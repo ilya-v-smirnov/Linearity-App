@@ -452,40 +452,44 @@ save_csv <- function(X, file, dialect = 'comma') {
 }
 
 
+aggregate_results <- function(result,
+                              aggr.pars = 'sample.name',
+                              method = 'geo_mean') {
+    if (is.null(aggr.pars)) return()
+    
+    # result <- subset(result, conc > 0)
+    # if (nrow(result) == 0) return()
+    
+    fml_str <- paste0('conc ~ ',
+                      paste(aggr.pars, collapse = ' + '))
+    fml <- as.formula(fml_str)
+    
+    df.n <- aggregate(fml, result, FUN = length)
+    colnames(df.n)[ncol(df.n)] <- 'n'
+    
+    fun <- switch(method,
+                  'mean' = mean_ci,
+                  'geo_mean' = geo_mean_ci,
+                  stop('Check method'))
+    
+    df.mean_ci <-
+        aggregate(fml, result, FUN = fun) %>%
+        as.list() %>%
+        as.data.frame
+    
+    colnames(df.mean_ci) <- str_remove_all(colnames(df.mean_ci), 'conc\\.')
+    
+    df.mean_ci <- apply_rounding(df.mean_ci)
+    merge(df.n,
+          df.mean_ci,
+          by = aggr.pars)
+}
 
-############################################################
+
+
 # 
 # 
-# aggregate_results <- function(result, aggr.pars = 'sample.name', method = 'geo_mean') {
-#     if (is.null(aggr.pars)) return()
-# 
-#     # result <- subset(result, conc > 0)
-#     # if (nrow(result) == 0) return()
-# 
-#     fml_str <- paste0('conc ~ ',
-#                       paste(aggr.pars, collapse = ' + '))
-#     fml <- as.formula(fml_str)
-# 
-#     df.n <- aggregate(fml, result, FUN = length)
-#     colnames(df.n)[ncol(df.n)] <- 'n'
-# 
-#     fun <- switch(method,
-#                   'mean' = mean_ci,
-#                   'geo_mean' = geo_mean_ci,
-#                   stop('Check method'))
-# 
-#     df.mean_ci <-
-#         aggregate(fml, result, FUN = fun) %>%
-#         as.list() %>%
-#         as.data.frame
-#     
-#     colnames(df.mean_ci) <- str_remove_all(colnames(df.mean_ci), 'conc\\.')
-#     
-#     df.mean_ci <- apply_rounding(df.mean_ci)
-#     merge(df.n,
-#           df.mean_ci,
-#           by = aggr.pars)
-# }
+
 
 
 # test <- xlsx::read.xlsx('E:/Work Files/2024-08-27 Griess/2024-08-27_Griess.xlsx',  1)
