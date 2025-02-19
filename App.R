@@ -221,8 +221,7 @@ server <- function(input, output, session) {
     })
     
     coef_table <- reactive({
-        df <- get_coef_ci(result()$model_direct) %>% apply_rounding()
-        df[, c('coef', 'est', 'est.rounded', 'ci.lower', 'ci.upper')]
+        get_coef_ci(result()$model_direct)
     })
     
     output$coefs_table <- renderTable({
@@ -242,14 +241,12 @@ server <- function(input, output, session) {
     
     
     ### Results ###
-    
-    show_result_table <- function(table) {
-        select(table, -c(type, OD))
-    }
+
     
     output$result_table <- renderTable({
-        show_result_table(result()$result)
+        result()$result
     })
+    
     
     output$download_results <- downloadHandler(
         filename = function() {
@@ -261,6 +258,8 @@ server <- function(input, output, session) {
         }
     )
 
+    
+    
     ### Means ###
     
     observe({
@@ -274,8 +273,8 @@ server <- function(input, output, session) {
     })
     
     means_table <- reactive({
-        aggregate_results(result()$result,
-                          input$aggr_par)
+        aggregate_result(result()$result,
+                         input$aggr_par)
     })
     
     output$means_table <- renderTable({

@@ -66,7 +66,7 @@ calculate_deming <- function(data, xvar, yvar) {
 }
 
 
-get_coef_ci <- function(fit) {
+get_coef_ci <- function(fit, round_par = 3) {
     tab <- 
         if (class(fit) == 'deming') {
             cbind(
@@ -88,10 +88,10 @@ get_coef_ci <- function(fit) {
     tab %>% 
         as.data.frame() %>% 
         setNames(c('est', 'ci.lower', 'ci.upper')) %>% 
-        mutate(coef = coef) %>% 
+        mutate(coef = coef) %>%
+        mutate(across(where(is.numeric), ~ signif(., round_par))) %>% 
+        select(coef, everything()) %>% 
         arrange(coef)
-    # print('linearity.R')
-    # print(tab)
     tab
 }
 
@@ -120,7 +120,7 @@ predict_log_regr <- function(data, fit, round_par = 3) {
 
 calculate <- function(data, model = 'LRM',
                       xvar = 'conc', yvar = 'OD',
-                      round_par = 4) {
+                      round_par = 3) {
     # Data preparation
     data <- subtract_NC(data)
     standard_data <- subset(data, type == 'standard')
@@ -149,89 +149,89 @@ calculate <- function(data, model = 'LRM',
     list(model_direct = fit_direct,
          model_reverse = fit_reverse,
          standard_data = standard_data,
-         result = sample_data)
+         result = sample_data %>% select(-c(type, OD)))
 }
 
 
-rounding <- function(est, ci.lower, ci.upper, sig_digits = 1) {
-    if (any(!is.finite(c(est, ci.lower, ci.upper)))) {
-        return(c(est = est,
-                 est.rounded = 0,
-                 ci.lower = 0,
-                 ci.upper = 0))
-    }
-    delta <- ci.upper - ci.lower
-    if (delta == 0) {
-        # If delta is zero, we cannot compute log10; default to no rounding
-        round_par <- max(getOption("digits") - 1, 0)
-    } else {
-        dexp <- floor(log10(abs(delta)))
-        round_par <- -(dexp - sig_digits + 1)
-    }
-    round_par <- as.integer(round_par)
-    est_rounded <- round(est, digits = round_par)
-    ci.lower_rounded <- round(ci.lower, digits = round_par) 
-    ci.upper_rounded <- round(ci.upper, digits = round_par)
-    return(c(est = round(est, 2),
-             est.rounded = est_rounded,
-             ci.lower = ci.lower_rounded,
-             ci.upper = ci.upper_rounded))
-}
-
-
-mean_ci <- function(x) {
-    t <- t.test(x)
-    c(est = as.numeric(t$estimate),
-      ci.lower = t$conf.int[1],
-      ci.upper = t$conf.int[2])
-}
-
-
-geo_mean_ci <- function(x, conf.level = 0.95) {
-    if (all(x <= 0)) {
-        return(c(est = 0, ci.lower = 0, ci.upper = 0))
-    } else if(any(x <= 0)) {
-        x <- x[x > 0]
-    }
-    
-    log_x <- log(x)
-    t <- t.test(log_x, conf.level = conf.level)
-    est <- exp(mean(log_x))
-    ci.lower <- exp(t$conf.int[1])
-    ci.upper <- exp(t$conf.int[2])
-    
-    c(est = est, ci.lower = ci.lower, ci.upper = ci.upper)
-}
-
-
-apply_rounding <- function(df, sig_digits = 1) {
-    # Ensure required columns exist
-    required_columns <- c("est", "ci.lower", "ci.upper")
-    missing_columns <- setdiff(required_columns, names(df))
-    if (length(missing_columns) > 0) {
-        stop(paste("The data.frame is missing required columns:", 
-                   paste(missing_columns, collapse = ", ")))
-    }
-    
-    # Apply rounding to each row
-    rounded_results <- apply(df, 1, function(row) {
-        result <- rounding(
-            est = as.numeric(row["est"]),
-            ci.lower = as.numeric(row["ci.lower"]),
-            ci.upper = as.numeric(row["ci.upper"]),
-            sig_digits = sig_digits
-        )
-        return(result)
-    }) %>% t() %>% as.data.frame()
-    
-    
-    # Merge rounded columns into original data.frame
-    df <- cbind(rounded_results,
-                df[, setdiff(names(df), c("est", "ci.lower", "ci.upper")), drop = F])
-    
-    # Return modified data.frame
-    return(df)
-}
+# rounding <- function(est, ci.lower, ci.upper, sig_digits = 1) {
+#     if (any(!is.finite(c(est, ci.lower, ci.upper)))) {
+#         return(c(est = est,
+#                  est.rounded = 0,
+#                  ci.lower = 0,
+#                  ci.upper = 0))
+#     }
+#     delta <- ci.upper - ci.lower
+#     if (delta == 0) {
+#         # If delta is zero, we cannot compute log10; default to no rounding
+#         round_par <- max(getOption("digits") - 1, 0)
+#     } else {
+#         dexp <- floor(log10(abs(delta)))
+#         round_par <- -(dexp - sig_digits + 1)
+#     }
+#     round_par <- as.integer(round_par)
+#     est_rounded <- round(est, digits = round_par)
+#     ci.lower_rounded <- round(ci.lower, digits = round_par) 
+#     ci.upper_rounded <- round(ci.upper, digits = round_par)
+#     return(c(est = round(est, 2),
+#              est.rounded = est_rounded,
+#              ci.lower = ci.lower_rounded,
+#              ci.upper = ci.upper_rounded))
+# }
+# 
+# 
+# mean_ci <- function(x) {
+#     t <- t.test(x)
+#     c(est = as.numeric(t$estimate),
+#       ci.lower = t$conf.int[1],
+#       ci.upper = t$conf.int[2])
+# }
+# 
+# 
+# geo_mean_ci <- function(x, conf.level = 0.95) {
+#     if (all(x <= 0)) {
+#         return(c(est = 0, ci.lower = 0, ci.upper = 0))
+#     } else if(any(x <= 0)) {
+#         x <- x[x > 0]
+#     }
+#     
+#     log_x <- log(x)
+#     t <- t.test(log_x, conf.level = conf.level)
+#     est <- exp(mean(log_x))
+#     ci.lower <- exp(t$conf.int[1])
+#     ci.upper <- exp(t$conf.int[2])
+#     
+#     c(est = est, ci.lower = ci.lower, ci.upper = ci.upper)
+# }
+# 
+# 
+# apply_rounding <- function(df, sig_digits = 1) {
+#     # Ensure required columns exist
+#     required_columns <- c("est", "ci.lower", "ci.upper")
+#     missing_columns <- setdiff(required_columns, names(df))
+#     if (length(missing_columns) > 0) {
+#         stop(paste("The data.frame is missing required columns:", 
+#                    paste(missing_columns, collapse = ", ")))
+#     }
+#     
+#     # Apply rounding to each row
+#     rounded_results <- apply(df, 1, function(row) {
+#         result <- rounding(
+#             est = as.numeric(row["est"]),
+#             ci.lower = as.numeric(row["ci.lower"]),
+#             ci.upper = as.numeric(row["ci.upper"]),
+#             sig_digits = sig_digits
+#         )
+#         return(result)
+#     }) %>% t() %>% as.data.frame()
+#     
+#     
+#     # Merge rounded columns into original data.frame
+#     df <- cbind(rounded_results,
+#                 df[, setdiff(names(df), c("est", "ci.lower", "ci.upper")), drop = F])
+#     
+#     # Return modified data.frame
+#     return(df)
+# }
 
 ######################## THEME & PLOTTING ######################################
 
@@ -451,60 +451,99 @@ save_csv <- function(X, file, dialect = 'comma') {
     )
 }
 
-
-aggregate_results <- function(result,
-                              aggr.pars = 'sample.name',
-                              method = 'geo_mean') {
+aggregate_result <- function(result, aggr.pars = 'sample.name', round_par = 3) {
     if (is.null(aggr.pars)) return()
-    
-    # result <- subset(result, conc > 0)
-    # if (nrow(result) == 0) return()
     
     fml_str <- paste0('conc ~ ',
                       paste(aggr.pars, collapse = ' + '))
     fml <- as.formula(fml_str)
     
     df.n <- aggregate(fml, result, FUN = length)
-    colnames(df.n)[ncol(df.n)] <- 'n'
+    df.mean <- aggregate(fml, result, FUN = mean)
+    df.min <- aggregate(fml, result, FUN = min)
+    df.max <- aggregate(fml, result, FUN = max)
     
-    fun <- switch(method,
-                  'mean' = mean_ci,
-                  'geo_mean' = geo_mean_ci,
-                  stop('Check method'))
-    
-    df.mean_ci <-
-        aggregate(fml, result, FUN = fun) %>%
-        as.list() %>%
-        as.data.frame
-    
-    colnames(df.mean_ci) <- str_remove_all(colnames(df.mean_ci), 'conc\\.')
-    
-    df.mean_ci <- apply_rounding(df.mean_ci)
-    merge(df.n,
-          df.mean_ci,
-          by = aggr.pars)
+    merge(df.n, df.mean, by = aggr.pars, suffixes = c('.n', '.mean')) %>% 
+        merge(df.min, by = aggr.pars, suffixes = c('', '.min')) %>% 
+        merge(df.max, by = aggr.pars, suffixes = c('', '.max')) %>% 
+        setNames(c(aggr.pars, 'n', 'mean', 'min', 'max')) %>% 
+        mutate(across(where(is.numeric), ~ signif(., round_par)))
 }
 
 
 
+# aggregate_results <- function(result,
+#                               aggr.pars = 'sample.name',
+#                               method = 'geo_mean') {
+#     if (is.null(aggr.pars)) return()
+#     
+#     # result <- subset(result, conc > 0)
+#     # if (nrow(result) == 0) return()
+#     
+#     fml_str <- paste0('conc ~ ',
+#                       paste(aggr.pars, collapse = ' + '))
+#     fml <- as.formula(fml_str)
+#     
+#     df.n <- aggregate(fml, result, FUN = length)
+#     colnames(df.n)[ncol(df.n)] <- 'n'
+#     
+#     fun <- switch(method,
+#                   'mean' = mean_ci,
+#                   'geo_mean' = geo_mean_ci,
+#                   stop('Check method'))
+#     
+#     df.mean_ci <-
+#         aggregate(fml, result, FUN = fun) %>%
+#         as.list() %>%
+#         as.data.frame
+#     
+#     colnames(df.mean_ci) <- str_remove_all(colnames(df.mean_ci), 'conc\\.')
+#     
+#     df.mean_ci <- apply_rounding(df.mean_ci)
+#     merge(df.n,
+#           df.mean_ci,
+#           by = aggr.pars)
+# }
+
+
+
 # 
 # 
 
+########################## Test Section ########################################
 
-
-# test <- xlsx::read.xlsx('E:/Work Files/2024-08-27 Griess/2024-08-27_Griess.xlsx',  1)
+# test <- xlsx::read.xlsx('D:/R projects/Linearity-App/Sample Data/2025-02-18_raw.data.xlsx',  1)
 # test$type <- ifelse(test$type == '', 'sample', test$type)
+
+# # Reading data
+# assay_table <- read_table(path = 'D:/R projects/Linearity-App/Sample Data/2025-02-18_raw.data.xlsx')
 # 
 # 
-# result <- calculate(test, 'LRM')
+# # Calculating model and results
+# result <- calculate(assay_table, 'LRM')
 # result$result
 # 
+# # Table of model coefficients
+# get_coef_ci(result$model_direct)
+# 
+# 
+# # Plots
 # (plots <- get_plots(result,
 #                     xtitle = 'Nitrite concentration, uM',
 #                     ytitle = 'Optical density, 520 nm'))
 # 
 # 
-# result$model_direct %>% get_coef_ci() %>% apply_rounding()
+# 
+# 
+# 
+# 
+# 
+# aggregate_result(result$result, aggr.pars = c('sample.date', 'sample.name'))
+
+
+# 
+# 
+# 
 # 
 # 
 # 
