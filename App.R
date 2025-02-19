@@ -191,6 +191,8 @@ server <- function(input, output, session) {
         }
     )
     
+    
+    
     ### Imported Data Tab ###
     
     import_data_table <- reactive({
@@ -202,6 +204,8 @@ server <- function(input, output, session) {
     output$imported_table <- renderTable({
         import_data_table()
     }, digits = 4)
+    
+    
     
     ### standard Curve ###
     
@@ -289,6 +293,8 @@ server <- function(input, output, session) {
             write.xlsx(means_table(), file, row.names = FALSE)
         }
     )
+    
+    
     
     ### Report ###
     
