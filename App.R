@@ -14,68 +14,91 @@ source('./report.R')
 
 ui <- fluidPage(
     
-    title = 'Linearity',
+    title = 'Linearity App',
     
-    titlePanel(title = h1('Linearity', align = 'center')),
+    titlePanel(title = h1('Linearity App', align = 'center')),
     
     sidebarLayout(
-    
+        
         # SIDEBAR    
         sidebarPanel(
             
-            h4('Make template'),
-            
-            fluidRow(
-                column(width = 6,
-                       numericInput('standard.start',
-                                    label = 'Start',
-                                    value = 100,
-                                    min = 0, step = 10)),
-                column(width = 6,
-                       numericInput('standard.step',
-                                    label = 'Step',
-                                    value = 2,
-                                    min = 2, step = 1))),
+            # MAKE TEMPLATE SECTION
+            wellPanel(
+                h4('Make template'),
                 
-            fluidRow(
-                column(width = 6,
-                       numericInput('standard.n',
-                                    label = 'Standard col',
-                                    value = 2,
-                                    min = 1, step = 1)),
-                column(width = 6,
-                       numericInput('samples.n',
-                                    label = 'N samples',
-                                    value = 10,
-                                    min = 1, step = 1))),
-            
-            fluidRow(
-                column(width = 8,
-                       selectInput('template_filetype',
-                                   label = 'File type',
-                                   choices = c('Excel' = 'xlsx',
-                                               'CSV' = 'csv'),
-                                   selected = 'Excel',
-                                   width = '100%')
-                       ),
-                column(width = 4,
-                       conditionalPanel(condition = "input.template_filetype == 'csv'",
-                                        selectInput('csv_dialect',
-                                                    label = 'Sep',
-                                                    choices = c(',' = 'comma',
-                                                                ';' = 'semicolon'),
-                                                    selected = ',.', width = '100%'))
-                       )
+                fluidRow(
+                    column(width = 6,
+                           numericInput('standard.start',
+                                        label = 'Start',
+                                        value = 100,
+                                        min = 0, step = 10)),
+                    column(width = 6,
+                           numericInput('standard.step',
+                                        label = 'Step',
+                                        value = 2,
+                                        min = 2, step = 1))),
+                
+                fluidRow(
+                    column(width = 6,
+                           numericInput('standard.n',
+                                        label = 'Standard col',
+                                        value = 2,
+                                        min = 1, step = 1)),
+                    column(width = 6,
+                           numericInput('samples.n',
+                                        label = 'N samples',
+                                        value = 10,
+                                        min = 1, step = 1))),
+                
+                fluidRow(
+                    column(width = 8,
+                           selectInput('template_filetype',
+                                       label = 'File type',
+                                       choices = c('Excel' = 'xlsx',
+                                                   'CSV' = 'csv'),
+                                       selected = 'Excel',
+                                       width = '100%')
+                    ),
+                    column(width = 4,
+                           conditionalPanel(condition = "input.template_filetype == 'csv'",
+                                            selectInput('csv_dialect',
+                                                        label = 'Sep',
+                                                        choices = c(',' = 'comma',
+                                                                    ';' = 'semicolon'),
+                                                        selected = ',.', width = '100%'))
+                    )),
+                
+                downloadButton('download_template', 'Download Template', icon = icon('file-excel')),
+                
             ),
             
+            # IMPORT DATA PANEL
+            wellPanel(
+                
+                h4('Import data'),
+                fileInput('import_data', label = 'Choose file:', accept = c('.csv', '.xlsx'))
+                
+            ),
             
-            downloadButton('download_template', 'Download Template', icon = icon('file-excel')),
-            br(), br(), br(),
+            fluidRow(
+                column(width = 12,
+                selectInput('round_fun_select',
+                            label = 'Rounding function',
+                            choices = c('Significant' = 'signif',
+                                        'Round' = 'round'),
+                            selected = 'Significant', width = 200))
+            ),
             
-            h4('Import data'),
-            fileInput('import_data', label = 'Choose file:', accept = c('.csv', '.xlsx')),
+            fluidRow(
+                column(width = 6,
+                numericInput('round_par',
+                             label = 'Number',
+                             value = 3, step = 1, min = 1, max = 7))    
+            ),
             
             width = 3),
+        
         
         # MAIN PANEL
         mainPanel(
@@ -86,7 +109,7 @@ ui <- fluidPage(
                                 
                                 tableOutput('imported_table')
                                 
-                                ),
+                       ),
                        
                        tabPanel('Standard curve',
                                 
@@ -132,7 +155,7 @@ ui <- fluidPage(
                                 
                                 downloadButton('save_plot', 'Save plot')
                                 
-                                ),
+                       ),
                        
                        tabPanel('Results',
                                 
@@ -140,7 +163,7 @@ ui <- fluidPage(
                                 
                                 downloadButton('download_results', 'Download results', icon = icon('file-excel')),
                                 
-                                ),
+                       ),
                        
                        tabPanel('Means',
                                 
@@ -153,18 +176,18 @@ ui <- fluidPage(
                                 tableOutput('means_table'),
                                 
                                 downloadButton('download_means', 'Download means', icon = icon('file-excel')),
-                                ),
+                       ),
                        
                        tabPanel('Report',
                                 
-                                textInput('title', 'Title:', value = 'Experiment name',
+                                textInput('title', 'Title:', placeholder = 'Experiment name',
                                           width = '100%'),
                                 
                                 downloadButton('download_report', label = 'Downoload report', icon = icon('file-word'))
-                                )
+                       )
                        
             ),
-        width = 9)
+            width = 9)
     )
 )
 
@@ -191,6 +214,13 @@ server <- function(input, output, session) {
         }
     )
     
+    observeEvent(input$round_fun_select, {
+        if (input$round_fun_select == 'round') {
+            updateNumericInput(session, 'round_par', value = 2, min = -7, max = 7)
+        } else {
+            updateNumericInput(session, 'round_par', value = 3, min = 1, max = 7)
+        }
+    })
     
     
     ### Imported Data Tab ###
@@ -209,13 +239,18 @@ server <- function(input, output, session) {
     
     ### standard Curve ###
     
+    r_fun <- list('signif' = signif, 'round' = round)
+    
     result <- reactive({
-        calculate(import_data_table(),
-                  input$model)
+        
+        calculate(data = import_data_table(),
+                  model = input$model,
+                  round_fun = r_fun[[input$round_fun_select]],
+                  round_par = input$round_par)
     })
     
     plots <- reactive({
-        get_plots(result(),
+        get_plots(result = result(),
                   xtitle = paste0(input$xtitle, input$xunits),
                   ytitle = input$ytitle)
     })
@@ -245,11 +280,11 @@ server <- function(input, output, session) {
     
     
     ### Results ###
-
+    
     
     output$result_table <- renderTable({
         result()$result
-    })
+    }, digits = 4)
     
     
     output$download_results <- downloadHandler(
@@ -261,7 +296,7 @@ server <- function(input, output, session) {
             write.xlsx(rtab, file, row.names = FALSE)
         }
     )
-
+    
     
     
     ### Means ###
@@ -277,13 +312,15 @@ server <- function(input, output, session) {
     })
     
     means_table <- reactive({
-        aggregate_result(result()$result,
-                         input$aggr_par)
+        aggregate_result(result = result()$result,
+                         aggr.pars = input$aggr_par,
+                         round_fun = r_fun[[input$round_fun_select]],
+                         round_par = input$round_par)
     })
     
     output$means_table <- renderTable({
         means_table()
-    })
+    }, digits = 4)
     
     output$download_means <- downloadHandler(
         filename = function() {
@@ -315,7 +352,7 @@ server <- function(input, output, session) {
                                         'QRM' = 'Quadric regression model',
                                         'deming' = 'Deming regression'),
                         model_table = coef_table(),
-                        result_table = show_result_table(result()$result),
+                        result_table = result()$result,
                         means_table = means_table())
         }
     )

@@ -10,13 +10,14 @@
 #' of significant digits.
 #'
 #' @param x Numeric vector.
+#' @param round_fun A function applied to round calculated geometric means (default is signif).
 #' @param round_par Integer specifying the number of significant digits (default is 3).
 #'
 #' @return A numeric value representing the geometric mean.
 
-geom_mean <- function(x, round_par = 3) {
+geom_mean <- function(x, round_fun = signif, round_par = 3) {
     if (length(x) == 1) return(x)
-    log10(x) %>% mean() %>% 10^. %>% signif(round_par)
+    log10(x) %>% mean() %>% 10^. %>% round_fun(round_par)
 }
 
 
@@ -33,9 +34,9 @@ geom_mean <- function(x, round_par = 3) {
 #'
 #' @return A data.frame with the adjusted 'OD' values (NC subtracted).
 
-subtract_NC <- function(data, round_par = 3) {
+subtract_NC <- function(data, round_fun = signif, round_par = 3) {
     NC_data <- subset(data, type == 'NC')
-    OD.NC <- NC_data$OD %>% geom_mean(round_par)
+    OD.NC <- NC_data$OD %>% geom_mean(round_fun, round_par)
     subset(data, type != 'NC') %>% 
         mutate(OD = OD - OD.NC)
 }
@@ -106,11 +107,12 @@ calculate_deming <- function(data, xvar, yvar) {
 #' Supports both standard `lm` objects and Deming regression objects.
 #'
 #' @param fit A fitted model object (either of class `lm` or `deming`).
+#' @param round_fun A function applied to round regression coefficients (default is round).
 #' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
 #'
 #' @return A data.frame with columns: `coef`, `est`, `ci.lower`, and `ci.upper`.
 
-get_coef_ci <- function(fit, round_par = 3) {
+get_coef_ci <- function(fit, round_fun = round, round_par = 2) {
     tab <- 
         if (class(fit) == 'deming') {
             cbind(
@@ -133,7 +135,7 @@ get_coef_ci <- function(fit, round_par = 3) {
         as.data.frame() %>% 
         setNames(c('est', 'ci.lower', 'ci.upper')) %>% 
         mutate(coef = coef) %>%
-        mutate(across(where(is.numeric), ~ signif(., round_par))) %>% 
+        mutate(across(where(is.numeric), ~ round_fun(., round_par))) %>% 
         select(coef, everything()) %>% 
         arrange(coef)
     tab
@@ -186,13 +188,14 @@ predict.deming <- function(object, data) {
 #'
 #' @param data A data.frame of new observations.
 #' @param fit A fitted regression model.
+#' @param round_fun A function applied to round calculated concentrations (default is signif).
 #' @param round_par Integer specifying the number of significant digits (default is 3).
 #'
 #' @return A numeric vector of predicted values.
 
-predict_log_regr <- function(data, fit, round_par = 3) {
+predict_log_regr <- function(data, fit, round_fun = signif, round_par = 3) {
     predicted <- suppressMessages(10^predict(fit, data))
-    return(signif(predicted, round_par))
+    return(round_fun(predicted, round_par))
 }
 
 
@@ -206,11 +209,12 @@ predict_log_regr <- function(data, fit, round_par = 3) {
 #' @param model Character string specifying the model type to use ('LRM', 'QRM', or 'deming'; default is 'LRM').
 #' @param xvar Character string specifying the independent variable name (default is "conc").
 #' @param yvar Character string specifying the dependent variable name (default is "OD").
+#' @param round_fun A function applied to round calculated concentrations (default is signif).
 #' @param round_par Integer for rounding predictions (default is 3).
 
 calculate <- function(data, model = 'LRM',
                       xvar = 'conc', yvar = 'OD',
-                      round_par = 3) {
+                      round_fun = signif, round_par = 3) {
     # Data preparation
     data <- subtract_NC(data)
     standard_data <- subset(data, type == 'standard')
@@ -228,7 +232,8 @@ calculate <- function(data, model = 'LRM',
     fit_reverse <- lin_fun(standard_data, xvar = 'OD',   yvar = 'conc')
     
     # Results
-    predicted <- predict_log_regr(sample_data, fit_reverse, round_par = round_par)
+    predicted <- predict_log_regr(sample_data, fit_reverse,
+                                  round_fun = round_fun, round_par = round_par)
     sample_data[, 'conc'] <- predicted * sample_data[, 'dilution']
     sample_data$conc <- ifelse(is.nan(sample_data$conc),
                                0,
@@ -250,11 +255,13 @@ calculate <- function(data, model = 'LRM',
 #'
 #' @param result A data.frame containing at least the `conc` column and grouping variables.
 #' @param aggr.pars A character vector of column names to group by (default is "sample.name").
+#' @param round_fun A function applied to round calculated concentrations (default is signif).
 #' @param round_par Integer for rounding aggregated values (default is 3).
 #'
 #' @return A data.frame with aggregated statistics: count (`n`), mean, min, and max concentration.
 
-aggregate_result <- function(result, aggr.pars = 'sample.name', round_par = 3) {
+aggregate_result <- function(result, aggr.pars = 'sample.name',
+                             round_fun = signif, round_par = 3) {
     if (is.null(aggr.pars)) return()
     
     fml_str <- paste0('conc ~ ',
@@ -270,7 +277,7 @@ aggregate_result <- function(result, aggr.pars = 'sample.name', round_par = 3) {
         merge(df.min, by = aggr.pars, suffixes = c('', '.min')) %>% 
         merge(df.max, by = aggr.pars, suffixes = c('', '.max')) %>% 
         setNames(c(aggr.pars, 'n', 'mean', 'min', 'max')) %>% 
-        mutate(across(where(is.numeric), ~ signif(., round_par)))
+        mutate(across(where(is.numeric), ~ round_fun(., round_par)))
 }
 
 
