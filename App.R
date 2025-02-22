@@ -1,25 +1,29 @@
 
 library(shiny)
 
+# Load external functions for core computations and reporting
 source('./linearity.R')
 source('./report.R')
 
 
 ui <- fluidPage(
     
+    # Set the title of the Shiny app
     title = 'Linearity App',
     
+    # Main title panel with centered heading
     titlePanel(title = h1('Linearity App', align = 'center')),
     
     sidebarLayout(
         
-        # SIDEBAR    
+        # SIDEBAR: Contains controls for generating a template, importing data, and rounding options    
         sidebarPanel(
             
-            # MAKE TEMPLATE SECTION
+            # --- Make Template Section ---
             wellPanel(
                 h4('Make template'),
                 
+                # Input row for standard sample parameters
                 fluidRow(
                     column(width = 6,
                            numericInput('standard.start',
@@ -32,6 +36,7 @@ ui <- fluidPage(
                                         value = 2,
                                         min = 2, step = 1))),
                 
+                # Input row for the number of standards and samples
                 fluidRow(
                     column(width = 6,
                            numericInput('standard.n',
@@ -44,13 +49,14 @@ ui <- fluidPage(
                                         value = 10,
                                         min = 1, step = 1))),
                 
+                # File type selection and CSV-specific options (shown conditionally)
                 fluidRow(
                     column(width = 8,
                            selectInput('template_filetype',
                                        label = 'File type',
                                        choices = c('Excel' = 'xlsx',
                                                    'CSV' = 'csv'),
-                                       selected = 'Excel',
+                                       selected = 'xlsx',
                                        width = '100%')
                     ),
                     column(width = 4,
@@ -59,14 +65,15 @@ ui <- fluidPage(
                                                         label = 'Sep',
                                                         choices = c(',' = 'comma',
                                                                     ';' = 'semicolon'),
-                                                        selected = ',.', width = '100%'))
+                                                        selected = 'comma', width = '100%'))
                     )),
                 
+                # Download button for template file generation
                 downloadButton('download_template', 'Download Template', icon = icon('file-excel')),
                 
             ),
             
-            # IMPORT DATA PANEL
+            # --- Import Data Panel ---
             wellPanel(
                 
                 h4('Import data'),
@@ -74,13 +81,14 @@ ui <- fluidPage(
                 
             ),
             
+            # --- Rounding Options ---
             fluidRow(
                 column(width = 12,
                 selectInput('round_fun_select',
                             label = 'Rounding function',
                             choices = c('Significant' = 'signif',
                                         'Round' = 'round'),
-                            selected = 'Significant', width = 200))
+                            selected = 'signif', width = 200))
             ),
             
             fluidRow(
@@ -93,24 +101,22 @@ ui <- fluidPage(
             width = 3),
         
         
-        # MAIN PANEL
+        # MAIN PANEL: Contains tabbed outputs for data preview, plotting, results, means, and reporting
         mainPanel(
             
             navbarPage('Steps:', id = 'tabs',
                        
+                       # Tab: Display imported data in a table format
                        tabPanel('Imported data',
-                                
                                 tableOutput('imported_table')
-                                
                        ),
                        
+                       # Tab: Standard Curve - plots, coefficient table, and model selection
                        tabPanel('Standard curve',
                                 
                                 plotOutput('two_plots', width = '800px'),
                                 br(),
-                                
                                 tableOutput('coefs_table'),
-                                
                                 radioButtons('model',
                                              'Choose regression model',
                                              choices = c('Linear regression model' = 'LRM',
@@ -118,7 +124,6 @@ ui <- fluidPage(
                                                          'Deming regression' = 'deming'),
                                              selected = 'LRM'),
                                 br(),
-                                
                                 fluidRow(
                                     column(4,
                                            textInput('xtitle',
@@ -150,55 +155,52 @@ ui <- fluidPage(
                                 
                        ),
                        
+                       # Tab: Results - shows the calculated results table and offers download functionality
                        tabPanel('Results',
-                                
                                 tableOutput('result_table'),
-                                
                                 downloadButton('download_results', 'Download results', icon = icon('file-excel')),
-                                
                        ),
                        
+                       # Tab: Means - allows aggregation of results with selectable grouping parameters
                        tabPanel('Means',
-                                
                                 selectizeInput('aggr_par',
                                                label = 'Select aggregation parameters:',
                                                choices = c('sample.name', 'sample.date', 'dilution'),
                                                selected = 'sample.name',
                                                multiple = TRUE),
-                                
                                 tableOutput('means_table'),
-                                
                                 downloadButton('download_means', 'Download means', icon = icon('file-excel')),
                        ),
                        
+                       # Tab: Report - generates a downloadable report with title and embedded plot
                        tabPanel('Report',
-                                
                                 textInput('title', 'Title:', placeholder = 'Experiment name',
                                           width = '100%'),
-                                
-                                downloadButton('download_report', label = 'Downoload report', icon = icon('file-word'))
+                                downloadButton('download_report', label = 'Download report', icon = icon('file-word'))
                        )
-                       
             ),
-            width = 9)
+            width = 9
+        )
     )
 )
 
+
 server <- function(input, output, session) {
     
-    ### Sidebar Panel ####
+    ### Sidebar Panel Handlers ###
     
     output$download_template <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_raw.data.', input$template_filetype)
         },
         content = function(file) {
-            
+            # Generate template using user-specified parameters
             template <- make_template(start = input$standard.start,
                                       step = input$standard.step,
                                       n.standard = input$standard.n,
                                       n.sample = input$samples.n)
             
+            # Save template as CSV or Excel based on file type selection
             if (input$template_filetype == 'csv') {
                 save_csv(template, file, input$csv_dialect)
             } else {
@@ -207,6 +209,7 @@ server <- function(input, output, session) {
         }
     )
     
+    # Observer to update the rounding parameter input based on the selected rounding function
     observeEvent(input$round_fun_select, {
         if (input$round_fun_select == 'round') {
             updateNumericInput(session, 'round_par', value = 2, min = -7, max = 7)
@@ -218,48 +221,56 @@ server <- function(input, output, session) {
     
     ### Imported Data Tab ###
     
+    # Reactive expression to read and validate the uploaded data file
     import_data_table <- reactive({
         data_file <- input$import_data
-        req(data_file)
+        req(data_file)  # Ensure a file is uploaded
         read_table(data_file$datapath) %>% check_input_file()
     })
     
+    # Render the imported data as a table in the UI
     output$imported_table <- renderTable({
         import_data_table()
     }, digits = 4)
     
     
     
-    ### standard Curve ###
+    ### standard Curve Tab ###
     
+    # List mapping rounding function names to the actual functions
     r_fun <- list('signif' = signif, 'round' = round)
     
+    # Reactive expression to perform calculations using the imported data
     result <- reactive({
-        
         calculate(data = import_data_table(),
                   model = input$model,
                   round_fun = r_fun[[input$round_fun_select]],
                   round_par = input$round_par)
     })
     
+    # Reactive expression to generate the combined plot (standard curve and residuals)
     plots <- reactive({
         get_plots(result = result(),
                   xtitle = paste0(input$xtitle, input$xunits),
                   ytitle = input$ytitle)
     })
     
+    # Render the combined plot in the UI
     output$two_plots <- renderPlot({
         plots()
     })
     
+    # Create a reactive expression to extract coefficients and confidence intervals
     coef_table <- reactive({
         get_coef_ci(result()$model_direct)
     })
     
+    # Render the coefficients table in the UI
     output$coefs_table <- renderTable({
         coef_table()
     })
     
+    # Download handler to save the current plot as a JPEG image
     output$save_plot <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_plot.jpeg')
@@ -272,31 +283,32 @@ server <- function(input, output, session) {
     )
     
     
-    ### Results ###
+    ### Results Tab ###
     
-    
+    # Render the results table in the UI
     output$result_table <- renderTable({
         result()$result
     }, digits = 4)
     
-    
+    # Download handler to save the results table (currently always using Excel)
     output$download_results <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_result_table.', input$template_filetype)
         },
         content = function(file) {
+            # Remove the OD column before export
             rtab <- result()$result %>% select(-OD)
             write.xlsx(rtab, file, row.names = FALSE)
         }
     )
     
     
+    ### Means Tab ###
     
-    ### Means ###
-    
+    # Observer to update aggregation parameter choices based on the results columns
     observe({
         column_names <-
-            colnames(result()$resul) %>% 
+            colnames(result()$result) %>% 
             setdiff(., c('type', 'conc', 'OD'))
         
         updateSelectizeInput(session, 'aggr_par',
@@ -304,17 +316,20 @@ server <- function(input, output, session) {
                              selected = 'sample.name')
     })
     
+    # Reactive expression to calculate aggregated means based on user-selected grouping variables
     means_table <- reactive({
         aggregate_result(result = result()$result,
-                         aggr.pars = input$aggr_par,
+                         group_vars = input$aggr_par,
                          round_fun = r_fun[[input$round_fun_select]],
                          round_par = input$round_par)
     })
     
+    # Render the aggregated means table in the UI
     output$means_table <- renderTable({
         means_table()
     }, digits = 4)
     
+    # Download handler to save the aggregated means as an Excel file
     output$download_means <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_means.', input$template_filetype)
@@ -325,9 +340,9 @@ server <- function(input, output, session) {
     )
     
     
+    ### Report Tab ###
     
-    ### Report ###
-    
+    # Download handler to generate and save a report document
     output$download_report <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_report.docx')
@@ -339,10 +354,10 @@ server <- function(input, output, session) {
                         plot = get_plots(result(),
                                          xtitle = paste0(input$xtitle, input$xunits),
                                          ytitle = input$ytitle,
-                                         plot.theme = report_theme),
+                                         plot.theme = report_theme), # report_theme is defined in report.R
                         method = switch(input$model,
                                         'LRM' = 'Linear regression model',
-                                        'QRM' = 'Quadric regression model',
+                                        'QRM' = 'Quadratic regression model',
                                         'deming' = 'Deming regression'),
                         model_table = coef_table(),
                         result_table = result()$result,
@@ -353,4 +368,6 @@ server <- function(input, output, session) {
     
 }
 
+
+# Launch the Shiny app
 shinyApp(ui, server)

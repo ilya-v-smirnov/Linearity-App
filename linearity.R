@@ -23,7 +23,7 @@ library(stringr)
 
 geom_mean <- function(x, round_fun = signif, round_par = 3) {
     if (length(x) == 1) return(x)
-    log10(x) %>% mean() %>% 10^. %>% round_fun(round_par)
+    log10(x[x > 0]) %>% mean() %>% 10^ . %>% round_fun(round_par)
 }
 
 
@@ -40,11 +40,11 @@ geom_mean <- function(x, round_fun = signif, round_par = 3) {
 #'
 #' @return A data.frame with the adjusted 'OD' values (NC subtracted).
 
-subtract_NC <- function(data, round_fun = signif, round_par = 3) {
+subtract_nc <- function(data, round_fun = signif, round_par = 3) {
     NC_data <- subset(data, type == 'NC')
-    OD.NC <- NC_data$OD %>% geom_mean(round_fun, round_par)
+    nc_value <- NC_data$OD %>% geom_mean(round_fun, round_par)
     subset(data, type != 'NC') %>% 
-        mutate(OD = OD - OD.NC)
+        mutate(OD = OD - nc_value)
 }
 
 
@@ -222,7 +222,7 @@ calculate <- function(data, model = 'LRM',
                       xvar = 'conc', yvar = 'OD',
                       round_fun = signif, round_par = 3) {
     # Data preparation
-    data <- subtract_NC(data)
+    data <- subtract_nc(data)
     standard_data <- subset(data, type == 'standard')
     sample_data <- subset(data, type == 'sample')
     
@@ -260,18 +260,18 @@ calculate <- function(data, model = 'LRM',
 #' mean, minimum, and maximum of the concentrations.
 #'
 #' @param result A data.frame containing at least the `conc` column and grouping variables.
-#' @param aggr.pars A character vector of column names to group by (default is "sample.name").
+#' @param group_vars A character vector of column names to group by (default is "sample.name").
 #' @param round_fun A function applied to round calculated concentrations (default is signif).
 #' @param round_par Integer for rounding aggregated values (default is 3).
 #'
 #' @return A data.frame with aggregated statistics: count (`n`), mean, min, and max concentration.
 
-aggregate_result <- function(result, aggr.pars = 'sample.name',
+aggregate_result <- function(result, group_vars = 'sample.name',
                              round_fun = signif, round_par = 3) {
-    if (is.null(aggr.pars)) return()
+    if (is.null(group_vars)) return()
     
     fml_str <- paste0('conc ~ ',
-                      paste(aggr.pars, collapse = ' + '))
+                      paste(group_vars, collapse = ' + '))
     fml <- as.formula(fml_str)
     
     df.n <- aggregate(fml, result, FUN = length)
@@ -279,10 +279,10 @@ aggregate_result <- function(result, aggr.pars = 'sample.name',
     df.min <- aggregate(fml, result, FUN = min)
     df.max <- aggregate(fml, result, FUN = max)
     
-    merge(df.n, df.mean, by = aggr.pars, suffixes = c('.n', '.mean')) %>% 
-        merge(df.min, by = aggr.pars, suffixes = c('', '.min')) %>% 
-        merge(df.max, by = aggr.pars, suffixes = c('', '.max')) %>% 
-        setNames(c(aggr.pars, 'n', 'mean', 'min', 'max')) %>% 
+    merge(df.n, df.mean, by = group_vars, suffixes = c('.n', '.mean')) %>% 
+        merge(df.min, by = group_vars, suffixes = c('', '.min')) %>% 
+        merge(df.max, by = group_vars, suffixes = c('', '.max')) %>% 
+        setNames(c(group_vars, 'n', 'mean', 'min', 'max')) %>% 
         mutate(across(where(is.numeric), ~ round_fun(., round_par)))
 }
 
@@ -568,7 +568,7 @@ read_table <- function(path) {
         'csv' = {
             # determining csv format
             table <- try(read.csv(path, sep = ';', dec = ','))
-            if (class(table) == 'try-error' | ncol(table) == 1) {
+            if (inherits(table, "try-error") | ncol(table) == 1) {
                 table <- try(read.csv(path, sep = ',', dec = '.'))
                 if (class(table) == 'try-error' | ncol(table) == 1) {
                     stop('Unknown csv format of file')
@@ -610,21 +610,33 @@ save_csv <- function(X, file, dialect = 'comma') {
 }
 
 
-#' Check Input File Validity
+#' Validate Input Data for the Linearity App
+#'
+#' This function ensures that the imported data meets the minimal requirements needed for
+#' processing in the Linearity App.
 #' 
-#' Checks the read table for minimal requirements necessary for the app: mandatory columns
-#' (sample.name, sample.date, type, dilution, conc, and OD) present. The dilution, conc, and OD
-#' columns are numeric (do not contain non-numeric values). Checks the type column contains
-#' all necessary values (standard, sample, and NC) and does not contain other values. Each sample has
-#' a proper dilution factor in the dilution column. Proves that number of standard wells is at least
-#' four.
+#' It performs several validations:
 #' 
-#' @param data A data.frame containing raw data to be checked.
-#' 
-#' @return A data.frame valid for app usage.
+#' - Mandatory Columns: Confirms that the data contains all required columns: 
+#'   "sample.name", "sample.date", "type", "dilution", "conc", and "OD".
+#' - Numeric Data: Verifies that the "dilution", "conc", and "OD" columns are numeric.
+#' - Type Values: Checks that the "type" column includes only the allowed values:
+#'   "standard", "sample", and "NC",
+#'   and that none of these values are missing.
+#' - Dilution Factors: Ensures that every sample (rows where "type" is "sample") has a valid,
+#'   non-missing, positive dilution factor.
+#' - Sufficient Standard Wells: Validates that there are more than four rows marked as "standard"
+#'   to ensure reliable standard curve fitting.
+#'
+#' If any of these checks fail, the function stops execution and returns an informative error message.
+#'
+#' @param data A data.frame containing the raw data to be validated. Expected columns are 
+#' "sample.name", "sample.date", "type", "dilution", "conc", and "OD".
+#'
+#' @return A validated data.frame that is ready for further processing in the app.
 
 check_input_file <- function(data) {
-    # checking mandatory columns
+    # check for mandatory columns
     munadatory_columns <- c('sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD')
     
     for (mc in munadatory_columns) {
@@ -633,7 +645,7 @@ check_input_file <- function(data) {
         }
     }
     
-    # Checking column types
+    # Verify that specified columns are numeric
     numeric_colmns <- c('dilution', 'conc', 'OD')
     
     for (nc in numeric_colmns) {
@@ -642,39 +654,34 @@ check_input_file <- function(data) {
         }
     }
     
-    # Checking type column
-    
+    # Validate the 'type' column values
     allowed_types <- c('standard', 'sample', 'NC')
     present_types <- unique(data[, 'type'])
         
-        # extra type values
+    # Check for any disallowed type values
     not_allowed <- setdiff(present_types, allowed_types)
     if (length(not_allowed) > 0) {
         stop(paste('Not allowed values in the type column:',
                    paste(not_allowed, collapse = ', ')))
     }
-        # missing type values
+    
+    # Check for missing required type values
     missing_types <- setdiff(allowed_types, present_types)
     if (length(missing_types) > 0) {
         stop(paste('Missing values in the type column:',
                    paste(missing_types, collapse = ', ')))
     }
     
-    # Checking dilution column
-    
+    # Check dilution values for sample rows
     dilutions <- subset(data, type == 'sample')$dilution
-        
-        # All samples have dilution factor value
     if (any(is.na(dilutions))) {
-        stop('Not all samples have dilutions')
+        stop('Not all samples have dilution factors specified')
     }
-    
-        # All dilutions are positive
     if (!all(dilutions > 0)) {
-        stop('Non-positive values in the dilution column')
+        stop('All dilution factors must be positive')
     }
     
-    # Check the number of standard wells
+    # Ensure there are more than four standard wells for reliable analysis
     n_standard <- sum(data$type == 'standard')
     if (n_standard <= 4) {
         stop(paste('Insufficient number of standard wells:', n_standard))
