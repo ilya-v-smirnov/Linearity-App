@@ -1,12 +1,5 @@
 
 library(shiny)
-library(dplyr)
-library(deming)
-library(ggplot2)
-library(cowplot)
-library(xlsx)
-library(stringr)
-
 
 source('./linearity.R')
 source('./report.R')
@@ -228,7 +221,7 @@ server <- function(input, output, session) {
     import_data_table <- reactive({
         data_file <- input$import_data
         req(data_file)
-        read_table(data_file$datapath)
+        read_table(data_file$datapath) %>% check_input_file()
     })
     
     output$imported_table <- renderTable({

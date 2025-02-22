@@ -1,4 +1,10 @@
 
+library(dplyr)
+library(deming)
+library(ggplot2)
+library(cowplot)
+library(xlsx)
+library(stringr)
 
 ##################### LINEAR MODELS FUNCTIONS ##################################
 
@@ -604,50 +610,75 @@ save_csv <- function(X, file, dialect = 'comma') {
 }
 
 
+#' Check Input File Validity
+#' 
+#' Checks the read table for minimal requirements necessary for the app: mandatory columns
+#' (sample.name, sample.date, type, dilution, conc, and OD) present. The dilution, conc, and OD
+#' columns are numeric (do not contain non-numeric values). Checks the type column contains
+#' all necessary values (standard, sample, and NC) and does not contain other values. Each sample has
+#' a proper dilution factor in the dilution column. Proves that number of standard wells is at least
+#' four.
+#' 
+#' @param data A data.frame containing raw data to be checked.
+#' 
+#' @return A data.frame valid for app usage.
 
-########################## Test Section ########################################
-
-
-# Reading data
-#   xlsx file
-griess_assay <- read_table(path = 'D:/R projects/Linearity-App/Sample Data/Griess Assay/Griess assay_1.xlsx')
-griess_assay
-
-#   semicolon-delimited csv file
-bca_assay <- read_table('D:/R projects/Linearity-App/Sample Data/BCA Assay/BCA assay_1.csv')
-bca_assay
-
-#   comma-delimited csv file
-elisa_assay <- read_table('D:/R projects/Linearity-App/Sample Data/Sandwich ELISA/ELISA_sMICB_rawdata.csv')
-elisa_assay
-
-
-# Choosing one of the assays
-assay_table <- bca_assay
-
-
-# Calculating model and results
-result_LRM <- calculate(assay_table, 'LRM')
-result_LRM
-
-result_QRM <- calculate(assay_table, 'QRM')
-result_QRM
-
-result_deming <- calculate(assay_table, 'deming')
-result_deming
-
-
-# Table of model coefficients
-get_coef_ci(result_LRM$model_direct)
-get_coef_ci(result_QRM$model_direct)
-get_coef_ci(result_deming$model_direct)
-
-
-# Plots
-get_plots(result_QRM,
-          xtitle = 'X axis title',
-          ytitle = 'Y axis title')
-
-# Aggregation of the result by sample.name and dilution
-aggregate_result(result_QRM$result, aggr.pars = c('sample.name', 'dilution'))
-
+check_input_file <- function(data) {
+    # checking mandatory columns
+    munadatory_columns <- c('sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD')
+    
+    for (mc in munadatory_columns) {
+        if (!mc %in% colnames(data)) {
+            stop(paste('Mundatory', mc, 'column is missing'))
+        }
+    }
+    
+    # Checking column types
+    numeric_colmns <- c('dilution', 'conc', 'OD')
+    
+    for (nc in numeric_colmns) {
+        if (!is.numeric(data[, nc])) {
+            stop(paste('Non-numeric values in', nc, 'column'))
+        }
+    }
+    
+    # Checking type column
+    
+    allowed_types <- c('standard', 'sample', 'NC')
+    present_types <- unique(data[, 'type'])
+        
+        # extra type values
+    not_allowed <- setdiff(present_types, allowed_types)
+    if (length(not_allowed) > 0) {
+        stop(paste('Not allowed values in the type column:',
+                   paste(not_allowed, collapse = ', ')))
+    }
+        # missing type values
+    missing_types <- setdiff(allowed_types, present_types)
+    if (length(missing_types) > 0) {
+        stop(paste('Missing values in the type column:',
+                   paste(missing_types, collapse = ', ')))
+    }
+    
+    # Checking dilution column
+    
+    dilutions <- subset(data, type == 'sample')$dilution
+        
+        # All samples have dilution factor value
+    if (any(is.na(dilutions))) {
+        stop('Not all samples have dilutions')
+    }
+    
+        # All dilutions are positive
+    if (!all(dilutions > 0)) {
+        stop('Non-positive values in the dilution column')
+    }
+    
+    # Check the number of standard wells
+    n_standard <- sum(data$type == 'standard')
+    if (n_standard <= 4) {
+        stop(paste('Insufficient number of standard wells:', n_standard))
+    }
+    
+    data
+}
