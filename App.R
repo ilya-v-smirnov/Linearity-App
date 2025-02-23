@@ -82,22 +82,22 @@ ui <- fluidPage(
             ),
             
             # --- Rounding Options ---
-            fluidRow(
-                column(width = 12,
-                selectInput('round_fun_select',
-                            label = 'Rounding function',
-                            choices = c('Significant' = 'signif',
-                                        'Round' = 'round'),
-                            selected = 'signif', width = 200))
-            ),
             
-            fluidRow(
-                column(width = 6,
-                numericInput('round_par',
-                             label = 'Number',
-                             value = 3, step = 1, min = 1, max = 7))    
-            ),
-            
+            wellPanel(
+                fluidRow(
+                    column(7,
+                           selectInput('round_fun_select',
+                                       label = 'Rounding function',
+                                       choices = c('Significant' = 'signif',
+                                                   'Round' = 'round'),
+                                       selected = 'signif')),
+                    column(5,
+                           numericInput('round_par',
+                                        label = 'Number',
+                                        value = 3, step = 1, min = 1, max = 7))
+                    )
+                ),
+             
             width = 3),
         
         
@@ -117,12 +117,18 @@ ui <- fluidPage(
                                 plotOutput('two_plots', width = '800px'),
                                 br(),
                                 tableOutput('coefs_table'),
-                                radioButtons('model',
-                                             'Choose regression model',
-                                             choices = c('Linear regression model' = 'LRM',
-                                                         'Quadratic regression model' = 'QRM',
-                                                         'Deming regression' = 'deming'),
-                                             selected = 'LRM'),
+                                fluidRow(
+                                    column(4,
+                                           radioButtons('model',
+                                                        'Choose regression model',
+                                                        choices = c('Linear regression model' = 'LRM',
+                                                                    'Quadratic regression model' = 'QRM',
+                                                                    'Deming regression' = 'deming'),
+                                                        selected = 'LRM')),
+                                    column(2,
+                                           checkboxInput('linear_scale', label = 'Linear scale', value = FALSE), )
+                                ),
+                                
                                 br(),
                                 fluidRow(
                                     column(4,
@@ -225,14 +231,15 @@ server <- function(input, output, session) {
     import_data_table <- reactive({
         data_file <- input$import_data
         req(data_file)  # Ensure a file is uploaded
-        read_table(data_file$datapath) %>% check_input_file()
+        read_table(data_file$datapath) %>%
+            check_input_file() %>% 
+            format_input_table()
     })
     
     # Render the imported data as a table in the UI
     output$imported_table <- renderTable({
         import_data_table()
     }, digits = 4)
-    
     
     
     ### standard Curve Tab ###
@@ -244,6 +251,7 @@ server <- function(input, output, session) {
     result <- reactive({
         calculate(data = import_data_table(),
                   model = input$model,
+                  linear = input$linear_scale,
                   round_fun = r_fun[[input$round_fun_select]],
                   round_par = input$round_par)
     })

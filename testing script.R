@@ -77,6 +77,8 @@ assay_table <- bca_assay
 # - $standard_data  
 # - $result  
 
+#### In log-log scales ####
+
 # Linear Regression Model (LRM)
 result_LRM <- calculate(assay_table, 'LRM')
 result_LRM
@@ -89,6 +91,20 @@ result_QRM
 result_deming <- calculate(assay_table, 'deming')
 result_deming
 
+
+#### In linear scales ####
+
+# Linear Regression Model (LRM)
+result_LRM_l <- calculate(assay_table, 'LRM', linear = TRUE)
+result_LRM_l
+
+# Quadratic Regression Model (QRM)
+result_QRM_l <- calculate(assay_table, 'QRM', linear = TRUE)
+result_QRM_l
+
+# Deming Regression Model
+result_deming_l <- calculate(assay_table, 'deming')
+result_deming_l
 
 ################ Viewing Model Coefficient Tables ##############################
 
@@ -104,6 +120,17 @@ get_coef_ci(result_QRM$model_direct)
 
 # Deming regression coefficients
 get_coef_ci(result_deming$model_direct)
+
+
+
+# LRM coefficients
+get_coef_ci(result_LRM_l$model_direct)
+
+# QRM coefficients
+get_coef_ci(result_QRM_l$model_direct)
+
+# Deming regression coefficients
+get_coef_ci(result_deming_l$model_direct)
 
 
 ######################### Plotting Function ####################################
@@ -131,6 +158,11 @@ get_plots(result_deming,
           ytitle = 'Y axis title')
 
 
+
+# Plot LRM
+get_plots(result_LRM_l,
+          xtitle = 'X axis title',
+          ytitle = 'Y axis title')
 ###################### Result Aggregation ######################################
 
 # Test for Result Aggregation Function  

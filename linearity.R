@@ -50,21 +50,20 @@ subtract_nc <- function(data, round_fun = signif, round_par = 3) {
 
 #' Calculate Ordinary Linear Regression Model (LRM)
 #'
-#' Fits a linear regression model on log10‐transformed variables. When `slope_1` is TRUE,
-#' the model is formulated such that the slope is implicitly set to 1 (by modeling the difference
-#' of logs).
+#' Fits a linear regression model on either log10‐transformed variables or raw values.
+#' When linear is FALSE (the default), the model is fitted on log10‐transformed data.
+#' When linear is TRUE, the model is fitted on the original (non-transformed) values.
 #'
-#' @param data A data.frame (with negative control values already subtracted).
+#' @param data A data.frame with negative control values already subtracted.
 #' @param xvar Character string specifying the independent variable name.
 #' @param yvar Character string specifying the dependent variable name.
-#' @param slope_1 Logical; if TRUE, forces a slope of 1 by modeling the difference between the
-#'   log10 values (default is FALSE).
+#' @param linear Logical; if TRUE, fits the model on raw (non-transformed) values (default is FALSE).
 #'
-#' @return An object of class `lm` representing the fitted regression model.
+#' @return An object of class lm representing the fitted regression model.
 
-calculate_LRM <- function(data, xvar, yvar, slope_1 = FALSE) {
-    if (slope_1) {
-        formula_str <- paste0('log10(', yvar, ') - log10(', xvar, ') ~ 1')
+calculate_LRM <- function(data, xvar, yvar, linear = FALSE) {
+    if (linear) {
+        formula_str <- paste0(yvar, ' ~ ', xvar)
     } else {
         formula_str <- paste0('log10(', yvar, ') ~ log10(', xvar, ')')
     }
@@ -74,35 +73,47 @@ calculate_LRM <- function(data, xvar, yvar, slope_1 = FALSE) {
 
 #' Calculate Quadratic Regression Model (QRM)
 #'
-#' Fits a quadratic regression model on log10‐transformed data. The model includes both
-#' linear and squared log10 terms of the independent variable.
+#' Fits a quadratic regression model on either log10‐transformed data or raw values.
+#' When linear is FALSE (default), the model is fitted on log10‐transformed data;
+#' when linear is TRUE, it is fitted on the original data.
 #'
-#' @param data A data.frame (with negative control values already subtracted).
+#' @param data A data.frame with negative control values already subtracted.
 #' @param xvar Character string specifying the independent variable name.
 #' @param yvar Character string specifying the dependent variable name.
+#' @param linear Logical; if TRUE, fits the model on raw values (default is FALSE).
 #'
-#' @return An object of class `lm` representing the fitted quadratic regression model.
+#' @return An object of class lm} representing the fitted quadratic regression model.
 
-calculate_QRM <- function(data, xvar, yvar) {
-    formula_str <-
-        paste0('log10(', yvar, ') ~ I(log10(', xvar, ')^2) + log10(', xvar, ')')
+calculate_QRM <- function(data, xvar, yvar, linear = FALSE) {
+    if (linear) {
+        formula_str <-
+            paste0(yvar, ' ~ I(' , xvar, '^2) + ', xvar)
+    } else {
+        formula_str <-
+            paste0('log10(', yvar, ') ~ I(log10(', xvar, ')^2) + log10(', xvar, ')')
+    }
     lm(as.formula(formula_str), data)
 }
 
 
 #' Calculate Deming Regression
 #'
-#' Fits a Deming regression model using log10‐transformed variables. Deming regression
-#' accounts for measurement error in both the dependent and independent variables.
+#' Fits a Deming regression model using either log10‐transformed variables or raw values.
+#' Deming regression accounts for measurement error in both the dependent and independent variables.
 #'
-#' @param data A data.frame (with negative control values already subtracted).
+#' @param data A data.frame with negative control values already subtracted.
 #' @param xvar Character string specifying the independent variable name.
 #' @param yvar Character string specifying the dependent variable name.
+#' @param linear Logical; if TRUE, fits the model on raw values (default is FALSE).
 #'
-#' @return An object of class `deming` representing the fitted Deming regression model.
+#' @return An object of class deming representing the fitted Deming regression model.
 
-calculate_deming <- function(data, xvar, yvar) {
-    formula_str <- paste0('log10(', yvar, ') ~ log10(', xvar, ')')
+calculate_deming <- function(data, xvar, yvar, linear = FALSE) {
+    if (linear) {
+        formula_str <- paste0(yvar, ' ~ ', xvar)
+    } else {
+        formula_str <- paste0('log10(', yvar, ') ~ log10(', xvar, ')')
+    }
     deming(as.formula(formula_str), data = data)
 }
 
@@ -111,14 +122,15 @@ calculate_deming <- function(data, xvar, yvar) {
 #'
 #' Extracts and formats the coefficients and their confidence intervals from a fitted model.
 #' Supports both standard `lm` objects and Deming regression objects.
+#' If round_fun and and round_par specified, coefficients are rounded.
 #'
 #' @param fit A fitted model object (either of class `lm` or `deming`).
-#' @param round_fun A function applied to round regression coefficients (default is round).
-#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
+#' @param round_fun A function applied to round regression coefficients (default is NULL).
+#' @param round_par Integer specifying the number of significant digits for rounding (default is NULL).
 #'
 #' @return A data.frame with columns: `coef`, `est`, `ci.lower`, and `ci.upper`.
 
-get_coef_ci <- function(fit, round_fun = round, round_par = 2) {
+get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
     tab <- 
         if (class(fit) == 'deming') {
             cbind(
@@ -141,104 +153,129 @@ get_coef_ci <- function(fit, round_fun = round, round_par = 2) {
         as.data.frame() %>% 
         setNames(c('est', 'ci.lower', 'ci.upper')) %>% 
         mutate(coef = coef) %>%
-        mutate(across(where(is.numeric), ~ round_fun(., round_par))) %>% 
-        select(coef, everything()) %>% 
         arrange(coef)
-    tab
+    
+    if (!is.null(round_fun) && !is.null(round_par)) {
+        tab <- tab %>% 
+            mutate(across(where(is.numeric), ~ round_fun(., round_par)))
+    }
+    select(tab, coef, everything())
 }
 
 
 #' Retrieve Fitted Values and Residuals
 #'
-#' Returns a data.frame containing the fitted values (back-transformed from log10 scale)
-#' and the residuals from a fitted regression model.
+#' Returns a data.frame containing the fitted values and residuals from a fitted regression model.
+#' If linear is FALSE (default), the fitted values are back-transformed from the log10 scale.
+#' If linear is TRUE, the fitted values are returned without transformation.
 #'
 #' @param fit A fitted regression model object.
+#' @param linear Logical; if TRUE, no back-transformation is applied to the fitted values (default is FALSE).
 #'
-#' @return A data.frame with columns `fitted` and `resid`.
+#' @return A data.frame with columns fitted and resid.
 
-get_fit_resid <- function(fit) {
+get_fit_resid <- function(fit, linear = FALSE) {
     n <- ncol(fit$model)
-    data.frame(fitted = 10^fit$model[,n],
-               resid = resid(fit))
+    df <- data.frame(fitted = fit$model[,n],
+                     resid = resid(fit))
+    if (!linear) {
+        df$fitted <- 10^df$fitted
+    }
+    df
 }
 
 
 #' Predict Method for Deming Regression
 #'
 #' Custom predict method for Deming regression objects. Extracts the regression coefficients,
-#' determines the independent variable from the model, and computes predictions on the log10 scale.
+#' identifies the independent variable from the model, and computes predictions. If the independent
+#' variable is log10-transformed, predictions are computed on the log10 scale.
 #'
 #' @param object A fitted Deming regression model.
 #' @param data A data.frame containing the independent variable.
 #'
-#' @return A numeric vector of predicted log10 values.
+#' @return A numeric vector of predicted values. If the predictor is log-transformed, the result is on the log10 scale.
 #'
-#' @examples
-#' predict(object = deming_fit, data = new_data)
 
 predict.deming <- function(object, data) {
     coef_ci <- get_coef_ci(object)
     coef <- coef_ci$est
-    xvar <- row.names(coef_ci)[1] %>%
-        str_extract(pattern = '(?<=log10\\().*(?=\\))')
-    coef[1]*log10(data[, xvar]) + coef[2]
+    xvar <- row.names(coef_ci)[1]
+    if (str_detect(xvar, 'log10')) {
+        xvar <- str_extract(xvar, pattern = '(?<=log10\\().*(?=\\))')
+        return(coef[1] * log10(data[, xvar]) + coef[2])
+    }
+    coef[1] * data[, xvar] + coef[2]
 }
 
 
 #' Predict Using Log-Transformed Regression Model
 #'
-#' Generates predictions from a fitted regression model by first obtaining predictions
-#' (assumed to be on the log10 scale), back-transforming them, and then rounding to the
-#' specified number of significant digits.
+#' Generates predictions from a fitted regression model. When linear is FALSE (default),
+#' the predictions are assumed to be on the log10 scale and are back-transformed; when TRUE,
+#' predictions are computed on the original scale.
+#' The results are rounded using the specified rounding function.
 #'
 #' @param data A data.frame of new observations.
 #' @param fit A fitted regression model.
-#' @param round_fun A function applied to round calculated concentrations (default is signif).
-#' @param round_par Integer specifying the number of significant digits (default is 3).
+#' @param linear Logical; if TRUE, no back-transformation is applied (default is FALSE).
+#' @param round_fun A function used to round the calculated predictions (default is signif).
+#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
 #'
 #' @return A numeric vector of predicted values.
 
-predict_log_regr <- function(data, fit, round_fun = signif, round_par = 3) {
-    predicted <- suppressMessages(10^predict(fit, data))
+predict_log_regr <- function(data, fit,
+                             linear = FALSE,
+                             round_fun = signif, round_par = 3) {
+    predicted <- suppressMessages(predict(fit, data))
+    if (!linear) predicted <- 10^predicted
     return(round_fun(predicted, round_par))
 }
 
 
 #' Calculate Sample Concentrations Using a Regression Model
 #'
-#' Prepares the data, fits regression models on the standard samples (both direct and reverse),
-#' predicts the sample concentrations, and returns a list containing the fitted models,
-#' standard data, and processed sample data.
+#' Prepares experimental data, fits regression models on the standard samples (both direct and reverse),
+#' predicts sample concentrations, and returns a list containing the fitted models, standard data,
+#' and processed sample data.
 #'
-#' @param data A data.frame containing experimental data with columns such as `type`, `conc`, `OD`, and `dilution`.
-#' @param model Character string specifying the model type to use ('LRM', 'QRM', or 'deming'; default is 'LRM').
-#' @param xvar Character string specifying the independent variable name (default is "conc").
-#' @param yvar Character string specifying the dependent variable name (default is "OD").
-#' @param round_fun A function applied to round calculated concentrations (default is signif).
-#' @param round_par Integer for rounding predictions (default is 3).
+#' @param data A data.frame containing experimental data with columns such as type, conc, OD, and dilution.
+#' @param model Character string specifying the model type to use ('LRM', 'QRM', or 'deming';
+#' default is 'LRM').
+#' @param xvar Character string specifying the independent variable name (default is 'conc').
+#' @param yvar Character string specifying the dependent variable name (default is 'OD').
+#' @param linear Logical; if TRUE, models are fitted using raw (non-log-transformed) data (default is FALSE).
+#' @param round_fun A function used to round predicted concentrations (default is signif).
+#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
+#'
+#' @return A list with components:
+#'   $model_direct: The fitted regression model on standard data.
+#'   $model_reverse: The fitted reverse regression model used for prediction.
+#'   $linear_scale: Logical value indicating if raw (linear) data was used.
+#'   $standard_data: The data used for model fitting (standard samples).
+#'   $result: A data.frame of sample results with estimated concentrations.
 
 calculate <- function(data, model = 'LRM',
-                      xvar = 'conc', yvar = 'OD',
+                      xvar = 'conc', yvar = 'OD', linear = FALSE,
                       round_fun = signif, round_par = 3) {
-    # Data preparation
+    # Data preparation: subtract negative control values
     data <- subtract_nc(data)
     standard_data <- subset(data, type == 'standard')
     sample_data <- subset(data, type == 'sample')
     
-    # Choosing model
+    #  Choose regression model function based on input model type
     lin_fun <- switch (model,
                        'LRM' = calculate_LRM,
                        'QRM' = calculate_QRM,
                        'deming' = calculate_deming
     )
     
-    # Model fitting
-    fit_direct <- lin_fun(standard_data,  xvar = 'conc', yvar = 'OD'  )
-    fit_reverse <- lin_fun(standard_data, xvar = 'OD',   yvar = 'conc')
+    # Model fitting on standard data (direct and reverse)
+    fit_direct <- lin_fun(standard_data,  xvar = 'conc', yvar = 'OD'  , linear = linear)
+    fit_reverse <- lin_fun(standard_data, xvar = 'OD',   yvar = 'conc', linear = linear)
     
-    # Results
-    predicted <- predict_log_regr(sample_data, fit_reverse,
+    # Predict sample concentrations using reverse model
+    predicted <- predict_log_regr(sample_data, fit_reverse, linear = linear,
                                   round_fun = round_fun, round_par = round_par)
     sample_data[, 'conc'] <- predicted * sample_data[, 'dilution']
     sample_data$conc <- ifelse(is.nan(sample_data$conc),
@@ -246,9 +283,10 @@ calculate <- function(data, model = 'LRM',
                                sample_data$conc)
     sample_data$OD <- round(sample_data$OD, 4)
     
-    # Return
+    # Return list with model and processed results
     list(model_direct = fit_direct,
          model_reverse = fit_reverse,
+         linear_scale = linear,
          standard_data = standard_data,
          result = sample_data %>% select(-c(type, OD)))
 }
@@ -304,6 +342,7 @@ my_theme <- theme_bw() +
           panel.border = element_blank(),
           axis.line = element_line(colour = "black"))
 
+theme_set(my_theme)
 
 #' Transform Data Frame to Named List
 #'
@@ -346,45 +385,51 @@ design_x_scale <- function(x, round_par = 3) {
 
 #' Quadratic Regression Function for Prediction
 #'
-#' Computes predicted values using a quadratic function on the log10-transformed scale.
-#' The function transforms the input `x`, applies the quadratic formula, and then back-transforms.
+#' Computes predicted values using a quadratic function. When linear is FALSE (default),
+#' the input x is log10-transformed before applying the quadratic formula and then back-transformed.
+#' If linear is TRUE, the function uses the original x values.
 #'
 #' @param x Numeric vector of independent variable values.
 #' @param a Coefficient for the quadratic term (default is 0).
 #' @param b Coefficient for the linear term.
 #' @param c Intercept term.
+#' @param linear Logical; if TRUE, predictions are computed on the original scale (default is FALSE).
 #'
-#' @return A numeric vector of predicted values on the original scale
+#' @return A numeric vector of predicted values on the appropriate scale.
 
-qrm_fun <- function(x, a = 0, b, c) {
+qrm_fun <- function(x, a = 0, b, c, linear = FALSE) {
+    if (linear) {
+        return(a * x^2 + b * x + c)
+    }
     x <- log10(x)
-    10^(a*x^2 + b*x + c)
+    10^(a * x^2 + b * x + c)
 }
 
 
 #' Plot Standard Curve with Fitted Regression
 #'
 #' Creates a ggplot2 plot of standard sample data with points and overlays a regression
-#' curve generated using a quadratic function. The x-axis is scaled logarithmically.
+#' curve generated using a quadratic function. When linear is FALSE (default), the x- and y-axes
+#' are scaled logarithmically.
 #'
 #' @param standard_data A data.frame containing standard sample data.
 #' @param fit A fitted regression model object.
-#' @param xvar Character string specifying the x-axis variable name (default is "conc").
-#' @param yvar Character string specifying the y-axis variable name (default is "OD").
+#' @param linear Logical; if TRUE, plots are generated on the original scale (default is FALSE).
+#' @param xvar Character string specifying the x-axis variable name (default is 'conc').
+#' @param yvar Character string specifying the y-axis variable name (default is 'OD').
 #' @param xtitle Character string for the x-axis label.
 #' @param ytitle Character string for the y-axis label.
 #'
 #' @return A ggplot2 plot object.
-
 plot_standard_curve <- function(standard_data,
                                 fit,
+                                linear = FALSE,
                                 xvar = 'conc', yvar = 'OD',
                                 xtitle = '', ytitle = '') {
     coef_ci <- get_coef_ci(fit)
     arg_list <- select(coef_ci, c('est', 'coef')) %>%
         transform_to_list()
-    
-    x_scale <- design_x_scale(standard_data[, xvar])
+    arg_list['linear'] <- linear
     
     plot <-
         ggplot(standard_data, aes_string(xvar, yvar)) +
@@ -392,11 +437,16 @@ plot_standard_curve <- function(standard_data,
         geom_function(fun = qrm_fun, args = arg_list,
                       color = 'blue',
                       linewidth = 0.75) +
+        labs(x = xtitle, y = ytitle)
+    
+    if (!linear) {
+        x_scale <- design_x_scale(standard_data[, xvar])
+        
+        plot <- plot +
         scale_x_log10(breaks = x_scale,
                       labels = as.character(x_scale)) +
-        scale_y_log10() +
-        my_theme +
-        labs(x = xtitle, y = ytitle)
+        scale_y_log10()
+    }
     
     plot
 }
@@ -405,17 +455,16 @@ plot_standard_curve <- function(standard_data,
 #' Plot Fitted Values vs. Residuals
 #'
 #' Generates a residual plot for a fitted regression model by plotting the fitted values
-#' (back-transformed to the original scale) against the residuals. A smooth loess line is added
-#' for trend visualization.
+#' (back-transformed from the log10 scale if applicable) against the residuals.
+#' A smooth loess line is added for visualizing trends.
 #'
 #' @param fit A fitted regression model object.
+#' @param linear Logical; if TRUE, fitted values are not back-transformed (default is FALSE).
 #'
 #' @return A ggplot2 plot object displaying the residuals.
 
-plot_fitted_resid <- function(fit) {
-    data <- get_fit_resid(fit)
-    
-    x_scale <- design_x_scale(data[, 'fitted'])
+plot_fitted_resid <- function(fit, linear = FALSE) {
+    data <- get_fit_resid(fit, linear = linear)
     
     plot <-
         ggplot(data, aes(fitted, resid)) +
@@ -427,10 +476,15 @@ plot_fitted_resid <- function(fit) {
                     se = FALSE,
                     span = 2,
                     linewidth = 0.75) +
-        scale_x_log10(breaks = x_scale,
-                      labels = as.character(x_scale)) +
-        my_theme +
         labs(x = 'Fitted values', y = 'Residuals')
+    
+    if (!linear) {
+        x_scale <- design_x_scale(data[, 'fitted'])
+        
+        plot <- plot +
+        scale_x_log10(breaks = x_scale,
+                      labels = as.character(x_scale))
+    }
     
     plot
 }
@@ -457,14 +511,16 @@ get_plots <- function(result,
     
     standard_plot <-
         plot_standard_curve(
-            result$standard_data,
-            result$model_direct,
+            standard_data = result$standard_data,
+            fit = result$model_direct,
+            linear = result$linear_scale,
             xvar = xvar, yvar = yvar,
             xtitle = xtitle, ytitle = ytitle
         )
     
     fit_resid_plot <- 
-        plot_fitted_resid(result$model_direct)
+        plot_fitted_resid(result$model_direct,
+                          linear = result$linear_scale)
     
     if (!is.null(plot.theme)) {
         standard_plot <- standard_plot + plot.theme
@@ -488,6 +544,21 @@ get_plots <- function(result,
 is.Date <- function(x) inherits(x, 'Date')
 
 
+#' Create Experiment Data Template
+#'
+#' Generates a template data.frame for an experiment containing both standard and sample entries.
+#' The standard part includes titration values and a negative control (NC) row, while the sample
+#' part includes placeholder rows.
+#'
+#' @param start Numeric value indicating the starting concentration (default is 100).
+#' @param step Unused parameter (reserved for future use; default is 2).
+#' @param n.standard Number of replicates for the standard samples (default is 2).
+#' @param n.sample Number of sample entries (default is 10).
+#'
+#' @return A data.frame template with columns: sample.name, sample.date, type, dilution, conc, and OD.
+#'
+#' @examples
+#' template <- make_template(start = 100, n.standard = 3, n.sample = 15)
 
 make_template <- function(start = 100, step = 2,
                           n.standard = 2, n.sample = 10) {
@@ -543,21 +614,14 @@ make_template <- function(start = 100, step = 2,
 }
 
 
-#' Create Experiment Data Template
+#' Read Data Table from File
 #'
-#' Generates a template data.frame for an experiment containing both standard and sample entries.
-#' The standard part includes titration values and a negative control (NC) row, while the sample
-#' part includes placeholder rows.
+#' Reads a table from a file path supporting both Excel (.xlsx) and CSV formats. For CSV files,
+#' the function attempts to detect the correct separator and decimal character.
 #'
-#' @param start Numeric value indicating the starting concentration (default is 100).
-#' @param step Unused parameter (reserved for future use; default is 2).
-#' @param n.standard Number of replicates for the standard samples (default is 2).
-#' @param n.sample Number of sample entries (default is 10).
+#' @param path Character string specifying the file path.
 #'
-#' @return A data.frame template with columns: sample.name, sample.date, type, dilution, conc, and OD.
-#'
-#' @examples
-#' template <- make_template(start = 100, n.standard = 3, n.sample = 15)
+#' @return A data.frame containing the imported data.
 
 read_table <- function(path) {
     file_type <- tools::file_ext(path) %>% tolower()
@@ -577,36 +641,8 @@ read_table <- function(path) {
         },
         stop('This filetype is not supported')
     )
-    for(col in colnames(table)) {
-        if (is.Date(table[, col])) {
-            table[, col] <- as.character(format(table[, col], '%d.%m.%Y'))
-        }
-    }
+    
     return(table)
-}
-
-
-#' Read Data Table from File
-#'
-#' Reads a table from a file path supporting both Excel (.xlsx) and CSV formats. For CSV files,
-#' the function attempts to detect the correct separator and decimal character. Date columns are
-#' formatted as character strings ("dd.mm.yyyy").
-#'
-#' @param path Character string specifying the file path.
-#'
-#' @return A data.frame containing the imported data.
-
-save_csv <- function(X, file, dialect = 'comma') {
-    switch (dialect,
-        'comma' = write.table(X,
-                              file,
-                              sep = ',', dec = '.',
-                              row.names = FALSE),
-        'semicolon' = write.table(X,
-                                  file,
-                                  sep = ';', dec = ',',
-                                  row.names = FALSE)
-    )
 }
 
 
@@ -688,4 +724,57 @@ check_input_file <- function(data) {
     }
     
     data
+}
+
+
+#' Format Input Data Table
+#'
+#' This function formats an input data table by converting all columns that are of the Date class
+#' into character strings with the format "dd.mm.yyyy". It also ensures that the sample.name
+#' column is stored as a character vector.
+#'
+#' @param table A data.frame representing the input data table.
+#'
+#' @return A formatted data.frame with date columns converted to character strings (formatted as "dd.mm.yyyy")
+#' and the sample.name column coerced to character type.
+
+format_input_table <- function(table) {
+    
+    # Format columns with dates
+    for(col in colnames(table)) {
+        if (is.Date(table[, col])) {
+            table[, col] <- as.character(format(table[, col], '%d.%m.%Y'))
+        }
+    }
+    
+    # Ensure the sample.name column is of character type
+    table$sample.name <- as.character(table$sample.name)
+    
+    table
+}
+
+
+#' Save Data Frame as CSV File
+#'
+#' Saves a data.frame to a CSV file using the specified dialect. The dialect determines the separator
+#' and decimal character used in the output.
+#'
+#' @param X A data.frame to be saved.
+#' @param file Character string specifying the output file path.
+#' @param dialect Character string indicating the CSV dialect; valid options are "comma" (default)
+#' or "semicolon".
+#'
+#' @return None. The function writes the file to disk.
+
+save_csv <- function(X, file, dialect = 'comma') {
+    switch (dialect,
+            'comma' = write.table(X,
+                                  file,
+                                  sep = ',', dec = '.',
+                                  row.names = FALSE),
+            'semicolon' = write.table(X,
+                                      file,
+                                      sep = ';', dec = ',',
+                                      row.names = FALSE)
+    )
 }
