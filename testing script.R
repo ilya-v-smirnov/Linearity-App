@@ -122,6 +122,7 @@ get_coef_ci(result_QRM$model_direct)
 get_coef_ci(result_deming$model_direct)
 
 
+#### In linear scales ####
 
 # LRM coefficients
 get_coef_ci(result_LRM_l$model_direct)
@@ -158,11 +159,23 @@ get_plots(result_deming,
           ytitle = 'Y axis title')
 
 
+#### In linear scales ####
 
 # Plot LRM
 get_plots(result_LRM_l,
           xtitle = 'X axis title',
           ytitle = 'Y axis title')
+
+# Plot LRM
+get_plots(result_QRM_l,
+          xtitle = 'X axis title',
+          ytitle = 'Y axis title')
+
+# Plot Deming model
+get_plots(result_deming_l,
+          xtitle = 'X axis title',
+          ytitle = 'Y axis title')
+
 ###################### Result Aggregation ######################################
 
 # Test for Result Aggregation Function  

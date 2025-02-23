@@ -85,19 +85,19 @@ ui <- fluidPage(
             
             wellPanel(
                 fluidRow(
-                    column(7,
+                    column(width = 7,
                            selectInput('round_fun_select',
                                        label = 'Rounding function',
                                        choices = c('Significant' = 'signif',
                                                    'Round' = 'round'),
                                        selected = 'signif')),
-                    column(5,
+                    column(width = 5,
                            numericInput('round_par',
                                         label = 'Number',
                                         value = 3, step = 1, min = 1, max = 7))
-                    )
-                ),
-             
+                )
+            ),
+            
             width = 3),
         
         
@@ -118,7 +118,7 @@ ui <- fluidPage(
                                 br(),
                                 tableOutput('coefs_table'),
                                 fluidRow(
-                                    column(4,
+                                    column(width = 4,
                                            radioButtons('model',
                                                         'Choose regression model',
                                                         choices = c('Linear regression model' = 'LRM',
@@ -131,12 +131,12 @@ ui <- fluidPage(
                                 
                                 br(),
                                 fluidRow(
-                                    column(4,
+                                    column(width = 4,
                                            textInput('xtitle',
                                                      'X-axis title:',
                                                      value = 'Concentration',
                                                      width = '100%')),
-                                    column(2,
+                                    column(width = 2,
                                            selectInput('xunits',
                                                        'X units:',
                                                        choices = c('',
@@ -151,7 +151,7 @@ ui <- fluidPage(
                                                                    'mM'    = ', mM'),
                                                        selected = '',
                                                        width = '100%')),
-                                    column(4,
+                                    column(width = 4,
                                            textInput('ytitle',
                                                      'Y-axis title:',
                                                      value = 'Optical density',
@@ -164,18 +164,55 @@ ui <- fluidPage(
                        # Tab: Results - shows the calculated results table and offers download functionality
                        tabPanel('Results',
                                 tableOutput('result_table'),
+                                fluidRow(
+                                    column(width = 2,
+                                           selectInput('result_format',
+                                                       label = 'File type',
+                                                       choices = c('Excel' = 'xlsx',
+                                                                   'CSV' = 'csv'),
+                                                       selected = 'Excel')),
+                                    column(width = 1,
+                                           conditionalPanel(condition = "input.result_format == 'csv'",
+                                                            selectInput('res_csv_dialect',
+                                                                        label = 'Sep',
+                                                                        choices = c(',' = 'comma',
+                                                                                    ';' = 'semicolon'),
+                                                                        selected = 'comma', width = '100%'))
+                                    )
+                                ),
                                 downloadButton('download_results', 'Download results', icon = icon('file-excel')),
+                                br(),
+                                br()
                        ),
                        
-                       # Tab: Means - allows aggregation of results with selectable grouping parameters
-                       tabPanel('Means',
+                       # Tab: Result Summary - allows aggregation of results with selectable grouping parameters
+                       tabPanel('Result Summary',
                                 selectizeInput('aggr_par',
                                                label = 'Select aggregation parameters:',
                                                choices = c('sample.name', 'sample.date', 'dilution'),
                                                selected = 'sample.name',
                                                multiple = TRUE),
                                 tableOutput('means_table'),
-                                downloadButton('download_means', 'Download means', icon = icon('file-excel')),
+                                fluidRow(
+                                    column(width = 2,
+                                           selectInput('result_summary_format',
+                                                       label = 'File type',
+                                                       choices = c('Excel' = 'xlsx',
+                                                                   'CSV' = 'csv'),
+                                                       selected = 'Excel')),
+                                    column(width = 1,
+                                           conditionalPanel(condition = "input.result_summary_format == 'csv'",
+                                                            selectInput('rs_csv_dialect',
+                                                                        label = 'Sep',
+                                                                        choices = c(',' = 'comma',
+                                                                                    ';' = 'semicolon'),
+                                                                        selected = 'comma', width = '100%'))
+                                           )
+                                ),
+                                downloadButton('download_means',
+                                               label = 'Download Summary Table',
+                                               icon = icon('file-excel'))
+                                
                        ),
                        
                        # Tab: Report - generates a downloadable report with title and embedded plot
@@ -183,6 +220,22 @@ ui <- fluidPage(
                                 textInput('title', 'Title:', placeholder = 'Experiment name',
                                           width = '100%'),
                                 downloadButton('download_report', label = 'Download report', icon = icon('file-word'))
+                       ),
+                       
+                       tabPanel('User Manual',
+                                
+                                # tags$iframe(style = "height:800px; width:100%;scrolling=yes", 
+                                #             src = 'User Manual.pdf?raw=1', type="application/pdf"),
+                                
+                                icon = icon('file-pdf')
+                       ),
+                       
+                       tabPanel('About',
+                                
+                                h4("This application was designed by Ilya Smirnov."),
+                                h4('Please, report problems or suggestions for improvement by email:'),
+                                h4(a('smirnov.iv.mail@gmail.com', href = 'mailto:smirnov.iv.mail@gmial.com')),
+                                
                        )
             ),
             width = 9
@@ -192,6 +245,9 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
+    
+    # List mapping rounding function names to the actual functions
+    r_fun <- list('signif' = signif, 'round' = round)
     
     ### Sidebar Panel Handlers ###
     
@@ -244,8 +300,6 @@ server <- function(input, output, session) {
     
     ### standard Curve Tab ###
     
-    # List mapping rounding function names to the actual functions
-    r_fun <- list('signif' = signif, 'round' = round)
     
     # Reactive expression to perform calculations using the imported data
     result <- reactive({
@@ -270,7 +324,9 @@ server <- function(input, output, session) {
     
     # Create a reactive expression to extract coefficients and confidence intervals
     coef_table <- reactive({
-        get_coef_ci(result()$model_direct)
+        get_coef_ci(result()$model_direct,
+                    round_fun = r_fun[[input$round_fun_select]],
+                    round_par = input$round_par)
     })
     
     # Render the coefficients table in the UI
@@ -298,20 +354,24 @@ server <- function(input, output, session) {
         result()$result
     }, digits = 4)
     
-    # Download handler to save the results table (currently always using Excel)
+    # Download handler to save the result table as an Excel or CSV file
     output$download_results <- downloadHandler(
         filename = function() {
-            paste0(Sys.Date(), '_result_table.', input$template_filetype)
+            paste0(Sys.Date(), '_result_table.', input$result_format)
         },
         content = function(file) {
-            # Remove the OD column before export
-            rtab <- result()$result %>% select(-OD)
-            write.xlsx(rtab, file, row.names = FALSE)
+            rtab <- result()$result
+            # Save result summary table as CSV or Excel based on file type selection
+            if (input$result_format == 'csv') {
+                save_csv(rtab, file, input$res_csv_dialect)
+            } else {
+                write.xlsx(rtab, file, row.names = FALSE)
+            }
         }
     )
     
     
-    ### Means Tab ###
+    ### Result Summary Tab ###
     
     # Observer to update aggregation parameter choices based on the results columns
     observe({
@@ -337,13 +397,18 @@ server <- function(input, output, session) {
         means_table()
     }, digits = 4)
     
-    # Download handler to save the aggregated means as an Excel file
+    # Download handler to save the aggregated means as an Excel or CSV file
     output$download_means <- downloadHandler(
         filename = function() {
-            paste0(Sys.Date(), '_means.', input$template_filetype)
+            paste0(Sys.Date(), '_summary.', input$result_summary_format)
         },
         content = function(file) {
-            write.xlsx(means_table(), file, row.names = FALSE)
+            # Save result summary table as CSV or Excel based on file type selection
+            if (input$result_summary_format == 'csv') {
+                save_csv(means_table(), file, input$rs_csv_dialect)
+            } else {
+                write.xlsx(means_table(), file, row.names = FALSE)
+            }
         }
     )
     
