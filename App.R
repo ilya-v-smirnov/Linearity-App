@@ -19,9 +19,9 @@ ui <- fluidPage(
         # SIDEBAR: Contains controls for generating a template, importing data, and rounding options    
         sidebarPanel(
             
-            # --- Make Template Section ---
+            # --- Template Parameters Section ---
             wellPanel(
-                h4('Make template'),
+                h4('Template Parameters'),
                 
                 # Input row for standard sample parameters
                 fluidRow(
@@ -40,7 +40,7 @@ ui <- fluidPage(
                 fluidRow(
                     column(width = 6,
                            numericInput('standard.n',
-                                        label = 'Standard col',
+                                        label = 'Standard columns',
                                         value = 2,
                                         min = 1, step = 1)),
                     column(width = 6,
@@ -76,7 +76,7 @@ ui <- fluidPage(
             # --- Import Data Panel ---
             wellPanel(
                 
-                h4('Import data'),
+                h4('Import Data'),
                 fileInput('import_data', label = 'Choose file:', accept = c('.csv', '.xlsx'))
                 
             ),
@@ -84,6 +84,7 @@ ui <- fluidPage(
             # --- Rounding Options ---
             
             wellPanel(
+                h4('Rounding Options'),
                 fluidRow(
                     column(width = 7,
                            selectInput('round_fun_select',
@@ -126,7 +127,7 @@ ui <- fluidPage(
                                                                     'Deming regression' = 'deming'),
                                                         selected = 'LRM')),
                                     column(2,
-                                           checkboxInput('linear_scale', label = 'Linear scale', value = FALSE), )
+                                           checkboxInput('linear_scale', label = 'Linear scales', value = FALSE), )
                                 ),
                                 
                                 br(),
@@ -224,8 +225,8 @@ ui <- fluidPage(
                        
                        tabPanel('User Manual',
                                 
-                                # tags$iframe(style = "height:800px; width:100%;scrolling=yes", 
-                                #             src = 'User Manual.pdf?raw=1', type="application/pdf"),
+                                tags$iframe(style = "height:800px; width:100%;scrolling=yes",
+                                            src = 'User Manual.pdf?raw=1', type="application/pdf"),
                                 
                                 icon = icon('file-pdf')
                        ),
