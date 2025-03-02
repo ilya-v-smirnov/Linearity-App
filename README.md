@@ -15,7 +15,7 @@ The **Linearity App** is a user-friendly tool designed to calculate analyte conc
 Clone this repository and install required dependencies before running the app:
 
 ```bash
-git clone https://github.com/your-repo/LinearityApp.git
+git clone https://github.com/ilya-v-smirnov/LinearityApp.git
 cd LinearityApp
 R -e 'install.packages("shiny")'  # Install Shiny if not already installed
 R -e 'install.packages("deming")' # Install deming package for Deming regression
@@ -41,8 +41,8 @@ R -e 'install.package("officer") # Install officer package to generate Word file
 ### 3. Analyze Standard Curve
 - Navigate to the **Standard Curve** tab.
 - View the **fitted regression line** and **residuals plot**.
-- Choose between **linear regression** (OLS/Deming) or **quadratic regression**.
-- Enable or disable **log transformation** for better linearity.
+- Choose between **linear regression** (LRM/QRM) or **quadratic regression**.
+- Enable or disable **log transformation** for better fit.
 
 ### 4. View and Export Results
 - The **Results Table** displays calculated analyte concentrations.
