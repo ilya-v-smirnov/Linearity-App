@@ -1,2 +1,6 @@
 *.Rhistory
 *.ini
+.Rproj.user
+.Rprofile
+renv/
+.Rporj.user
