@@ -1,6 +1,7 @@
 
 library(shiny)
 
+
 # Load external functions for core computations and reporting
 source('./linearity.R')
 source('./report.R')
@@ -233,7 +234,9 @@ ui <- fluidPage(
                        
                        tabPanel('About',
                                 
-                                h4("This application was designed by Ilya Smirnov."),
+                                h4("This application was designed by Ilya Smirnov."), br(),
+                                h4('The source code is published in my GitHub account:'),
+                                h4(a('https://github.com/ilya-v-smirnov/Linearity-App', href = 'https://github.com/ilya-v-smirnov/Linearity-App')), br(),
                                 h4('Please, report problems or suggestions for improvement by email:'),
                                 h4(a('smirnov.iv.mail@gmail.com', href = 'mailto:smirnov.iv.mail@gmial.com')),
                                 
