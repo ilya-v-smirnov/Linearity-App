@@ -12,6 +12,11 @@ test_that('all languages have the same keys and placeholders', {
     }
 })
 
+test_that('no dictionary key is read as a YAML boolean (y, n, yes, no, on, off)', {
+    keys <- names(LinearityApp:::i18n_dict('en'))
+    expect_false(any(grepl('(^|[.])(TRUE|FALSE)($|[.])', keys)))
+})
+
 test_that('placeholders do not clash with the arguments of tr()', {
     all_placeholders <- unique(unlist(lapply(LinearityApp:::i18n_dict('en'), placeholders)))
     expect_false(any(c('{key}', '{lang}') %in% all_placeholders))

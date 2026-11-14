@@ -20,6 +20,7 @@ The **Linearity App** is an R package with a Shiny application that calculates a
 - Concentrations with 95 % confidence intervals (delta method)
 - Comparison of models (AIC/BIC on the OD scale, R², back-calculated standards, lack-of-fit test)
 - Exclusion of standard points by clicking on the curve, with a mandatory reason
+- Quality assessment of each run (ICH M10 defaults, editable): back-calculated standards, LLOQ/ULOQ from accepted standard levels, replicate CV, QC bias with the 4-6-X rule, dilution linearity, run verdict
 - Provides standard curve and residual plots
 - Flags samples outside the calibration range instead of extrapolating
 - Exports results in Excel or CSV format
@@ -50,6 +51,7 @@ data <- check_assay(read_assay(path))   # plate workbook or table
 res <- calculate(data, model = "4PL", weights = "1/y2")
 res$result                      # sample concentrations and flags
 res$qc                          # quality controls (if any)
+res$quality$accepted            # run verdict; see also res$quality$standards, $samples, $dilution
 message_text(res$notes, "en")   # warnings
 ```
 
@@ -111,7 +113,22 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
 - Warnings about excluded standards and unquantified samples are shown above the tables and in the report.
 - Click **"Download Results"** to export as Excel or CSV.
 
-### 6. Generate a Summary Report
+### 6. Check the Quality of the Run
+The **Quality** tab shows whether the run is accepted and why:
+
+| Check | How | Default limit (ICH M10, ligand binding assays) |
+|-------|-----|-------------------------------------------------|
+| Standards | bias of the mean back-calculated concentration of each level; CV of OD replicates | ±20 % (±25 % at the lowest and highest level); CV ≤ 20 % (25 %) |
+| Calibration | number of accepted standard levels | ≥ 75 % and ≥ 6 levels |
+| LLOQ / ULOQ | lowest and highest accepted standard level; samples outside are flagged `< LLOQ` / `> ULOQ` | — |
+| Quality controls | bias of each QC well; rule: ≥ 2/3 of all QC and ≥ 50 % of each level within limits | ±20 % (±25 % near LLOQ/ULOQ) |
+| Samples | mean, SD and CV of replicates (same `id`, or same name, dilution and date); flag `High CV` | CV ≤ 20 % (25 % near LLOQ/ULOQ) |
+| Dilution linearity | for samples measured at several dilutions: deviation of each dilution from the mean and CV between dilutions; flag `Dilution non-linear` | ±20 %, CV ≤ 20 % |
+| Curve | R², residual standard error, lack-of-fit test | warning if R² < 0.99 or lack of fit p < 0.05 |
+
+The run is rejected if the calibration or the QC rule fails; replicate CV, dilution linearity and curve quality give warnings. All limits can be changed in the **Acceptance criteria** block (for chromatographic assays use 15 % / 20 %); the quantification range can also be set to all standards used in the fit.
+
+### 7. Generate a Summary Report
 - Navigate to the **Report** tab, enter an **experiment title** and click **"Download Report"**.
 
 See the [User Manual](inst/app/www/user-manual.pdf) for detailed instructions.
@@ -155,6 +172,7 @@ Continuous integration (GitHub Actions) runs `R CMD check` on Windows, macOS and
 |------|---------|
 | `R/calibration.R` | background subtraction, standards, flags, `calculate()` |
 | `R/models.R` | calibration models, weighting, inverse prediction with confidence intervals, model comparison |
+| `R/quality.R` | acceptance criteria, standards, replicates, QC, dilution linearity, run verdict |
 | `R/io.R`, `R/plate.R`, `R/validate.R`, `R/template.R` | reading (table and plate formats), validation, templates |
 | `R/aggregate.R`, `R/plots.R`, `R/report.R` | summary tables, plots, Word report |
 | `R/i18n.R`, `inst/i18n/*.yml` | translations |

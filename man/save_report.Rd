@@ -18,6 +18,7 @@ save_report(
   qc_table = NULL,
   exclusions = NULL,
   comparison = NULL,
+  quality = NULL,
   notes = character(0),
   lang = "en"
 )
@@ -48,6 +49,9 @@ save_report(
 \item{exclusions}{Optional table of standard points excluded by the user.}
 
 \item{comparison}{Optional table comparing the calibration models.}
+
+\item{quality}{Optional quality assessment: a list with \code{summary} (from
+\code{quality_summary()}) and \code{tables} (from \code{\link[=quality_tables]{quality_tables()}}).}
 
 \item{notes}{Character vector of warnings.}
 

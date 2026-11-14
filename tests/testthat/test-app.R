@@ -145,7 +145,8 @@ test_that('server takes the language from the page URL', {
     local_mocked_bindings(
         mod_import_server = function(...) NULL, mod_rounding_server = function(...) NULL,
         mod_curve_server = function(...) NULL, mod_results_server = function(...) NULL,
-        mod_summary_server = function(...) NULL, mod_report_server = function(...) NULL
+        mod_summary_server = function(...) NULL, mod_report_server = function(...) NULL,
+        mod_criteria_server = function(...) NULL, mod_quality_server = function(...) NULL
     )
     fake_session <- function(search) list(clientData = list(url_search = search))
     LinearityApp:::app_server(list(), list(), fake_session('?lang=ru'))

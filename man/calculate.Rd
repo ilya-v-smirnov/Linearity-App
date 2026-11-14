@@ -12,7 +12,8 @@ calculate(
   exclude = NULL,
   round_fun = signif,
   round_par = 3,
-  level = 0.95
+  level = 0.95,
+  criteria = qc_criteria()
 )
 }
 \arguments{
@@ -30,6 +31,8 @@ columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}
 \item{round_fun, round_par}{Rounding applied to the final concentrations only.}
 
 \item{level}{Confidence level of the concentration intervals.}
+
+\item{criteria}{Acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
 }
 \value{
 A list with components:
@@ -40,7 +43,9 @@ A list with components:
 \item \code{standard_data}: standards used in the fit (with \code{.key});
 \item \code{excluded_standards}: standards not used in the fit with a \code{reason};
 \item \code{exclusions}: standards excluded by the user (\code{key}, \code{conc}, \code{OD}, \code{reason});
-\item \code{calibration_range}: range of standard concentrations used in the fit;
+\item \code{calibration_range}: quantification range (LLOQ, ULOQ) used for the flags;
+\item \code{standard_range}: range of all standard concentrations used in the fit;
+\item \code{quality}: quality assessment of the run (see \code{\link[=assess_run]{assess_run()}});
 \item \code{back_calc}: back-calculated standards (see \code{\link[=back_calculate]{back_calculate()}});
 \item \code{lack_of_fit}: lack-of-fit test (see \code{\link[=lack_of_fit]{lack_of_fit()}});
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});

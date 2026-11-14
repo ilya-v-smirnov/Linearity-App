@@ -43,6 +43,8 @@ mod_report_server <- function(id, lang, curve, means) {
                             qc_table = localize_result(curve$result()$qc, lang),
                             exclusions = exclusions_table(curve$result()$exclusions, lang),
                             comparison = comparison_table(curve$comparison(), lang),
+                            quality = list(summary = quality_summary(curve$result(), lang),
+                                           tables = quality_tables(curve$result()$quality, lang)),
                             notes = curve$notes(),
                             lang = lang)
             }

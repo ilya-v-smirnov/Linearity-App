@@ -12,6 +12,14 @@
 #' - `missing` (`"Missing OD"`): the OD value is empty.
 #' - `excluded` (`"Excluded"`): a standard point excluded by the user.
 #'
+#' Flags of replicate groups (see [assess_run()]):
+#'
+#' - `high_cv` (`"High CV"`): the CV of replicates exceeds the limit.
+#' - `nonlinear` (`"Dilution non-linear"`): the dilutions of the sample do not agree.
+#'
+#' LLOQ and ULOQ are the lowest and highest accepted standard levels (see
+#' [qc_criteria()], argument `range`).
+#'
 #' @export
 FLAGS <- list(ok = 'OK',
               below = '< LLOQ',
@@ -19,7 +27,9 @@ FLAGS <- list(ok = 'OK',
               od_le_nc = 'OD <= NC',
               no_solution = 'No solution',
               missing = 'Missing OD',
-              excluded = 'Excluded')
+              excluded = 'Excluded',
+              high_cv = 'High CV',
+              nonlinear = 'Dilution non-linear')
 
 
 ##################### BACKGROUND (NC) ##########################################
@@ -217,6 +227,7 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   columns `key` (see [well_keys()]) and `reason`.
 #' @param round_fun,round_par Rounding applied to the final concentrations only.
 #' @param level Confidence level of the concentration intervals.
+#' @param criteria Acceptance criteria (see [qc_criteria()]).
 #'
 #' @return A list with components:
 #'   * `model_direct`, `fit`: the fitted calibration (`lin_fit`, see [fit_curve()]);
@@ -225,7 +236,9 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `standard_data`: standards used in the fit (with `.key`);
 #'   * `excluded_standards`: standards not used in the fit with a `reason`;
 #'   * `exclusions`: standards excluded by the user (`key`, `conc`, `OD`, `reason`);
-#'   * `calibration_range`: range of standard concentrations used in the fit;
+#'   * `calibration_range`: quantification range (LLOQ, ULOQ) used for the flags;
+#'   * `standard_range`: range of all standard concentrations used in the fit;
+#'   * `quality`: quality assessment of the run (see [assess_run()]);
 #'   * `back_calc`: back-calculated standards (see [back_calculate()]);
 #'   * `lack_of_fit`: lack-of-fit test (see [lack_of_fit()]);
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
@@ -245,7 +258,7 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' head(res$result)
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
-                      round_fun = signif, round_par = 3, level = 0.95) {
+                      round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria()) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
@@ -276,7 +289,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     # Fit OD = f(conc)
     fit <- fit_curve(standard_data, model, linear, weights)
     notes <- c(notes, fit$notes)
+
+    # Quantification range: accepted standard levels
+    standards <- assess_standards(fit, criteria)
+    calibration <- calibration_acceptance(standards, criteria)
     conc_range <- fit$conc_range
+    if (criteria$range == 'accepted') {
+        if (is.na(calibration$lloq)) {
+            notes <- c(notes, list(lin_message('note.no_accepted_standards')))
+        } else if (calibration$lloq > conc_range[1] || calibration$uloq < conc_range[2]) {
+            conc_range <- c(calibration$lloq, calibration$uloq)
+            notes <- c(notes, list(lin_message('note.range_narrowed', lloq = signif(conc_range[1], 3),
+                                               uloq = signif(conc_range[2], 3))))
+        }
+    }
     if (!is_monotonic(fit)) {
         notes <- c(notes, list(lin_message('note.not_monotonic')))
     }
@@ -330,6 +356,9 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     sample_data$.key <- NULL
     sample_data <- drop_empty_columns(sample_data, c('well', 'id'))
 
+    quality <- assess_run(fit, standards, calibration, sample_data, qc, conc_range, lof, criteria)
+    notes <- c(notes, quality$reasons, quality$warnings)
+
     list(model_direct = fit,
          fit = fit,
          model = model,
@@ -340,6 +369,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          excluded_standards = std$excluded,
          exclusions = exclusions,
          calibration_range = conc_range,
+         standard_range = fit$conc_range,
+         quality = quality,
          back_calc = back_calculate(fit),
          lack_of_fit = lof,
          notes = notes,

@@ -32,6 +32,8 @@ app_ui <- function(request, default_lang = 'en') {
                                     mod_curve_ui('curve', lang)),
                     shiny::tabPanel(t('tab.results'), value = 'results',
                                     mod_results_ui('results', lang)),
+                    shiny::tabPanel(t('tab.quality'), value = 'quality',
+                                    mod_quality_ui('quality', lang)),
                     shiny::tabPanel(t('tab.summary'), value = 'summary',
                                     mod_summary_ui('summary', lang)),
                     shiny::tabPanel(t('tab.report'), value = 'report',

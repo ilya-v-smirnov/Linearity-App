@@ -8,7 +8,13 @@
 \usage{
 mod_curve_ui(id, lang)
 
-mod_curve_server(id, lang, data, rounding)
+mod_curve_server(
+  id,
+  lang,
+  data,
+  rounding,
+  criteria = shiny::reactive(qc_criteria())
+)
 }
 \arguments{
 \item{id}{Module id.}
@@ -18,6 +24,8 @@ mod_curve_server(id, lang, data, rounding)
 \item{data}{Reactive with validated input data.}
 
 \item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}.}
+
+\item{criteria}{Reactive with acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
 }
 \value{
 \code{mod_curve_server()} returns a list of reactives: \code{result}

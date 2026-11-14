@@ -107,10 +107,15 @@ tr <- function(key, lang = 'en', ...) {
 #' @return Character vector of translated flags; unknown values are returned unchanged.
 #' @export
 translate_flags <- function(flags, lang = 'en') {
-    keys <- names(FLAGS)[match(flags, unlist(FLAGS))]
-    out <- flags
-    known <- !is.na(keys)
-    out[known] <- vapply(keys[known], function(k) tr(paste0('flag.', k), lang), character(1))
+    one <- function(f) {
+        k <- names(FLAGS)[match(f, unlist(FLAGS))]
+        if (is.na(k)) f else tr(paste0('flag.', k), lang)
+    }
+    out <- vapply(flags, function(f) {
+        if (is.na(f)) return(NA_character_)
+        paste(vapply(strsplit(f, '; ', fixed = TRUE)[[1]], one, ''), collapse = '; ')
+    }, character(1), USE.NAMES = FALSE)
+    names(out) <- names(flags)
     out
 }
 

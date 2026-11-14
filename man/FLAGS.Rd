@@ -21,4 +21,13 @@ stored in English; use \code{\link[=translate_flags]{translate_flags()}} for dis
 \item \code{missing} (\code{"Missing OD"}): the OD value is empty.
 \item \code{excluded} (\code{"Excluded"}): a standard point excluded by the user.
 }
+
+Flags of replicate groups (see \code{\link[=assess_run]{assess_run()}}):
+\itemize{
+\item \code{high_cv} (\code{"High CV"}): the CV of replicates exceeds the limit.
+\item \code{nonlinear} (\code{"Dilution non-linear"}): the dilutions of the sample do not agree.
+}
+
+LLOQ and ULOQ are the lowest and highest accepted standard levels (see
+\code{\link[=qc_criteria]{qc_criteria()}}, argument \code{range}).
 }

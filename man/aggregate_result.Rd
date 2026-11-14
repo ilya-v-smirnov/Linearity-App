@@ -20,7 +20,7 @@ aggregate_result(
 }
 \value{
 A data.frame with \code{n} (all wells), \code{n.quantified} (wells with a
-concentration), \code{mean}, \code{min} and \code{max} of quantified concentrations;
+concentration), \code{mean}, \code{sd}, \code{cv} (\%), \code{min} and \code{max} of quantified concentrations;
 \code{NULL} if no grouping columns are given.
 }
 \description{

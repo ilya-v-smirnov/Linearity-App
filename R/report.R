@@ -9,6 +9,8 @@
 #' @param weights Weighting (text shown in the report).
 #' @param exclusions Optional table of standard points excluded by the user.
 #' @param comparison Optional table comparing the calibration models.
+#' @param quality Optional quality assessment: a list with `summary` (from
+#'   `quality_summary()`) and `tables` (from [quality_tables()]).
 #' @param model_table Coefficients table from [get_coef_ci()].
 #' @param result_table Sample results.
 #' @param means_table Optional aggregated results.
@@ -31,6 +33,7 @@ save_report <- function(file,
                         qc_table = NULL,
                         exclusions = NULL,
                         comparison = NULL,
+                        quality = NULL,
                         notes = character(0),
                         lang = 'en') {
     date_text_style <- officer::fp_text(font.size = 11, underlined = TRUE, font.family = 'Calibri')
@@ -88,6 +91,25 @@ save_report <- function(file,
         for (note in notes) {
             report <- officer::body_add_par(report, paste('-', note), style = 'Normal')
         }
+    }
+
+    if (!is.null(quality)) {
+        s <- quality$summary
+        report <- officer::body_add_fpar(report, section('report.section_quality'))
+        report <- officer::body_add_fpar(report, officer::fpar(officer::ftext(s$title, bold_text)))
+        for (line in c(s$range, s$levels, s$reasons, s$warnings)) {
+            report <- officer::body_add_par(report, line, style = 'Normal')
+        }
+        add_named <- function(report, key, tab) {
+            if (is.null(tab)) return(report)
+            report <- officer::body_add_par(report, tr(key, lang), style = 'Normal')
+            officer::body_add_table(report, tab, style = 'table_template')
+        }
+        report <- add_named(report, 'quality.section_standards', quality$tables$standards)
+        report <- add_named(report, 'quality.section_qc', quality$tables$qc)
+        report <- add_named(report, 'quality.section_samples', quality$tables$samples)
+        report <- add_named(report, 'quality.section_dilution', quality$tables$dilution)
+        report <- add_named(report, 'quality.section_curve', quality$tables$curve)
     }
 
     if (!is.null(means_table)) {

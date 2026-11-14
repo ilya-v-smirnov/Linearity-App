@@ -5,7 +5,7 @@
 #' @param round_fun,round_par Rounding of the aggregated statistics.
 #'
 #' @return A data.frame with `n` (all wells), `n.quantified` (wells with a
-#'   concentration), `mean`, `min` and `max` of quantified concentrations;
+#'   concentration), `mean`, `sd`, `cv` (%), `min` and `max` of quantified concentrations;
 #'   `NULL` if no grouping columns are given.
 #' @export
 aggregate_result <- function(result, group_vars = 'sample.name',
@@ -19,10 +19,13 @@ aggregate_result <- function(result, group_vars = 'sample.name',
         summarise(n = n(),
                   n.quantified = sum(!is.na(.data$conc)),
                   mean = stat_or_na(base::mean, .data$conc),
+                  sd = if (sum(!is.na(.data$conc)) >= 2) stats::sd(.data$conc, na.rm = TRUE) else NA_real_,
+                  cv = cv_percent(.data$conc),
                   min = stat_or_na(base::min, .data$conc),
                   max = stat_or_na(base::max, .data$conc),
                   .groups = 'drop') |>
-        mutate(across(all_of(c('mean', 'min', 'max')), ~ round_fun(.x, round_par))) |>
+        mutate(across(all_of(c('mean', 'sd', 'min', 'max')), ~ round_fun(.x, round_par)),
+               cv = round(.data$cv, 1)) |>
         as.data.frame()
 }
 
