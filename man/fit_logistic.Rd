@@ -6,7 +6,21 @@
 \usage{
 fit_logistic(model, x, y, w)
 }
+\arguments{
+\item{model}{\code{"4PL"} or \code{"5PL"}.}
+
+\item{x, y, w}{Concentrations, ODs and weights.}
+}
+\value{
+A list with \code{par} (named internal parameters) and \code{rss} (weighted
+residual sum of squares), or \code{NULL} if no start converged.
+}
 \description{
-Fit a Logistic Model with Several Starting Points
+Minimises the weighted residual sum of squares with the Levenberg-Marquardt
+algorithm (\code{minpack.lm::nls.lm}) from several starting points and returns
+the best solution. \code{nls.lm} is used directly (not \code{nlsLM}), because
+building an \code{nls} object fails when the parameters are not identifiable
+(e.g. the upper asymptote is not reached), although the curve itself is
+well determined.
 }
 \keyword{internal}

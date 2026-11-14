@@ -179,42 +179,92 @@ start_4pl <- function(x, y, extend = 0.1) {
 
 
 #' Fit a Logistic Model with Several Starting Points
+#'
+#' Minimises the weighted residual sum of squares with the Levenberg-Marquardt
+#' algorithm (`minpack.lm::nls.lm`) from several starting points and returns
+#' the best solution. `nls.lm` is used directly (not `nlsLM`), because
+#' building an `nls` object fails when the parameters are not identifiable
+#' (e.g. the upper asymptote is not reached), although the curve itself is
+#' well determined.
+#'
+#' @param model `"4PL"` or `"5PL"`.
+#' @param x,y,w Concentrations, ODs and weights.
+#'
+#' @return A list with `par` (named internal parameters) and `rss` (weighted
+#'   residual sum of squares), or `NULL` if no start converged.
 #' @keywords internal
 fit_logistic <- function(model, x, y, w) {
-    data <- data.frame(x = x, y = y, w = w)
-    f4 <- y ~ d + (a - d) / (1 + exp(b * (log(x) - lc)))
-    f5 <- y ~ d + (a - d) / (1 + exp(b * (log(x) - lc)))^g
+    shape <- list(model = model, log_scale = FALSE)
     ctrl <- minpack.lm::nls.lm.control(maxiter = 500)
 
-    try_fit <- function(formula, start, lower = NULL) {
-        tryCatch(
-            if (is.null(lower)) {
-                minpack.lm::nlsLM(formula, data = data, start = start, weights = w, control = ctrl)
-            } else {
-                minpack.lm::nlsLM(formula, data = data, start = start, weights = w, control = ctrl,
-                                  lower = lower)
-            },
+    try_fit <- function(start, lower = NULL) {
+        res <- tryCatch(
+            minpack.lm::nls.lm(par = start, lower = lower, control = ctrl,
+                               fn = function(p) sqrt(w) * (y - curve_fun(shape, x, p))),
             error = function(e) NULL)
+        if (is.null(res)) return(NULL)
+        par <- unlist(res$par)
+        names(par) <- names(start)
+        rss <- sum(res$fvec^2)
+        if (!all(is.finite(par)) || !is.finite(rss)) return(NULL)
+        list(par = par, rss = rss)
     }
     best_of <- function(fits) {
-        usable <- function(f) {
-            !is.null(f) && all(is.finite(coef(f))) &&
-                !inherits(try(stats::vcov(f), silent = TRUE), 'try-error')
-        }
-        fits <- Filter(usable, fits)
+        fits <- Filter(Negate(is.null), fits)
         if (length(fits) == 0) return(NULL)
-        fits[[which.min(vapply(fits, stats::deviance, 0))]]
+        fits[[which.min(vapply(fits, function(f) f$rss, 0))]]
     }
 
-    fits4 <- lapply(c(0.1, 0.5, 1, 3), function(e) try_fit(f4, as.list(start_4pl(x, y, e))))
+    fits4 <- lapply(c(0.1, 0.5, 1, 3), function(e) try_fit(start_4pl(x, y, e)))
     best4 <- best_of(fits4)
     if (model == '4PL') return(best4)
 
-    starts <- list(c(as.list(start_4pl(x, y, 0.1)), g = 1))
-    if (!is.null(best4)) starts <- c(list(c(as.list(coef(best4)), g = 1)), starts)
     lower <- c(a = -Inf, b = -Inf, lc = -Inf, d = -Inf, g = 0.05)
-    fits5 <- lapply(starts, function(s) try_fit(f5, s, lower[names(s)]))
-    best_of(fits5)
+    starts <- list(c(start_4pl(x, y, 0.1), g = 1))
+    if (!is.null(best4)) starts <- c(list(c(best4$par, g = 1)), starts)
+    best_of(lapply(starts, function(s) try_fit(s, lower)))
+}
+
+
+#' Covariance Matrix of Logistic Parameters
+#'
+#' sigma^2 (J' W J)^-1 with the Jacobian J of the curve computed numerically.
+#' Parameters are considered not identifiable from the standards when the
+#' condition number of J' W J exceeds 1e10 (typically the upper asymptote is
+#' not reached; the standard error of log EC50 is then > 10). If the matrix
+#' cannot be inverted at all, a pseudo-inverse is used (`exact = FALSE`) so
+#' that concentrations still get confidence intervals.
+#'
+#' @param model `"4PL"` or `"5PL"`.
+#' @param par Internal parameters.
+#' @param x,w Concentrations and weights.
+#' @param sigma Residual standard error.
+#'
+#' @return A list with `vcov`, `identifiable` and `exact`.
+#' @keywords internal
+logistic_vcov <- function(model, par, x, w, sigma) {
+    shape <- list(model = model, log_scale = FALSE)
+    jac <- vapply(seq_along(par), function(i) {
+        h <- 1e-6 * max(1, abs(par[[i]]))
+        up <- par
+        dn <- par
+        up[i] <- par[i] + h
+        dn[i] <- par[i] - h
+        (curve_fun(shape, x, up) - curve_fun(shape, x, dn)) / (2 * h)
+    }, numeric(length(x)))
+    jac <- matrix(jac, nrow = length(x))
+    info <- crossprod(jac * sqrt(w))
+    inv <- tryCatch(solve(info), error = function(e) NULL)
+    exact <- !is.null(inv) && all(is.finite(inv)) && all(diag(inv) > 0)
+    identifiable <- exact && kappa(info, exact = TRUE) < 1e10
+    if (!exact) {
+        s <- svd(info)
+        keep <- s$d > max(s$d) * 1e-12
+        inv <- s$v[, keep, drop = FALSE] %*% (t(s$u[, keep, drop = FALSE]) / s$d[keep])
+    }
+    vc <- sigma^2 * inv
+    dimnames(vc) <- list(names(par), names(par))
+    list(vcov = vc, identifiable = identifiable, exact = exact)
 }
 
 
@@ -226,9 +276,10 @@ fit_logistic <- function(model, x, y, w) {
 #' @param weights Weighting code (see [weighting_schemes()]).
 #'
 #' @return A `lin_fit` object: list with `model`, `log_scale`, `weights`,
-#'   `par` (internal parameters), `vcov`, `df`, `sigma`, `x`, `y`, `w`,
-#'   `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and the
-#'   underlying `lm`/`nls` object in `object`.
+#'   `par` (internal parameters), `vcov`, `df`, `sigma`, `rss` (weighted
+#'   residual sum of squares), `loglik`, `x`, `y`, `w`, `conc_range`,
+#'   `weight_fun`, `w_scale`, `theta`, `notes` and, for LRM and QRM, the
+#'   underlying `lm` object in `object`.
 #' @export
 fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'none') {
     x <- standard_data$conc
@@ -257,18 +308,38 @@ fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'n
             par <- par[c('b', 'c')]
         }
         vc <- vc[names(par), names(par)]
+        df_res <- stats::df.residual(object)
+        sigma <- stats::sigma(object)
+        rss <- stats::deviance(object)
+        loglik <- as.numeric(stats::logLik(object))
+        vcov_exact <- TRUE
+        notes <- wf$notes
     } else {
-        object <- fit_logistic(model, x, y, w)
-        if (is.null(object)) lin_abort('error.fit_failed', model = model)
-        par <- coef(object)
-        vc <- stats::vcov(object)
+        best <- fit_logistic(model, x, y, w)
+        if (is.null(best)) lin_abort('error.fit_failed', model = model)
+        object <- NULL
+        par <- best$par
+        rss <- best$rss
+        n <- length(y)
+        df_res <- n - length(par)
+        sigma <- sqrt(rss / max(df_res, 1))
+        # Gaussian log-likelihood of a weighted least-squares fit (as logLik.nls)
+        loglik <- 0.5 * (sum(log(w)) - n * (log(2 * pi) + 1 - log(n) + log(rss)))
+        cov_info <- logistic_vcov(model, par, x, w, sigma)
+        vc <- cov_info$vcov
+        vcov_exact <- cov_info$exact
+        notes <- wf$notes
+        if (!cov_info$identifiable) {
+            notes <- c(notes, list(lin_message('note.par_unidentifiable', model = model)))
+        }
     }
 
     fit <- structure(list(model = model, log_scale = log_scale, weights = weights,
-                          par = par, vcov = vc, df = stats::df.residual(object),
-                          sigma = stats::sigma(object), x = x, y = y, w = w,
+                          par = par, vcov = vc, vcov_exact = vcov_exact, df = df_res,
+                          sigma = sigma, rss = rss,
+                          loglik = loglik, x = x, y = y, w = w,
                           conc_range = range(x), weight_fun = wf$fun, w_scale = w_scale,
-                          theta = wf$theta, notes = wf$notes, object = object),
+                          theta = wf$theta, notes = notes, object = object),
                      class = 'lin_fit')
     fit
 }
@@ -351,6 +422,11 @@ coef_table_fit <- function(fit, level = 0.95) {
     est <- fit$par
     lower <- est - t_q * se
     upper <- est + t_q * se
+    if (isFALSE(fit$vcov_exact)) {
+        # pseudo-inverse: the intervals of the parameters would be misleadingly narrow
+        lower[] <- NA_real_
+        upper[] <- NA_real_
+    }
     if ('lc' %in% names(est)) {
         i <- which(names(est) == 'lc')
         est[i] <- exp(est[i])
@@ -415,9 +491,8 @@ back_calculate <- function(fit) {
 #' @return Named vector `AIC`, `BIC`.
 #' @keywords internal
 information_criteria <- function(fit) {
-    ll <- stats::logLik(fit$object)
-    k <- attr(ll, 'df')
-    ll <- as.numeric(ll)
+    ll <- fit$loglik
+    k <- length(fit$par) + 1
     if (fit$log_scale) ll <- ll - sum(log(fit$y * log(10)))
     n <- length(fit$y)
     c(AIC = -2 * ll + 2 * k, BIC = -2 * ll + log(n) * k)
