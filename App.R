@@ -35,15 +35,21 @@ ui <- fluidPage(
                            numericInput('standard.step',
                                         label = 'Step',
                                         value = 2,
-                                        min = 2, step = 1))),
-                
-                # Input row for the number of standards and samples
+                                        min = 1.1, step = 1))),
+
+                # Input rows for the number of standard levels, standard series and samples
                 fluidRow(
+                    column(width = 6,
+                           numericInput('standard.levels',
+                                        label = 'Standard levels',
+                                        value = 7,
+                                        min = 3, step = 1)),
                     column(width = 6,
                            numericInput('standard.n',
                                         label = 'Standard columns',
                                         value = 2,
-                                        min = 1, step = 1)),
+                                        min = 1, step = 1))),
+                fluidRow(
                     column(width = 6,
                            numericInput('samples.n',
                                         label = 'N samples',
@@ -118,17 +124,17 @@ ui <- fluidPage(
                                 
                                 plotOutput('two_plots', width = '800px'),
                                 br(),
+                                uiOutput('analysis_notes'),
                                 tableOutput('coefs_table'),
                                 fluidRow(
                                     column(width = 4,
                                            radioButtons('model',
                                                         'Choose regression model',
                                                         choices = c('Linear regression model' = 'LRM',
-                                                                    'Quadratic regression model' = 'QRM',
-                                                                    'Deming regression' = 'deming'),
+                                                                    'Quadratic regression model' = 'QRM'),
                                                         selected = 'LRM')),
                                     column(2,
-                                           checkboxInput('linear_scale', label = 'Linear scales', value = FALSE), )
+                                           checkboxInput('linear_scale', label = 'Linear scales', value = FALSE))
                                 ),
                                 
                                 br(),
@@ -165,6 +171,7 @@ ui <- fluidPage(
                        
                        # Tab: Results - shows the calculated results table and offers download functionality
                        tabPanel('Results',
+                                uiOutput('result_notes'),
                                 tableOutput('result_table'),
                                 fluidRow(
                                     column(width = 2,
@@ -172,7 +179,7 @@ ui <- fluidPage(
                                                        label = 'File type',
                                                        choices = c('Excel' = 'xlsx',
                                                                    'CSV' = 'csv'),
-                                                       selected = 'Excel')),
+                                                       selected = 'xlsx')),
                                     column(width = 1,
                                            conditionalPanel(condition = "input.result_format == 'csv'",
                                                             selectInput('res_csv_dialect',
@@ -201,7 +208,7 @@ ui <- fluidPage(
                                                        label = 'File type',
                                                        choices = c('Excel' = 'xlsx',
                                                                    'CSV' = 'csv'),
-                                                       selected = 'Excel')),
+                                                       selected = 'xlsx')),
                                     column(width = 1,
                                            conditionalPanel(condition = "input.result_summary_format == 'csv'",
                                                             selectInput('rs_csv_dialect',
@@ -238,7 +245,7 @@ ui <- fluidPage(
                                 h4('The source code is published in my GitHub account:'),
                                 h4(a('https://github.com/ilya-v-smirnov/Linearity-App', href = 'https://github.com/ilya-v-smirnov/Linearity-App')), br(),
                                 h4('Please, report problems or suggestions for improvement by email:'),
-                                h4(a('smirnov.iv.mail@gmail.com', href = 'mailto:smirnov.iv.mail@gmial.com')),
+                                h4(a('smirnov.iv.mail@gmail.com', href = 'mailto:smirnov.iv.mail@gmail.com')),
                                 
                        )
             ),
@@ -249,12 +256,37 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
-    
+
     # List mapping rounding function names to the actual functions
     r_fun <- list('signif' = signif, 'round' = round)
-    
+
+    # Run an expression and show any error as a validation message in the UI
+    # (grey text in the outputs instead of a red error)
+    with_validation <- function(expr, prefix) {
+        tryCatch(expr, error = function(e) {
+            validate(need(FALSE, paste0(prefix, conditionMessage(e))))
+        })
+    }
+
+    # Save a table as CSV or Excel depending on the selected file type
+    save_table <- function(X, file, filetype, dialect) {
+        if (filetype == 'csv') {
+            save_csv(X, file, dialect)
+        } else {
+            save_xlsx(X, file)
+        }
+    }
+
+    # Render warnings for the user as a list in a highlighted box
+    notes_ui <- function(notes) {
+        if (length(notes) == 0) return(NULL)
+        div(class = 'alert alert-warning',
+            strong('Warnings:'),
+            tags$ul(lapply(notes, tags$li)))
+    }
+
     ### Sidebar Panel Handlers ###
-    
+
     output$download_template <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_raw.data.', input$template_filetype)
@@ -264,17 +296,12 @@ server <- function(input, output, session) {
             template <- make_template(start = input$standard.start,
                                       step = input$standard.step,
                                       n.standard = input$standard.n,
-                                      n.sample = input$samples.n)
-            
-            # Save template as CSV or Excel based on file type selection
-            if (input$template_filetype == 'csv') {
-                save_csv(template, file, input$csv_dialect)
-            } else {
-                write.xlsx(template, file, row.names = FALSE)
-            }
+                                      n.sample = input$samples.n,
+                                      n.levels = input$standard.levels)
+            save_table(template, file, input$template_filetype, input$csv_dialect)
         }
     )
-    
+
     # Observer to update the rounding parameter input based on the selected rounding function
     observeEvent(input$round_fun_select, {
         if (input$round_fun_select == 'round') {
@@ -283,61 +310,73 @@ server <- function(input, output, session) {
             updateNumericInput(session, 'round_par', value = 3, min = 1, max = 7)
         }
     })
-    
-    
+
+
     ### Imported Data Tab ###
-    
+
     # Reactive expression to read and validate the uploaded data file
     import_data_table <- reactive({
         data_file <- input$import_data
         req(data_file)  # Ensure a file is uploaded
-        read_table(data_file$datapath) %>%
-            check_input_file() %>% 
-            format_input_table()
+        with_validation(
+            read_table(data_file$datapath) %>%
+                check_input_file() %>%
+                format_input_table(),
+            prefix = 'Import error: ')
     })
-    
+
     # Render the imported data as a table in the UI
     output$imported_table <- renderTable({
         import_data_table()
-    }, digits = 4)
-    
-    
-    ### standard Curve Tab ###
-    
-    
+    }, digits = 4, na = '')
+
+
+    ### Standard Curve Tab ###
+
     # Reactive expression to perform calculations using the imported data
     result <- reactive({
-        calculate(data = import_data_table(),
-                  model = input$model,
-                  linear = input$linear_scale,
-                  round_fun = r_fun[[input$round_fun_select]],
-                  round_par = input$round_par)
+        data <- import_data_table()
+        with_validation(
+            calculate(data = data,
+                      model = input$model,
+                      linear = input$linear_scale,
+                      round_fun = r_fun[[input$round_fun_select]],
+                      round_par = input$round_par),
+            prefix = 'Calculation error: ')
     })
-    
+
     # Reactive expression to generate the combined plot (standard curve and residuals)
     plots <- reactive({
         get_plots(result = result(),
                   xtitle = paste0(input$xtitle, input$xunits),
                   ytitle = input$ytitle)
     })
-    
+
     # Render the combined plot in the UI
     output$two_plots <- renderPlot({
         plots()
     })
-    
+
+    # Warnings about the fit and unquantified samples
+    output$analysis_notes <- renderUI({
+        notes_ui(result()$notes)
+    })
+    output$result_notes <- renderUI({
+        notes_ui(result()$notes)
+    })
+
     # Create a reactive expression to extract coefficients and confidence intervals
     coef_table <- reactive({
         get_coef_ci(result()$model_direct,
                     round_fun = r_fun[[input$round_fun_select]],
                     round_par = input$round_par)
     })
-    
+
     # Render the coefficients table in the UI
     output$coefs_table <- renderTable({
         coef_table()
     })
-    
+
     # Download handler to save the current plot as a JPEG image
     output$save_plot <- downloadHandler(
         filename = function() {
@@ -349,76 +388,69 @@ server <- function(input, output, session) {
                    width = 20, height = 10, units = 'cm', dpi = 600)
         }
     )
-    
-    
+
+
     ### Results Tab ###
-    
+
     # Render the results table in the UI
     output$result_table <- renderTable({
         result()$result
-    }, digits = 4)
-    
+    }, digits = 4, na = '')
+
     # Download handler to save the result table as an Excel or CSV file
     output$download_results <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_result_table.', input$result_format)
         },
         content = function(file) {
-            rtab <- result()$result
-            # Save result summary table as CSV or Excel based on file type selection
-            if (input$result_format == 'csv') {
-                save_csv(rtab, file, input$res_csv_dialect)
-            } else {
-                write.xlsx(rtab, file, row.names = FALSE)
-            }
+            save_table(result()$result, file, input$result_format, input$res_csv_dialect)
         }
     )
-    
-    
+
+
     ### Result Summary Tab ###
-    
-    # Observer to update aggregation parameter choices based on the results columns
-    observe({
-        column_names <-
-            colnames(result()$result) %>% 
-            setdiff(., c('type', 'conc', 'OD'))
-        
-        updateSelectizeInput(session, 'aggr_par',
-                             choices = column_names,
-                             selected = 'sample.name')
+
+    # Columns that can be used for aggregation
+    aggregation_columns <- reactive({
+        setdiff(colnames(result()$result), c('type', 'conc', 'OD', 'flag'))
     })
-    
+
+    # Update the choices but keep the user's current selection when possible
+    observeEvent(aggregation_columns(), {
+        columns <- aggregation_columns()
+        selected <- intersect(isolate(input$aggr_par), columns)
+        if (length(selected) == 0) selected <- intersect('sample.name', columns)
+        updateSelectizeInput(session, 'aggr_par',
+                             choices = columns,
+                             selected = selected)
+    })
+
     # Reactive expression to calculate aggregated means based on user-selected grouping variables
     means_table <- reactive({
         aggregate_result(result = result()$result,
-                         group_vars = input$aggr_par,
+                         group_vars = intersect(input$aggr_par, aggregation_columns()),
                          round_fun = r_fun[[input$round_fun_select]],
                          round_par = input$round_par)
     })
-    
+
     # Render the aggregated means table in the UI
     output$means_table <- renderTable({
         means_table()
-    }, digits = 4)
-    
+    }, digits = 4, na = '')
+
     # Download handler to save the aggregated means as an Excel or CSV file
     output$download_means <- downloadHandler(
         filename = function() {
             paste0(Sys.Date(), '_summary.', input$result_summary_format)
         },
         content = function(file) {
-            # Save result summary table as CSV or Excel based on file type selection
-            if (input$result_summary_format == 'csv') {
-                save_csv(means_table(), file, input$rs_csv_dialect)
-            } else {
-                write.xlsx(means_table(), file, row.names = FALSE)
-            }
+            save_table(means_table(), file, input$result_summary_format, input$rs_csv_dialect)
         }
     )
-    
-    
+
+
     ### Report Tab ###
-    
+
     # Download handler to generate and save a report document
     output$download_report <- downloadHandler(
         filename = function() {
@@ -432,17 +464,16 @@ server <- function(input, output, session) {
                                          xtitle = paste0(input$xtitle, input$xunits),
                                          ytitle = input$ytitle,
                                          plot.theme = report_theme), # report_theme is defined in report.R
-                        method = switch(input$model,
-                                        'LRM' = 'Linear regression model',
-                                        'QRM' = 'Quadratic regression model',
-                                        'deming' = 'Deming regression'),
+                        method = MODELS[[input$model]],
+                        scale = if (input$linear_scale) 'linear' else 'log10',
                         model_table = coef_table(),
                         result_table = result()$result,
-                        means_table = means_table())
+                        means_table = means_table(),
+                        notes = result()$notes)
         }
     )
-    
-    
+
+
 }
 
 

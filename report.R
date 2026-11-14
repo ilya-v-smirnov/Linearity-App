@@ -1,5 +1,6 @@
 
 library(officer)
+library(ggplot2)
 
 # Styles
 date_text_style <- fp_text(font.size = 11, underlined = TRUE, font.family = 'Calibri')
@@ -25,9 +26,11 @@ save_report <- function(file,
                         title,
                         plot,
                         method = 'test',
+                        scale = NULL,
                         model_table,
                         result_table,
-                        means_table = NULL) {
+                        means_table = NULL,
+                        notes = character(0)) {
     
     # Date, title and files
     date <- format(as.Date(date), '%d.%m.%Y')
@@ -37,11 +40,14 @@ save_report <- function(file,
     calib_text <- fpar(ftext('Standard curve', section_text_style), fp_p = section_par_style)
     result_text <- fpar(ftext('Result', section_text_style), fp_p = section_par_style)
     means_text <- fpar(ftext('Means', section_text_style), fp_p = section_par_style)
+    notes_text <- fpar(ftext('Warnings', section_text_style), fp_p = section_par_style)
     
     # Standard plot
     calib_method_text_title <- ftext('Calibration method: ', norm_text)
     calib_method_text <- ftext(method, bold_text)
     calib_method_line <- fpar(calib_method_text_title, calib_method_text)
+    scale_line <- fpar(ftext('Scale: ', norm_text),
+                       ftext(if (is.null(scale)) '' else scale, bold_text))
     
     report <- read_docx() %>%
         body_add_fpar(date_text) %>%
@@ -50,6 +56,7 @@ save_report <- function(file,
         body_add_fpar(calib_text) %>%
         body_add_gg(plot, width = 6.5, height = 3) %>%
         body_add_fpar(calib_method_line) %>%
+        body_add_fpar(scale_line) %>%
         # Add visual space after the calibration method line
         body_add_par("", style = "Normal") %>%
         #
@@ -58,6 +65,13 @@ save_report <- function(file,
         body_add_fpar(result_text) %>%
         body_add_table(result_table, style = 'table_template')
     
+    if (length(notes) > 0) {
+        report <- body_add_fpar(report, notes_text)
+        for (note in notes) {
+            report <- body_add_par(report, paste('-', note), style = 'Normal')
+        }
+    }
+
     if (!is.null(means_table)) {
         report <- 
             report %>% 

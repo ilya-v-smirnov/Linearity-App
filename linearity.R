@@ -1,67 +1,112 @@
-
 library(dplyr)
-library(deming)
 library(ggplot2)
 library(cowplot)
-library(xlsx)
-library(stringr)
 
-##################### LINEAR MODELS FUNCTIONS ##################################
+# Excel files are read with readxl and written with openxlsx (both are called
+# with explicit namespaces, so neither package needs to be attached).
+
+
+######################## CONSTANTS #############################################
+
+#' Result flags
+#'
+#' Status assigned to every sample well. Only wells flagged "OK" receive a
+#' numeric concentration; all other wells get NA in the `conc` column.
+#'
+#' - OK          : the OD lies within the calibration range.
+#' - < LLOQ      : the estimate is below the lowest standard used in the fit.
+#' - > ULOQ      : the estimate is above the highest standard used in the fit.
+#' - OD <= NC    : the background-subtracted OD is zero or negative.
+#' - No solution : the OD cannot be reached by the fitted curve (quadratic model).
+#' - Missing OD  : the OD value is empty.
+
+FLAGS <- list(ok = 'OK',
+              below = '< LLOQ',
+              above = '> ULOQ',
+              od_le_nc = 'OD <= NC',
+              no_solution = 'No solution',
+              missing = 'Missing OD')
+
+MODELS <- c('LRM' = 'Linear regression model',
+            'QRM' = 'Quadratic regression model')
+
+
+##################### BACKGROUND (NC) ##########################################
 
 #' Calculate Geometric Mean
 #'
-#' Computes the geometric mean of a numeric vector. If the vector has only one element,
-#' that value is returned. Otherwise, the function takes the mean of the log10‐transformed
-#' values, exponentiates back (base 10), and rounds the result using the specified number
-#' of significant digits.
+#' Computes the geometric mean of a numeric vector of positive values.
+#' Missing values are ignored. No rounding is applied.
 #'
 #' @param x Numeric vector.
-#' @param round_fun A function applied to round calculated geometric means (default is signif).
-#' @param round_par Integer specifying the number of significant digits (default is 3).
 #'
-#' @return A numeric value representing the geometric mean.
+#' @return A numeric value (NA if `x` has no non-missing values or contains
+#'   non-positive values).
 
-geom_mean <- function(x, round_fun = signif, round_par = 3) {
-    if (length(x) == 1) return(x)
-    log10(x[x > 0]) %>% mean() %>% 10^ . %>% round_fun(round_par)
+geom_mean <- function(x) {
+    x <- x[!is.na(x)]
+    if (length(x) == 0 || any(x <= 0)) return(NA_real_)
+    10^mean(log10(x))
+}
+
+
+#' Estimate the Background (Negative Control) Value
+#'
+#' The background is the geometric mean of the NC optical densities. If some NC
+#' values are zero or negative (e.g. the reader already subtracted a blank), the
+#' geometric mean is undefined and the arithmetic mean is used instead.
+#'
+#' @param od Numeric vector of NC optical densities.
+#'
+#' @return A list with `value` (numeric) and `note` (character, possibly empty).
+
+background_value <- function(od) {
+    od <- od[!is.na(od)]
+    if (length(od) == 0) {
+        stop('No valid OD values in NC wells')
+    }
+    if (any(od <= 0)) {
+        return(list(value = mean(od),
+                    note = paste('Some NC values are zero or negative:',
+                                 'the arithmetic mean was used as background',
+                                 'instead of the geometric mean.')))
+    }
+    list(value = geom_mean(od), note = character(0))
 }
 
 
 #' Subtract Negative Control Values
 #'
-#' Subtracts the negative control (NC) value from the observed data. The NC value is
-#' computed as the geometric mean (using [geom_mean]) of the 'OD' column for rows where
-#' the 'type' is "NC". The function then subtracts this NC value from the 'OD' values
-#' in the remaining data.
+#' Removes NC rows and subtracts the background value from the OD of all other rows.
 #'
-#' @param data A data.frame containing at least the columns 'type' and 'OD'. Additional
-#'   grouping variables may be present.
-#' @param round_par Integer specifying the number of significant digits (default is 3).
+#' @param data A data.frame containing at least the columns `type` and `OD`.
+#' @param nc_value Background value; if NULL it is estimated with [background_value()].
 #'
-#' @return A data.frame with the adjusted 'OD' values (NC subtracted).
+#' @return A data.frame without NC rows, with background-subtracted `OD`.
 
-subtract_nc <- function(data, round_fun = signif, round_par = 3) {
-    NC_data <- subset(data, type == 'NC')
-    nc_value <- NC_data$OD %>% geom_mean(round_fun, round_par)
-    subset(data, type != 'NC') %>% 
-        mutate(OD = OD - nc_value)
+subtract_nc <- function(data, nc_value = NULL) {
+    if (is.null(nc_value)) {
+        nc_value <- background_value(data$OD[data$type == 'NC'])$value
+    }
+    out <- data[data$type != 'NC', , drop = FALSE]
+    out$OD <- out$OD - nc_value
+    out
 }
 
 
+##################### CALIBRATION MODELS #######################################
+
 #' Calculate Ordinary Linear Regression Model (LRM)
 #'
-#' Fits a linear regression model on either log10‐transformed variables or raw values.
-#' When linear is FALSE (the default), the model is fitted on log10‐transformed data.
-#' When linear is TRUE, the model is fitted on the original (non-transformed) values.
+#' Fits OD ~ conc (linear = TRUE) or log10(OD) ~ log10(conc) (linear = FALSE).
 #'
-#' @param data A data.frame with negative control values already subtracted.
-#' @param xvar Character string specifying the independent variable name.
-#' @param yvar Character string specifying the dependent variable name.
-#' @param linear Logical; if TRUE, fits the model on raw (non-transformed) values (default is FALSE).
+#' @param data A data.frame with background-subtracted standard data.
+#' @param xvar,yvar Names of the concentration and OD columns.
+#' @param linear Logical; if TRUE the model is fitted on untransformed values.
 #'
-#' @return An object of class lm representing the fitted regression model.
+#' @return An object of class `lm`.
 
-calculate_LRM <- function(data, xvar, yvar, linear = FALSE) {
+calculate_LRM <- function(data, xvar = 'conc', yvar = 'OD', linear = FALSE) {
     if (linear) {
         formula_str <- paste0(yvar, ' ~ ', xvar)
     } else {
@@ -73,18 +118,13 @@ calculate_LRM <- function(data, xvar, yvar, linear = FALSE) {
 
 #' Calculate Quadratic Regression Model (QRM)
 #'
-#' Fits a quadratic regression model on either log10‐transformed data or raw values.
-#' When linear is FALSE (default), the model is fitted on log10‐transformed data;
-#' when linear is TRUE, it is fitted on the original data.
+#' Fits OD ~ conc^2 + conc (linear = TRUE) or the same model on log10 scales.
 #'
-#' @param data A data.frame with negative control values already subtracted.
-#' @param xvar Character string specifying the independent variable name.
-#' @param yvar Character string specifying the dependent variable name.
-#' @param linear Logical; if TRUE, fits the model on raw values (default is FALSE).
+#' @inheritParams calculate_LRM
 #'
-#' @return An object of class lm} representing the fitted quadratic regression model.
+#' @return An object of class `lm`.
 
-calculate_QRM <- function(data, xvar, yvar, linear = FALSE) {
+calculate_QRM <- function(data, xvar = 'conc', yvar = 'OD', linear = FALSE) {
     if (linear) {
         formula_str <-
             paste0(yvar, ' ~ I(' , xvar, '^2) + ', xvar)
@@ -96,232 +136,287 @@ calculate_QRM <- function(data, xvar, yvar, linear = FALSE) {
 }
 
 
-#' Calculate Deming Regression
+#' Name Model Coefficients
 #'
-#' Fits a Deming regression model using either log10‐transformed variables or raw values.
-#' Deming regression accounts for measurement error in both the dependent and independent variables.
+#' Maps lm coefficient names to the notation y = a*x^2 + b*x + c.
 #'
-#' @param data A data.frame with negative control values already subtracted.
-#' @param xvar Character string specifying the independent variable name.
-#' @param yvar Character string specifying the dependent variable name.
-#' @param linear Logical; if TRUE, fits the model on raw values (default is FALSE).
+#' @param term_names Character vector of coefficient names from `coef(fit)`.
 #'
-#' @return An object of class deming representing the fitted Deming regression model.
+#' @return Character vector with values "a", "b" or "c".
 
-calculate_deming <- function(data, xvar, yvar, linear = FALSE) {
-    if (linear) {
-        formula_str <- paste0(yvar, ' ~ ', xvar)
-    } else {
-        formula_str <- paste0('log10(', yvar, ') ~ log10(', xvar, ')')
-    }
-    deming(as.formula(formula_str), data = data)
+coef_labels <- function(term_names) {
+    ifelse(term_names == '(Intercept)', 'c',
+           ifelse(grepl('^2', term_names, fixed = TRUE), 'a', 'b'))
+}
+
+
+#' Curve Coefficients as a Named List
+#'
+#' @param fit A fitted `lm` calibration model.
+#'
+#' @return A list with numeric elements `a` (0 for linear models), `b` and `c`.
+
+curve_coefs <- function(fit) {
+    cf <- coef(fit)
+    lab <- coef_labels(names(cf))
+    list(a = if ('a' %in% lab) unname(cf[lab == 'a']) else 0,
+         b = unname(cf[lab == 'b']),
+         c = unname(cf[lab == 'c']))
 }
 
 
 #' Extract Coefficients and Confidence Intervals
 #'
-#' Extracts and formats the coefficients and their confidence intervals from a fitted model.
-#' Supports both standard `lm` objects and Deming regression objects.
-#' If round_fun and and round_par specified, coefficients are rounded.
+#' @param fit A fitted `lm` calibration model.
+#' @param round_fun Optional rounding function (e.g. `signif`).
+#' @param round_par Optional rounding parameter.
 #'
-#' @param fit A fitted model object (either of class `lm` or `deming`).
-#' @param round_fun A function applied to round regression coefficients (default is NULL).
-#' @param round_par Integer specifying the number of significant digits for rounding (default is NULL).
-#'
-#' @return A data.frame with columns: `coef`, `est`, `ci.lower`, and `ci.upper`.
+#' @return A data.frame with columns `coef`, `est`, `ci.lower`, `ci.upper`.
 
 get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
-    tab <- 
-        if (class(fit) == 'deming') {
-            cbind(
-                fit$coefficients,
-                fit$ci
-            )
-        } else {
-            cbind(
-                coef(fit),
-                confint(fit)
-            )
-        }
-    if(nrow(tab) == 3) {
-        coef <- c('c', 'a', 'b')
-    } else {
-        coef <- c('c', 'b')
+    if (!inherits(fit, 'lm')) {
+        stop('Unsupported model object')
     }
-    tab <-
-    tab %>% 
-        as.data.frame() %>% 
-        setNames(c('est', 'ci.lower', 'ci.upper')) %>% 
-        mutate(coef = coef) %>%
-        arrange(coef)
-    
+    tab <- as.data.frame(cbind(coef(fit), confint(fit)))
+    tab <- setNames(tab, c('est', 'ci.lower', 'ci.upper'))
+    tab$coef <- coef_labels(rownames(tab))
+    tab <- tab[order(tab$coef), c('coef', 'est', 'ci.lower', 'ci.upper')]
+    rownames(tab) <- NULL
+
     if (!is.null(round_fun) && !is.null(round_par)) {
-        tab <- tab %>% 
-            mutate(across(where(is.numeric), ~ round_fun(., round_par)))
+        tab <- mutate(tab, across(where(is.numeric), ~ round_fun(., round_par)))
     }
-    select(tab, coef, everything())
+    tab
 }
 
 
-#' Retrieve Fitted Values and Residuals
+#' Inverse Prediction from the Calibration Curve
 #'
-#' Returns a data.frame containing the fitted values and residuals from a fitted regression model.
-#' If linear is FALSE (default), the fitted values are back-transformed from the log10 scale.
-#' If linear is TRUE, the fitted values are returned without transformation.
+#' Calculates the concentration that corresponds to a given (background-subtracted)
+#' OD by inverting the fitted curve OD = f(conc). For the quadratic model the root
+#' lying on the same branch of the parabola as the standards is returned.
 #'
-#' @param fit A fitted regression model object.
-#' @param linear Logical; if TRUE, no back-transformation is applied to the fitted values (default is FALSE).
+#' @param fit A fitted `lm` calibration model (OD as a function of concentration).
+#' @param od Numeric vector of background-subtracted ODs.
+#' @param conc_range Range of standard concentrations used in the fit.
+#' @param linear Logical; TRUE if the model was fitted on untransformed values.
 #'
-#' @return A data.frame with columns fitted and resid.
+#' @return Numeric vector of concentrations (NA where no solution exists or OD <= 0).
 
-get_fit_resid <- function(fit, linear = FALSE) {
-    n <- ncol(fit$model)
-    df <- data.frame(fitted = fit$model[,n],
-                     resid = resid(fit))
-    if (!linear) {
-        df$fitted <- 10^df$fitted
+inverse_predict <- function(fit, od, conc_range, linear = FALSE) {
+    k <- curve_coefs(fit)
+
+    y <- rep(NA_real_, length(od))
+    positive <- !is.na(od) & od > 0
+    y[positive] <- if (linear) od[positive] else log10(od[positive])
+
+    x_lim <- if (linear) conc_range else log10(conc_range)
+
+    if (k$a == 0) {
+        x <- (y - k$c) / k$b
+    } else {
+        disc <- k$b^2 - 4 * k$a * (k$c - y)
+        vertex <- -k$b / (2 * k$a)
+        side <- if (mean(x_lim) >= vertex) 1 else -1
+        x <- rep(NA_real_, length(y))
+        ok <- !is.na(disc) & disc >= 0
+        x[ok] <- vertex + side * sqrt(disc[ok]) / (2 * abs(k$a))
     }
-    df
+
+    if (linear) x else 10^x
 }
 
 
-#' Predict Method for Deming Regression
+#' Check Monotonicity of the Quadratic Curve
 #'
-#' Custom predict method for Deming regression objects. Extracts the regression coefficients,
-#' identifies the independent variable from the model, and computes predictions. If the independent
-#' variable is log10-transformed, predictions are computed on the log10 scale.
+#' @inheritParams inverse_predict
 #'
-#' @param object A fitted Deming regression model.
-#' @param data A data.frame containing the independent variable.
-#'
-#' @return A numeric vector of predicted values. If the predictor is log-transformed, the result is on the log10 scale.
-#'
+#' @return TRUE if the curve is monotonic within the standard range.
 
-predict.deming <- function(object, data) {
-    coef_ci <- get_coef_ci(object)
-    coef <- coef_ci$est
-    xvar <- row.names(coef_ci)[1]
-    if (str_detect(xvar, 'log10')) {
-        xvar <- str_extract(xvar, pattern = '(?<=log10\\().*(?=\\))')
-        return(coef[1] * log10(data[, xvar]) + coef[2])
-    }
-    coef[1] * data[, xvar] + coef[2]
+is_monotonic <- function(fit, conc_range, linear = FALSE) {
+    k <- curve_coefs(fit)
+    if (k$a == 0) return(TRUE)
+    x_lim <- if (linear) conc_range else log10(conc_range)
+    vertex <- -k$b / (2 * k$a)
+    !(vertex > x_lim[1] && vertex < x_lim[2])
 }
 
 
-#' Predict Using Log-Transformed Regression Model
+#' Assign Result Flags
 #'
-#' Generates predictions from a fitted regression model. When linear is FALSE (default),
-#' the predictions are assumed to be on the log10 scale and are back-transformed; when TRUE,
-#' predictions are computed on the original scale.
-#' The results are rounded using the specified rounding function.
+#' @param od Background-subtracted OD.
+#' @param conc Concentration estimate before dilution correction.
+#' @param conc_range Range of standard concentrations used in the fit.
 #'
-#' @param data A data.frame of new observations.
-#' @param fit A fitted regression model.
-#' @param linear Logical; if TRUE, no back-transformation is applied (default is FALSE).
-#' @param round_fun A function used to round the calculated predictions (default is signif).
-#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
-#'
-#' @return A numeric vector of predicted values.
+#' @return Character vector of flags (see [FLAGS]).
 
-predict_log_regr <- function(data, fit,
-                             linear = FALSE,
-                             round_fun = signif, round_par = 3) {
-    predicted <- suppressMessages(predict(fit, data))
-    if (!linear) predicted <- 10^predicted
-    return(round_fun(predicted, round_par))
+assign_flags <- function(od, conc, conc_range) {
+    tol <- 1e-9 * diff(range(conc_range))
+    flag <- rep(FLAGS$ok, length(od))
+    flag[!is.na(conc) & conc > conc_range[2] + tol] <- FLAGS$above
+    flag[!is.na(conc) & conc < conc_range[1] - tol] <- FLAGS$below
+    flag[is.na(conc)] <- FLAGS$no_solution
+    flag[!is.na(od) & od <= 0] <- FLAGS$od_le_nc
+    flag[is.na(od)] <- FLAGS$missing
+    flag
 }
 
 
-#' Calculate Sample Concentrations Using a Regression Model
+#' Summarise Flags as a Sentence
 #'
-#' Prepares experimental data, fits regression models on the standard samples (both direct and reverse),
-#' predicts sample concentrations, and returns a list containing the fitted models, standard data,
-#' and processed sample data.
+#' @param flags Character vector of result flags.
 #'
-#' @param data A data.frame containing experimental data with columns such as type, conc, OD, and dilution.
-#' @param model Character string specifying the model type to use ('LRM', 'QRM', or 'deming';
-#' default is 'LRM').
-#' @param xvar Character string specifying the independent variable name (default is 'conc').
-#' @param yvar Character string specifying the dependent variable name (default is 'OD').
-#' @param linear Logical; if TRUE, models are fitted using raw (non-log-transformed) data (default is FALSE).
-#' @param round_fun A function used to round predicted concentrations (default is signif).
-#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
+#' @return Character string (empty vector if all wells are OK).
+
+summarise_flags <- function(flags) {
+    bad <- flags[flags != FLAGS$ok]
+    if (length(bad) == 0) return(character(0))
+    counts <- table(factor(bad, levels = unique(bad)))
+    paste0(length(bad), ' of ', length(flags),
+           ' sample wells were not quantified: ',
+           paste0(names(counts), ' (', counts, ')', collapse = ', '), '.')
+}
+
+
+#' Select Standard Wells Usable for Fitting
+#'
+#' Standards with a missing OD, or (on log scales) with an OD that is not positive
+#' after background subtraction, cannot be used for fitting.
+#'
+#' @param standard_data Background-subtracted standard rows.
+#' @param linear Logical; TRUE if the model is fitted on untransformed values.
+#'
+#' @return A list with `used` and `excluded` data.frames; `excluded` has a
+#'   `reason` column.
+
+split_standards <- function(standard_data, linear = FALSE) {
+    reason <- rep(NA_character_, nrow(standard_data))
+    if (!linear) reason[!is.na(standard_data$OD) & standard_data$OD <= 0] <- FLAGS$od_le_nc
+    reason[is.na(standard_data$OD)] <- FLAGS$missing
+
+    excluded <- standard_data[!is.na(reason), , drop = FALSE]
+    excluded$reason <- reason[!is.na(reason)]
+    list(used = standard_data[is.na(reason), , drop = FALSE],
+         excluded = excluded)
+}
+
+
+#' Calculate Sample Concentrations
+#'
+#' Subtracts the background, fits the calibration curve OD = f(conc) on the
+#' standards, inverts the curve for the samples and multiplies the result by the
+#' dilution factor. Samples outside the calibration range are flagged and receive
+#' NA instead of a concentration.
+#'
+#' @param data Validated input data (see [check_input_file()]).
+#' @param model 'LRM' or 'QRM'.
+#' @param xvar,yvar Kept for backward compatibility; must be 'conc' and 'OD'.
+#' @param linear Logical; if TRUE the model is fitted on untransformed values.
+#' @param round_fun,round_par Rounding applied to the final concentrations only.
 #'
 #' @return A list with components:
-#'   $model_direct: The fitted regression model on standard data.
-#'   $model_reverse: The fitted reverse regression model used for prediction.
-#'   $linear_scale: Logical value indicating if raw (linear) data was used.
-#'   $standard_data: The data used for model fitting (standard samples).
-#'   $result: A data.frame of sample results with estimated concentrations.
+#'   $model_direct: fitted calibration model (OD = f(conc));
+#'   $model: model code;
+#'   $linear_scale: logical;
+#'   $nc_value: background value subtracted from all ODs;
+#'   $standard_data: standards used in the fit;
+#'   $excluded_standards: standards excluded from the fit with a reason;
+#'   $calibration_range: range of standard concentrations used in the fit;
+#'   $notes: character vector of warnings for the user;
+#'   $result: sample results with `conc` (dilution-corrected) and `flag` columns.
 
 calculate <- function(data, model = 'LRM',
                       xvar = 'conc', yvar = 'OD', linear = FALSE,
                       round_fun = signif, round_par = 3) {
-    # Data preparation: subtract negative control values
-    data <- subtract_nc(data)
-    standard_data <- subset(data, type == 'standard')
-    sample_data <- subset(data, type == 'sample')
-    
-    #  Choose regression model function based on input model type
-    lin_fun <- switch (model,
-                       'LRM' = calculate_LRM,
-                       'QRM' = calculate_QRM,
-                       'deming' = calculate_deming
-    )
-    
-    # Model fitting on standard data (direct and reverse)
-    fit_direct <- lin_fun(standard_data,  xvar = 'conc', yvar = 'OD'  , linear = linear)
-    fit_reverse <- lin_fun(standard_data, xvar = 'OD',   yvar = 'conc', linear = linear)
-    
-    # Predict sample concentrations using reverse model
-    predicted <- predict_log_regr(sample_data, fit_reverse, linear = linear,
-                                  round_fun = round_fun, round_par = round_par)
-    sample_data[, 'conc'] <- predicted * sample_data[, 'dilution']
-    sample_data$conc <- ifelse(is.nan(sample_data$conc),
-                               0,
-                               sample_data$conc)
+    if (!model %in% names(MODELS)) {
+        stop('Unknown model: ', model, '. Use one of: ',
+             paste(names(MODELS), collapse = ', '))
+    }
+    notes <- character(0)
+
+    # Background subtraction
+    bg <- background_value(data$OD[data$type == 'NC'])
+    notes <- c(notes, bg$note)
+    data <- subtract_nc(data, bg$value)
+
+    # Standards used for fitting
+    std <- split_standards(data[data$type == 'standard', , drop = FALSE], linear)
+    standard_data <- std$used
+    if (nrow(std$excluded) > 0) {
+        counts <- table(std$excluded$reason)
+        notes <- c(notes,
+                   paste0(nrow(std$excluded), ' standard well(s) excluded from the fit: ',
+                          paste0(names(counts), ' (', counts, ')', collapse = ', '), '.'))
+    }
+    min_levels <- if (model == 'QRM') 4 else 3
+    n_levels <- length(unique(standard_data$conc))
+    if (n_levels < min_levels) {
+        stop('At least ', min_levels, ' standard concentration levels with valid OD ',
+             'are required for the ', MODELS[[model]], ' (found ', n_levels, ')')
+    }
+
+    # Fit OD = f(conc)
+    lin_fun <- switch(model, 'LRM' = calculate_LRM, 'QRM' = calculate_QRM)
+    fit <- lin_fun(standard_data, xvar = 'conc', yvar = 'OD', linear = linear)
+    conc_range <- range(standard_data$conc)
+
+    if (!is_monotonic(fit, conc_range, linear)) {
+        notes <- c(notes,
+                   paste('The quadratic curve is not monotonic within the standard range:',
+                         'concentrations near the turning point are unreliable.'))
+    }
+
+    # Samples: inverse prediction, flags, dilution correction
+    sample_data <- data[data$type == 'sample', , drop = FALSE]
+    conc <- inverse_predict(fit, sample_data$OD, conc_range, linear)
+    flag <- assign_flags(sample_data$OD, conc, conc_range)
+    conc[flag != FLAGS$ok] <- NA_real_
+
+    sample_data$conc <- round_fun(conc * sample_data$dilution, round_par)
     sample_data$OD <- round(sample_data$OD, 4)
-    
-    # Return list with model and processed results
-    list(model_direct = fit_direct,
-         model_reverse = fit_reverse,
+    sample_data$flag <- flag
+    notes <- c(notes, summarise_flags(flag))
+
+    rownames(sample_data) <- NULL
+    rownames(standard_data) <- NULL
+
+    list(model_direct = fit,
+         model = model,
          linear_scale = linear,
+         nc_value = bg$value,
          standard_data = standard_data,
-         result = sample_data %>% select(-c(type, OD)))
+         excluded_standards = std$excluded,
+         calibration_range = conc_range,
+         notes = notes,
+         result = select(sample_data, -type))
 }
 
 
 #' Aggregate Results by Grouping Parameters
 #'
-#' Aggregates concentration data by the specified grouping parameters, calculating the count,
-#' mean, minimum, and maximum of the concentrations.
+#' @param result Result table from [calculate()].
+#' @param group_vars Character vector of grouping columns.
+#' @param round_fun,round_par Rounding of the aggregated statistics.
 #'
-#' @param result A data.frame containing at least the `conc` column and grouping variables.
-#' @param group_vars A character vector of column names to group by (default is "sample.name").
-#' @param round_fun A function applied to round calculated concentrations (default is signif).
-#' @param round_par Integer for rounding aggregated values (default is 3).
-#'
-#' @return A data.frame with aggregated statistics: count (`n`), mean, min, and max concentration.
+#' @return A data.frame with `n` (all wells), `n.quantified` (wells with a
+#'   concentration), `mean`, `min` and `max` of quantified concentrations.
 
 aggregate_result <- function(result, group_vars = 'sample.name',
                              round_fun = signif, round_par = 3) {
-    if (is.null(group_vars)) return()
-    
-    fml_str <- paste0('conc ~ ',
-                      paste(group_vars, collapse = ' + '))
-    fml <- as.formula(fml_str)
-    
-    df.n <- aggregate(fml, result, FUN = length)
-    df.mean <- aggregate(fml, result, FUN = mean)
-    df.min <- aggregate(fml, result, FUN = min)
-    df.max <- aggregate(fml, result, FUN = max)
-    
-    merge(df.n, df.mean, by = group_vars, suffixes = c('.n', '.mean')) %>% 
-        merge(df.min, by = group_vars, suffixes = c('', '.min')) %>% 
-        merge(df.max, by = group_vars, suffixes = c('', '.max')) %>% 
-        setNames(c(group_vars, 'n', 'mean', 'min', 'max')) %>% 
-        mutate(across(where(is.numeric), ~ round_fun(., round_par)))
+    if (length(group_vars) == 0) return(NULL)
+
+    stat_or_na <- function(f, x) if (all(is.na(x))) NA_real_ else f(x, na.rm = TRUE)
+
+    result %>%
+        group_by(across(all_of(group_vars))) %>%
+        summarise(n = n(),
+                  n.quantified = sum(!is.na(conc)),
+                  mean = stat_or_na(base::mean, conc),
+                  min = stat_or_na(base::min, conc),
+                  max = stat_or_na(base::max, conc),
+                  .groups = 'drop') %>%
+        mutate(across(c('mean', 'min', 'max'), ~ round_fun(., round_par))) %>%
+        as.data.frame()
 }
 
 
@@ -329,9 +424,6 @@ aggregate_result <- function(result, group_vars = 'sample.name',
 
 
 #' Custom ggplot2 Theme for Plots
-#'
-#' A custom theme based on `theme_bw()` with modifications for plot title, axis text,
-#' and other panel elements to standardize the look of plots.
 
 my_theme <- theme_bw() +
     theme(plot.title = element_text(hjust = 0.5, size = 11, face = "plain"),
@@ -344,37 +436,21 @@ my_theme <- theme_bw() +
 
 theme_set(my_theme)
 
-#' Transform Data Frame to Named List
-#'
-#' Converts a data.frame with columns `est` (estimates) and `coef` (names of coefficients)
-#' into a named list, where each name is taken from the `coef` column and its value from `est`.
-#'
-#' @param df A data.frame containing at least the columns `est` and `coef`.
-#'
-#' @return A named list of coefficient estimates.
-
-transform_to_list <- function(df) {
-    setNames(as.list(df$est), df$coef)
-}
-
 
 #' Design X-Axis Scale for Logarithmic Data
 #'
-#' Determines appropriate break points for the x-axis on a logarithmic scale based on the
-#' distribution of the data. If the number of unique log-transformed values is large or
-#' too closely spaced, it generates a sequence of 8 breaks.
-#'
 #' @param x Numeric vector representing the x-values.
-#' @param round_par Integer specifying the number of significant digits for rounding (default is 3).
+#' @param round_par Number of significant digits for the break labels.
 
 design_x_scale <- function(x, round_par = 3) {
     x <- x[!is.na(x)]
     log_x <- log10(x[x > 0])
     unique_x <- unique(log_x)
+    if (length(unique_x) < 2) return(signif(10^unique_x, round_par))
     min_dist <- min(dist(unique_x))
     range_x <- range(unique_x)
     min_dist_perc <- min_dist * 100 / diff(range_x)
-    if (length(unique_x) > 10 | min_dist_perc < 5) {
+    if (length(unique_x) > 10 || min_dist_perc < 5) {
         splited_x <- seq(range_x[1], range_x[2], length.out = 8)
         return(signif(10^splited_x, round_par))
     } else {
@@ -383,19 +459,13 @@ design_x_scale <- function(x, round_par = 3) {
 }
 
 
-#' Quadratic Regression Function for Prediction
+#' Quadratic Calibration Function
 #'
-#' Computes predicted values using a quadratic function. When linear is FALSE (default),
-#' the input x is log10-transformed before applying the quadratic formula and then back-transformed.
-#' If linear is TRUE, the function uses the original x values.
+#' y = a*x^2 + b*x + c, on log10 scales unless `linear` is TRUE.
 #'
-#' @param x Numeric vector of independent variable values.
-#' @param a Coefficient for the quadratic term (default is 0).
-#' @param b Coefficient for the linear term.
-#' @param c Intercept term.
-#' @param linear Logical; if TRUE, predictions are computed on the original scale (default is FALSE).
-#'
-#' @return A numeric vector of predicted values on the appropriate scale.
+#' @param x Concentrations.
+#' @param a,b,c Coefficients.
+#' @param linear Logical.
 
 qrm_fun <- function(x, a = 0, b, c, linear = FALSE) {
     if (linear) {
@@ -408,64 +478,70 @@ qrm_fun <- function(x, a = 0, b, c, linear = FALSE) {
 
 #' Plot Standard Curve with Fitted Regression
 #'
-#' Creates a ggplot2 plot of standard sample data with points and overlays a regression
-#' curve generated using a quadratic function. When linear is FALSE (default), the x- and y-axes
-#' are scaled logarithmically.
+#' @param standard_data Standards used in the fit.
+#' @param fit Fitted calibration model.
+#' @param linear Logical.
+#' @param xvar,yvar Column names.
+#' @param xtitle,ytitle Axis titles.
 #'
-#' @param standard_data A data.frame containing standard sample data.
-#' @param fit A fitted regression model object.
-#' @param linear Logical; if TRUE, plots are generated on the original scale (default is FALSE).
-#' @param xvar Character string specifying the x-axis variable name (default is 'conc').
-#' @param yvar Character string specifying the y-axis variable name (default is 'OD').
-#' @param xtitle Character string for the x-axis label.
-#' @param ytitle Character string for the y-axis label.
-#'
-#' @return A ggplot2 plot object.
+#' @return A ggplot2 object.
+
 plot_standard_curve <- function(standard_data,
                                 fit,
                                 linear = FALSE,
                                 xvar = 'conc', yvar = 'OD',
                                 xtitle = '', ytitle = '') {
-    coef_ci <- get_coef_ci(fit)
-    arg_list <- select(coef_ci, c('est', 'coef')) %>%
-        transform_to_list()
-    arg_list['linear'] <- linear
-    
+    arg_list <- curve_coefs(fit)
+    arg_list$linear <- linear
+
     plot <-
-        ggplot(standard_data, aes_string(xvar, yvar)) +
+        ggplot(standard_data, aes(.data[[xvar]], .data[[yvar]])) +
         geom_point(size = 1.5, alpha = 0.5) +
         geom_function(fun = qrm_fun, args = arg_list,
                       color = 'blue',
                       linewidth = 0.75) +
         labs(x = xtitle, y = ytitle)
-    
+
     if (!linear) {
-        x_scale <- design_x_scale(standard_data[, xvar])
-        
+        x_scale <- design_x_scale(standard_data[[xvar]])
+
         plot <- plot +
-        scale_x_log10(breaks = x_scale,
-                      labels = as.character(x_scale)) +
-        scale_y_log10()
+            scale_x_log10(breaks = x_scale,
+                          labels = as.character(x_scale)) +
+            scale_y_log10()
     }
-    
+
     plot
+}
+
+
+#' Retrieve Fitted Values and Residuals
+#'
+#' @param fit Fitted calibration model.
+#' @param linear Logical; if FALSE fitted values are back-transformed from log10.
+#'
+#' @return A data.frame with columns `fitted` (OD scale) and `resid`
+#'   (on the scale of the fit).
+
+get_fit_resid <- function(fit, linear = FALSE) {
+    df <- data.frame(fitted = unname(fitted(fit)),
+                     resid = unname(resid(fit)))
+    if (!linear) {
+        df$fitted <- 10^df$fitted
+    }
+    df
 }
 
 
 #' Plot Fitted Values vs. Residuals
 #'
-#' Generates a residual plot for a fitted regression model by plotting the fitted values
-#' (back-transformed from the log10 scale if applicable) against the residuals.
-#' A smooth loess line is added for visualizing trends.
+#' @inheritParams get_fit_resid
 #'
-#' @param fit A fitted regression model object.
-#' @param linear Logical; if TRUE, fitted values are not back-transformed (default is FALSE).
-#'
-#' @return A ggplot2 plot object displaying the residuals.
+#' @return A ggplot2 object.
 
 plot_fitted_resid <- function(fit, linear = FALSE) {
     data <- get_fit_resid(fit, linear = linear)
-    
+
     plot <-
         ggplot(data, aes(fitted, resid)) +
         geom_point(size = 1.5, alpha = 0.5) +
@@ -476,39 +552,34 @@ plot_fitted_resid <- function(fit, linear = FALSE) {
                     se = FALSE,
                     span = 2,
                     linewidth = 0.75) +
-        labs(x = 'Fitted values', y = 'Residuals')
-    
+        labs(x = 'Fitted OD', y = 'Residuals')
+
     if (!linear) {
-        x_scale <- design_x_scale(data[, 'fitted'])
-        
+        x_scale <- design_x_scale(data$fitted)
+
         plot <- plot +
-        scale_x_log10(breaks = x_scale,
-                      labels = as.character(x_scale))
+            scale_x_log10(breaks = x_scale,
+                          labels = as.character(x_scale))
     }
-    
+
     plot
 }
 
 
 #' Generate Combined Plots for Standard Curve and Residuals
 #'
-#' Creates a grid of plots that includes both the standard curve (with the fitted regression)
-#' and the residual plot. Optionally, a custom ggplot2 theme can be applied.
+#' @param result Output of [calculate()].
+#' @param xvar,yvar Column names.
+#' @param xtitle,ytitle Axis titles of the standard curve.
+#' @param plot.theme Optional ggplot2 theme added to both plots.
 #'
-#' @param result A list containing at least `standard_data` and `model_direct` (fitted model).
-#' @param xvar Character string specifying the x variable name (default is "conc").
-#' @param yvar Character string specifying the y variable name (default is "OD").
-#' @param xtitle Character string for the x-axis label.
-#' @param ytitle Character string for the y-axis label.
-#' @param plot.theme Optional ggplot2 theme to further customize the plots.
-#'
-#' @return A combined ggplot2 plot grid.
+#' @return A cowplot grid.
 
 get_plots <- function(result,
                       xvar = 'conc', yvar = 'OD',
                       xtitle = '', ytitle = '',
                       plot.theme = NULL) {
-    
+
     standard_plot <-
         plot_standard_curve(
             standard_data = result$standard_data,
@@ -517,264 +588,222 @@ get_plots <- function(result,
             xvar = xvar, yvar = yvar,
             xtitle = xtitle, ytitle = ytitle
         )
-    
-    fit_resid_plot <- 
+
+    fit_resid_plot <-
         plot_fitted_resid(result$model_direct,
                           linear = result$linear_scale)
-    
+
     if (!is.null(plot.theme)) {
         standard_plot <- standard_plot + plot.theme
         fit_resid_plot <- fit_resid_plot + plot.theme
     }
-    
+
     plot_grid(standard_plot, fit_resid_plot)
 }
 
 
 ###################### SUPPLEMENTARY FUNCTIONS #################################
 
-#' Check if an Object is a Date
-#'
-#' Determines whether the provided object inherits from the "Date" class.
-#'
-#' @param x An object to be tested.
-#'
-#' @return A logical value: TRUE if `x` is of class "Date", otherwise FALSE.
-
-is.Date <- function(x) inherits(x, 'Date')
-
-
 #' Create Experiment Data Template
 #'
-#' Generates a template data.frame for an experiment containing both standard and sample entries.
-#' The standard part includes titration values and a negative control (NC) row, while the sample
-#' part includes placeholder rows.
+#' @param start Highest standard concentration.
+#' @param step Dilution step of the standard series (> 1).
+#' @param n.standard Number of replicate standard series.
+#' @param n.sample Number of sample rows.
+#' @param n.levels Number of standard concentration levels.
 #'
-#' @param start Numeric value indicating the starting concentration (default is 100).
-#' @param step Unused parameter (reserved for future use; default is 2).
-#' @param n.standard Number of replicates for the standard samples (default is 2).
-#' @param n.sample Number of sample entries (default is 10).
-#'
-#' @return A data.frame template with columns: sample.name, sample.date, type, dilution, conc, and OD.
+#' @return A data.frame with columns sample.name, sample.date, type, dilution,
+#'   conc and OD.
 #'
 #' @examples
-#' template <- make_template(start = 100, n.standard = 3, n.sample = 15)
+#' template <- make_template(start = 100, step = 3, n.standard = 3, n.sample = 15)
 
 make_template <- function(start = 100, step = 2,
-                          n.standard = 2, n.sample = 10) {
-    
-    templater <- function(
-        sample.name = '',
-        sample.date = '',
-        type,
-        dilution,
-        conc,
-        OD = '') {
-        data.frame(
-            sample.name = sample.name,
-            sample.date = sample.date,
-            type = type,
-            dilution = dilution,
-            conc = conc,
-            OD = OD
-        )
+                          n.standard = 2, n.sample = 10, n.levels = 7) {
+    if (!is.numeric(start) || length(start) != 1 || is.na(start) || start <= 0) {
+        stop('Start concentration must be a positive number')
     }
-    
-    template <- data.frame()
-    
-    # Standard part
-    titration <- start/(2^(0:6))
-    titration <- sapply(titration, FUN = signif, 3)
-    st_part <-
-        templater(
-            type = c(rep('standard', times = 7), 'NC'),
-            dilution = '',
-            conc = c(titration, '')
-        )
-    
-    for (i in 1:n.standard) {
-        template <- rbind(template, st_part)
+    if (!is.numeric(step) || length(step) != 1 || is.na(step) || step <= 1) {
+        stop('Dilution step must be greater than 1')
     }
-    
-    # Sample part
-    sampl_part <-
-        templater(
-            type = 'sample',
-            dilution = 1,
-            conc = ''
-        )
-    
-    for (i in 1:n.sample) {
-        template <- rbind(template, sampl_part)
+    if (n.levels < 3) stop('At least 3 standard levels are required')
+
+    titration <- signif(start / step^(0:(n.levels - 1)), 3)
+
+    standard_part <- data.frame(
+        type = rep(c(rep('standard', n.levels), 'NC'), times = n.standard),
+        dilution = NA_real_,
+        conc = rep(c(titration, NA_real_), times = n.standard)
+    )
+    sample_part <- data.frame(
+        type = rep('sample', n.sample),
+        dilution = rep(1, n.sample),
+        conc = NA_real_
+    )
+    template <- rbind(standard_part, sample_part)
+
+    # Empty cells are written as NA so that Excel/CSV files contain blank cells
+    data.frame(sample.name = NA_character_,
+               sample.date = NA_character_,
+               type = template$type,
+               dilution = template$dilution,
+               conc = template$conc,
+               OD = NA_real_)
+}
+
+
+#' Read a Semicolon- or Comma-Delimited CSV File
+#'
+#' Semicolon-separated files are expected to use a comma as decimal separator,
+#' comma-separated files a dot.
+#'
+#' @param path File path.
+#'
+#' @return A data.frame.
+
+read_csv_auto <- function(path) {
+    dialects <- list(c(sep = ';', dec = ','), c(sep = ',', dec = '.'))
+    for (d in dialects) {
+        table <- tryCatch(read.csv(path, sep = d[['sep']], dec = d[['dec']],
+                                   stringsAsFactors = FALSE),
+                          error = function(e) NULL)
+        if (!is.null(table) && ncol(table) > 1) return(table)
     }
-    
-    template$conc <- as.numeric(template$conc)
-    template$dilution <- as.numeric(template$dilution)
-    template
+    stop('Unknown CSV format: expected comma- or semicolon-separated values')
 }
 
 
 #' Read Data Table from File
 #'
-#' Reads a table from a file path supporting both Excel (.xlsx) and CSV formats. For CSV files,
-#' the function attempts to detect the correct separator and decimal character.
-#'
-#' @param path Character string specifying the file path.
+#' @param path Path to an .xlsx or .csv file.
 #'
 #' @return A data.frame containing the imported data.
 
 read_table <- function(path) {
-    file_type <- tools::file_ext(path) %>% tolower()
-    switch (file_type,
-        'xlsx' = {
-            table <- read.xlsx(path, 1)
-        },
-        'csv' = {
-            # determining csv format
-            table <- try(read.csv(path, sep = ';', dec = ','))
-            if (inherits(table, "try-error") | ncol(table) == 1) {
-                table <- try(read.csv(path, sep = ',', dec = '.'))
-                if (class(table) == 'try-error' | ncol(table) == 1) {
-                    stop('Unknown csv format of file')
-                }
-            }
-        },
-        stop('This filetype is not supported')
+    file_type <- tolower(tools::file_ext(path))
+    switch(file_type,
+           'xlsx' = as.data.frame(readxl::read_excel(path, sheet = 1)),
+           'csv' = read_csv_auto(path),
+           stop('This file type is not supported: use .xlsx or .csv')
     )
-    
-    return(table)
 }
 
 
 #' Validate Input Data for the Linearity App
 #'
-#' This function ensures that the imported data meets the minimal requirements needed for
-#' processing in the Linearity App.
-#' 
-#' It performs several validations:
-#' 
-#' - Mandatory Columns: Confirms that the data contains all required columns: 
-#'   "sample.name", "sample.date", "type", "dilution", "conc", and "OD".
-#' - Numeric Data: Verifies that the "dilution", "conc", and "OD" columns are numeric.
-#' - Type Values: Checks that the "type" column includes only the allowed values:
-#'   "standard", "sample", and "NC",
-#'   and that none of these values are missing.
-#' - Dilution Factors: Ensures that every sample (rows where "type" is "sample") has a valid,
-#'   non-missing, positive dilution factor.
-#' - Sufficient Standard Wells: Validates that there are more than four rows marked as "standard"
-#'   to ensure reliable standard curve fitting.
+#' Checks mandatory columns, numeric columns, allowed values of `type`,
+#' dilution factors of samples, concentrations of standards and the number of
+#' standard wells. Stops with an informative message on the first problem.
 #'
-#' If any of these checks fail, the function stops execution and returns an informative error message.
+#' @param data A data.frame with the raw data.
 #'
-#' @param data A data.frame containing the raw data to be validated. Expected columns are 
-#' "sample.name", "sample.date", "type", "dilution", "conc", and "OD".
-#'
-#' @return A validated data.frame that is ready for further processing in the app.
+#' @return The validated data.frame.
 
 check_input_file <- function(data) {
-    # check for mandatory columns
-    munadatory_columns <- c('sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD')
-    
-    for (mc in munadatory_columns) {
+    # Mandatory columns
+    mandatory_columns <- c('sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD')
+
+    for (mc in mandatory_columns) {
         if (!mc %in% colnames(data)) {
-            stop(paste('Mundatory', mc, 'column is missing'))
+            stop(paste('Mandatory', mc, 'column is missing'))
         }
     }
-    
-    # Verify that specified columns are numeric
-    numeric_colmns <- c('dilution', 'conc', 'OD')
-    
-    for (nc in numeric_colmns) {
-        if (!is.numeric(data[, nc])) {
+
+    # Numeric columns
+    numeric_columns <- c('dilution', 'conc', 'OD')
+
+    for (nc in numeric_columns) {
+        if (!is.numeric(data[[nc]])) {
             stop(paste('Non-numeric values in', nc, 'column'))
         }
     }
-    
-    # Validate the 'type' column values
+
+    # Values of the type column
     allowed_types <- c('standard', 'sample', 'NC')
-    present_types <- unique(data[, 'type'])
-        
-    # Check for any disallowed type values
+    present_types <- unique(data[['type']])
+
     not_allowed <- setdiff(present_types, allowed_types)
     if (length(not_allowed) > 0) {
         stop(paste('Not allowed values in the type column:',
                    paste(not_allowed, collapse = ', ')))
     }
-    
-    # Check for missing required type values
+
     missing_types <- setdiff(allowed_types, present_types)
     if (length(missing_types) > 0) {
         stop(paste('Missing values in the type column:',
                    paste(missing_types, collapse = ', ')))
     }
-    
-    # Check dilution values for sample rows
-    dilutions <- subset(data, type == 'sample')$dilution
+
+    # Dilution factors of samples
+    dilutions <- data$dilution[data$type == 'sample']
     if (any(is.na(dilutions))) {
         stop('Not all samples have dilution factors specified')
     }
     if (!all(dilutions > 0)) {
         stop('All dilution factors must be positive')
     }
-    
-    # Ensure there are more than four standard wells for reliable analysis
+
+    # Concentrations of standards
+    std_conc <- data$conc[data$type == 'standard']
+    if (any(is.na(std_conc))) {
+        stop('Not all standard wells have concentrations specified')
+    }
+    if (!all(std_conc > 0)) {
+        stop('All standard concentrations must be positive')
+    }
+
+    # Enough standard wells
     n_standard <- sum(data$type == 'standard')
     if (n_standard <= 4) {
         stop(paste('Insufficient number of standard wells:', n_standard))
     }
-    
+
     data
 }
 
 
 #' Format Input Data Table
 #'
-#' This function formats an input data table by converting all columns that are of the Date class
-#' into character strings with the format "dd.mm.yyyy". It also ensures that the sample.name
-#' column is stored as a character vector.
+#' Converts date and date-time columns to "dd.mm.yyyy" strings and coerces
+#' `sample.name` to character.
 #'
-#' @param table A data.frame representing the input data table.
+#' @param table A data.frame.
 #'
-#' @return A formatted data.frame with date columns converted to character strings (formatted as "dd.mm.yyyy")
-#' and the sample.name column coerced to character type.
+#' @return The formatted data.frame.
 
 format_input_table <- function(table) {
-    
-    # Format columns with dates
-    for(col in colnames(table)) {
-        if (is.Date(table[, col])) {
-            table[, col] <- as.character(format(table[, col], '%d.%m.%Y'))
+    for (col in colnames(table)) {
+        if (inherits(table[[col]], c('Date', 'POSIXt'))) {
+            table[[col]] <- format(table[[col]], '%d.%m.%Y')
         }
     }
-    
-    # Ensure the sample.name column is of character type
     table$sample.name <- as.character(table$sample.name)
-    
     table
 }
 
 
 #' Save Data Frame as CSV File
 #'
-#' Saves a data.frame to a CSV file using the specified dialect. The dialect determines the separator
-#' and decimal character used in the output.
-#'
-#' @param X A data.frame to be saved.
-#' @param file Character string specifying the output file path.
-#' @param dialect Character string indicating the CSV dialect; valid options are "comma" (default)
-#' or "semicolon".
-#'
-#' @return None. The function writes the file to disk.
+#' @param X A data.frame.
+#' @param file Output path.
+#' @param dialect "comma" (sep ",", dec ".") or "semicolon" (sep ";", dec ",").
 
 save_csv <- function(X, file, dialect = 'comma') {
-    switch (dialect,
-            'comma' = write.table(X,
-                                  file,
-                                  sep = ',', dec = '.',
-                                  row.names = FALSE),
-            'semicolon' = write.table(X,
-                                      file,
-                                      sep = ';', dec = ',',
-                                      row.names = FALSE)
+    switch(dialect,
+           'comma' = write.table(X, file, sep = ',', dec = '.',
+                                 row.names = FALSE, na = ''),
+           'semicolon' = write.table(X, file, sep = ';', dec = ',',
+                                     row.names = FALSE, na = ''),
+           stop('Unknown CSV dialect: ', dialect)
     )
+}
+
+
+#' Save Data Frame as Excel File
+#'
+#' @param X A data.frame.
+#' @param file Output path.
+
+save_xlsx <- function(X, file) {
+    openxlsx::write.xlsx(X, file, rowNames = FALSE, overwrite = TRUE)
 }
