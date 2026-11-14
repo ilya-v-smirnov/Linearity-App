@@ -15,7 +15,11 @@ mod_template_server(id, lang)
 
 \item{lang}{Language code.}
 }
+\value{
+\code{mod_template_server()} returns a reactive list of template parameters.
+}
 \description{
-Parameters of the data template and its download.
+Parameters of the data template and its download: a plate workbook (see
+\link{plate_format}) or a table with one row per well.
 }
 \keyword{internal}

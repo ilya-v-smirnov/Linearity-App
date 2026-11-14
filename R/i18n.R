@@ -64,6 +64,9 @@ i18n_dict <- function(lang) {
 #' Format a Placeholder Value
 #' @keywords internal
 format_param <- function(x, lang) {
+    if (inherits(x, 'lin_message')) {
+        return(message_text(list(x), lang))
+    }
     if (inherits(x, 'flag_counts')) {
         return(paste0(translate_flags(names(x), lang), ' (', unclass(x), ')', collapse = ', '))
     }
@@ -131,11 +134,12 @@ lin_message <- function(key, ...) {
     structure(list(key = key, params = list(...)), class = 'lin_message')
 }
 
+#' @param .fields Additional fields of the condition (e.g. `problems`).
 #' @rdname lin_messages
-lin_abort <- function(key, ...) {
+lin_abort <- function(key, ..., .fields = list()) {
     cnd <- structure(
         class = c('lin_error', 'error', 'condition'),
-        list(message = tr(key, 'en', ...), call = NULL, key = key, params = list(...))
+        c(list(message = tr(key, 'en', ...), call = NULL, key = key, params = list(...)), .fields)
     )
     stop(cnd)
 }

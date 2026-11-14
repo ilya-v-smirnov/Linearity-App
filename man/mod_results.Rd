@@ -21,6 +21,6 @@ mod_results_server(id, lang, curve)
 \code{mod_results_server()} returns a reactive with the translated result table.
 }
 \description{
-Sample results with flags, warnings and download.
+Sample results with flags, quality controls, warnings and download.
 }
 \keyword{internal}

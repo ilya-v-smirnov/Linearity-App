@@ -42,8 +42,8 @@ test_that('notes and errors keep the key and are shown in any language', {
 
     cnd <- tryCatch(check_input_file(data.frame(x = 1)), error = identity)
     expect_s3_class(cnd, 'lin_error')
-    expect_equal(cnd$key, 'error.mandatory_column')
-    expect_equal(LinearityApp:::condition_text(cnd, 'en'), 'Mandatory sample.name column is missing')
+    expect_equal(cnd$key, 'error.invalid_input_many')
+    expect_match(LinearityApp:::condition_text(cnd, 'en'), '^Mandatory type column is missing')
     expect_false(LinearityApp:::condition_text(cnd, 'ru') == conditionMessage(cnd))
     expect_equal(LinearityApp:::condition_text(simpleError('plain'), 'ru'), 'plain')
 })

@@ -35,6 +35,7 @@ aggregate_result <- function(result, group_vars = 'sample.name',
 #' @return The table with translated `flag` values.
 #' @export
 localize_result <- function(result, lang = 'en') {
+    if (is.null(result)) return(NULL)
     if ('flag' %in% names(result)) {
         result$flag <- translate_flags(result$flag, lang)
     }

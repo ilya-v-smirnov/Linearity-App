@@ -1,6 +1,8 @@
 #' Import Module
 #'
-#' File input (sidebar) and the table of imported data (main panel).
+#' File input (sidebar), the table of problems found in the file and the table
+#' of imported data (main panel). Plate workbooks and tables are recognised
+#' automatically (see [read_assay()]).
 #'
 #' @param id Module id.
 #' @param lang Language code.
@@ -20,23 +22,52 @@ mod_import_input_ui <- function(id, lang) {
 }
 
 #' @rdname mod_import
-mod_import_table_ui <- function(id) {
+mod_import_table_ui <- function(id, lang = 'en') {
     ns <- shiny::NS(id)
-    shiny::tableOutput(ns('table'))
+    shiny::tagList(
+        shiny::uiOutput(ns('problems')),
+        shiny::tableOutput(ns('table'))
+    )
 }
 
 #' @rdname mod_import
 mod_import_server <- function(id, lang) {
     shiny::moduleServer(id, function(input, output, session) {
-        data <- shiny::reactive({
+        imported <- shiny::reactive({
             file <- input$file
             shiny::req(file)
-            with_validation(
-                format_input_table(check_input_file(read_table(file$datapath))),
-                'common.import_error', lang)
+            tryCatch({
+                data <- check_assay(read_assay(file$datapath))
+                list(data = data, problems = attr(data, 'problems'), error = NULL)
+            }, error = function(e) {
+                list(data = NULL, problems = e$problems, error = e)
+            })
         })
 
-        output$table <- shiny::renderTable(data(), digits = 4, na = '')
+        data <- shiny::reactive({
+            x <- imported()
+            if (!is.null(x$error)) {
+                shiny::validate(shiny::need(FALSE, tr('common.import_error', lang,
+                                                      message = condition_text(x$error, lang))))
+            }
+            x$data
+        })
+
+        problems <- shiny::reactive(problems_table(imported()$problems, lang))
+
+        output$problems <- shiny::renderUI({
+            if (is.null(problems())) return(NULL)
+            shiny::div(class = 'alert alert-warning',
+                       shiny::strong(tr('import.problems', lang)),
+                       shiny::tableOutput(session$ns('problems_table')))
+        })
+        output$problems_table <- shiny::renderTable(problems())
+
+        output$table <- shiny::renderTable({
+            out <- data()
+            attr(out, 'problems') <- NULL
+            out
+        }, digits = 4, na = '')
 
         data
     })

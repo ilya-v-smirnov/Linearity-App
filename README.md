@@ -11,8 +11,10 @@
 The **Linearity App** is an R package with a Shiny application that calculates analyte concentrations from laboratory assay data using a standard curve. It supports common assays like **sandwich ELISA, BCA assay, and Griess assay** and processes data from **Excel (.xlsx) and CSV (.csv) files**. The interface and reports are available in **English and Russian**.
 
 ## Features
-- Generates structured data templates for easy data entry
-- Imports and validates assay data
+- Plate format: paste the plate reader grid into an Excel template with the plate layout
+- Simple table format with only two required columns (`type`, `OD`); old files keep working
+- Validation lists every problem in the file with the well or row where it occurs
+- Blank wells and quality controls (QC) with recovery
 - Supports linear and quadratic regression models (log-log or linear scales)
 - Provides standard curve and residual plots
 - Flags samples outside the calibration range instead of extrapolating
@@ -39,33 +41,50 @@ The calculations can also be used without the interface:
 
 ```r
 library(LinearityApp)
-path <- system.file("extdata", "griess.xlsx", package = "LinearityApp")
-data <- format_input_table(check_input_file(read_table(path)))
+path <- system.file("extdata", "bca_plate.xlsx", package = "LinearityApp")
+data <- check_assay(read_assay(path))   # plate workbook or table
 res <- calculate(data, model = "LRM")
 res$result                      # sample concentrations and flags
+res$qc                          # quality controls (if any)
 message_text(res$notes, "en")   # warnings
 ```
 
 ## How to Use - Brief Guideline
 
 ### 1. Generate a Data Template
-- Set **template parameters**: start concentration, dilution step, number of standard levels and series, number of samples.
-- Click **"Download Template"** to generate a CSV or Excel file.
+- Choose the **template format**: *Plate (Excel)* (recommended) or *Table*.
+- Set the parameters: start concentration, dilution step, number of standard levels and series, number of samples (and, for plates, sample replicates and plate size 96/384).
+- Click **"Download Template"**.
 
-### 2. Import Data
-- Fill in the template with:
-  - Sample names, dates, well types (`standard`, `sample`, `NC`)
-  - Dilution factors and optical density (OD) values
-- Click **"Browse"** to upload the modified file.
-- The app validates the data before proceeding.
+### 2. Fill In the Template
 
-### 3. Analyze Standard Curve
+**Plate workbook** - one sheet per kind of information:
+
+| Sheet | Content |
+|-------|---------|
+| `Layout` | well codes on the plate grid: `S1`...`Sn` standards, `B` blank, `NC` negative control, `QC-L`/`QC-M`/`QC-H` quality controls, `X1`...`Xn` samples; empty wells are not used; wells with the same code are replicates |
+| `OD` | optical densities pasted from the plate reader at the same positions (decimal comma accepted) |
+| `Standards` | `level`, `conc` - filled in from the template parameters |
+| `Samples` | `id`, `name`, `dilution` and any extra columns (e.g. `date`) |
+| `QC` | `id`, `conc` - nominal concentrations (optional) |
+
+The template generated in Russian has Russian sheet names; both languages are recognised on import. Column names and well codes are the same in all languages.
+
+**Table** - one row per well. Required columns: `type` (`standard`, `sample`, `NC`, `blank`, `QC`) and `OD`; `conc` for standards and QC; optional `dilution` (default 1), `id`, `sample.name`, `well` and any metadata columns. The six-column format of earlier versions is accepted as is.
+
+The background is the mean OD of `NC` wells, or of blank wells if there are no `NC` wells.
+
+### 3. Import Data
+- Click **"Browse"** and choose the file; the format is recognised automatically.
+- All problems are listed in a table with the well or row where they occur. Errors stop the analysis, warnings do not.
+
+### 4. Analyze Standard Curve
 - Navigate to the **Standard Curve** tab.
 - View the **fitted curve** and the **residuals plot**.
 - Choose between **linear regression** (LRM) or **quadratic regression** (QRM).
 - Enable or disable **log transformation** with the "Linear scales" checkbox.
 
-### 4. View and Export Results
+### 5. View and Export Results
 - The **Results** table displays calculated analyte concentrations.
 - Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor.
 - Each sample well gets a **flag**. Only wells flagged `OK` receive a concentration; the others are left empty:
@@ -73,10 +92,11 @@ message_text(res$notes, "en")   # warnings
   - `OD <= NC` - optical density at or below the negative control;
   - `No solution` - the OD cannot be reached by the quadratic curve;
   - `Missing OD` - no optical density value.
+- Quality controls are shown in a separate table with nominal and measured concentration and recovery (%).
 - Warnings about excluded standards and unquantified samples are shown above the tables and in the report.
 - Click **"Download Results"** to export as Excel or CSV.
 
-### 5. Generate a Summary Report
+### 6. Generate a Summary Report
 - Navigate to the **Report** tab, enter an **experiment title** and click **"Download Report"**.
 
 See the [User Manual](inst/app/www/user-manual.pdf) for detailed instructions.
@@ -86,6 +106,7 @@ Example files are installed with the package (`system.file("extdata", package = 
 
 | File | Assay |
 |------|-------|
+| `bca_plate.xlsx` | BCA assay in the plate format (same measurements as `bca_semicolon.csv`) |
 | `bca_semicolon.csv` | BCA assay, protein concentration (semicolon-separated CSV) |
 | `elisa_smicb_comma.csv` | Sandwich ELISA, soluble MICB in plasma (comma-separated CSV) |
 | `griess.xlsx` | Griess assay, nitrite production by immune cells (Excel) |
@@ -118,11 +139,11 @@ Continuous integration (GitHub Actions) runs `R CMD check` on Windows, macOS and
 | Path | Content |
 |------|---------|
 | `R/calibration.R` | background subtraction, model fitting, inverse prediction, flags |
-| `R/io.R`, `R/validate.R`, `R/template.R` | reading, validation and templates |
+| `R/io.R`, `R/plate.R`, `R/validate.R`, `R/template.R` | reading (table and plate formats), validation, templates |
 | `R/aggregate.R`, `R/plots.R`, `R/report.R` | summary tables, plots, Word report |
 | `R/i18n.R`, `inst/i18n/*.yml` | translations |
 | `R/app_*.R`, `R/mod_*.R` | Shiny application and modules |
-| `inst/extdata` | example data |
+| `inst/extdata`, `data-raw` | example data and the script that creates them |
 | `tests/testthat` | automated tests |
 
 ### Adding a language

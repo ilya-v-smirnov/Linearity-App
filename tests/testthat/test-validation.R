@@ -6,10 +6,10 @@ test_that('valid sample files pass validation', {
 
 test_that('each incorrect input file gives its own error message', {
     expected <- c(
-        '01_mandatory_column_missing.xlsx' = 'Mandatory sample.date column is missing',
+        '01_mandatory_column_missing.xlsx' = 'Mandatory type column is missing',
         '02_non_numeric_od.xlsx' = 'Non-numeric values in OD column',
         '03_sample_type_missing.xlsx' = 'Missing values in the type column: sample',
-        '04_dilution_column_empty.xlsx' = 'Non-numeric values in dilution column',
+        '04_dilution_column_empty.xlsx' = 'Not all samples have dilution factors specified',
         '05_dilution_missing.xlsx' = 'Not all samples have dilution factors specified',
         '06_zero_dilution.xlsx' = 'All dilution factors must be positive',
         '07_three_standard_wells.xlsx' = 'Insufficient number of standard wells: 3'
@@ -36,6 +36,7 @@ test_that('standards must have positive concentrations', {
 
 test_that('unknown type values are reported', {
     data <- load_sample('bca')
-    data$type[1] <- 'blank'
-    expect_error(check_input_file(data), 'Not allowed values in the type column: blank')
+    data$type[1] <- 'calibrator'
+    expect_error(check_input_file(data), 'Not allowed values in the type column: calibrator (row 2)',
+                 fixed = TRUE)
 })

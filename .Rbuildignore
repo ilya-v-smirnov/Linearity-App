@@ -12,3 +12,4 @@
 ^renv\.lock$
 ^\.Rprofile$
 ^codecov\.yml$
+^data-raw$

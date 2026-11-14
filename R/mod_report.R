@@ -38,6 +38,7 @@ mod_report_server <- function(id, lang, curve, means) {
                             model_table = curve$coef_table(),
                             result_table = localize_result(curve$result()$result, lang),
                             means_table = means(),
+                            qc_table = localize_result(curve$result()$qc, lang),
                             notes = curve$notes(),
                             lang = lang)
             }

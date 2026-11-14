@@ -63,18 +63,32 @@ background_value <- function(od) {
 }
 
 
-#' Subtract Negative Control Values
+#' Wells Used as Background
+#'
+#' NC wells if present, otherwise blank wells.
+#'
+#' @param type Vector of well types.
+#'
+#' @return `"NC"` or `"blank"`.
+#' @keywords internal
+background_type <- function(type) {
+    if (any(type %in% 'NC')) 'NC' else 'blank'
+}
+
+
+#' Subtract Background Values
 #'
 #' @param data A data.frame with columns `type` and `OD`.
-#' @param nc_value Background value; estimated with [background_value()] if `NULL`.
+#' @param nc_value Background value; estimated with [background_value()] from
+#'   NC wells (or blank wells if there are no NC wells) if `NULL`.
 #'
-#' @return A data.frame without NC rows, with background-subtracted `OD`.
+#' @return A data.frame without NC and blank rows, with background-subtracted `OD`.
 #' @keywords internal
 subtract_nc <- function(data, nc_value = NULL) {
     if (is.null(nc_value)) {
-        nc_value <- background_value(data$OD[data$type == 'NC'])$value
+        nc_value <- background_value(data$OD[data$type %in% background_type(data$type)])$value
     }
-    out <- data[data$type != 'NC', , drop = FALSE]
+    out <- data[!data$type %in% c('NC', 'blank'), , drop = FALSE]
     out$OD <- out$OD - nc_value
     out
 }
@@ -288,7 +302,13 @@ split_standards <- function(standard_data, linear = FALSE) {
 #'   * `excluded_standards`: standards excluded from the fit with a `reason`;
 #'   * `calibration_range`: range of standard concentrations used in the fit;
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
-#'   * `result`: sample results with `conc` (dilution-corrected) and `flag`.
+#'   * `result`: sample results with `conc` (dilution-corrected) and `flag`;
+#'   * `qc`: quality controls with nominal and measured concentration,
+#'     recovery (%) and flag (`NULL` if there are no QC wells).
+#'
+#' The background is the geometric mean of NC wells, or of blank wells if
+#' there are no NC wells. Columns `well` and `id` are kept in the results
+#' when they contain values.
 #' @export
 #' @examples
 #' path <- system.file('extdata', 'griess.xlsx', package = 'LinearityApp')
@@ -303,8 +323,10 @@ calculate <- function(data, model = 'LRM', linear = FALSE,
     }
 
     # Background subtraction
-    bg <- background_value(data$OD[data$type == 'NC'])
+    bg_type <- background_type(data$type)
+    bg <- background_value(data$OD[data$type %in% bg_type])
     notes <- bg$notes
+    if (bg_type == 'blank') notes <- c(notes, list(lin_message('note.blank_background')))
     data <- subtract_nc(data, bg$value)
 
     # Standards used for fitting
@@ -330,26 +352,43 @@ calculate <- function(data, model = 'LRM', linear = FALSE,
         notes <- c(notes, list(lin_message('note.not_monotonic')))
     }
 
-    # Samples: inverse prediction, flags, dilution correction
-    sample_data <- data[data$type == 'sample', , drop = FALSE]
-    conc <- inverse_predict(fit, sample_data$OD, conc_range, linear)
-    flag <- assign_flags(sample_data$OD, conc, conc_range)
-    conc[flag != FLAGS$ok] <- NA_real_
+    # Samples and QC: inverse prediction, flags, dilution correction
+    quantify <- function(rows) {
+        rows$dilution[is.na(rows$dilution)] <- 1
+        conc <- inverse_predict(fit, rows$OD, conc_range, linear)
+        flag <- assign_flags(rows$OD, conc, conc_range)
+        conc[flag != FLAGS$ok] <- NA_real_
+        rows$conc <- round_fun(conc * rows$dilution, round_par)
+        rows$OD <- round(rows$OD, 4)
+        rows$flag <- flag
+        rownames(rows) <- NULL
+        rows
+    }
 
-    sample_data$conc <- round_fun(conc * sample_data$dilution, round_par)
-    sample_data$OD <- round(sample_data$OD, 4)
-    sample_data$flag <- flag
-
-    bad <- flag[flag != FLAGS$ok]
+    sample_data <- quantify(data[data$type == 'sample', , drop = FALSE])
+    bad <- sample_data$flag[sample_data$flag != FLAGS$ok]
     if (length(bad) > 0) {
         notes <- c(notes, list(lin_message('note.not_quantified',
-                                           n = length(bad), total = length(flag),
+                                           n = length(bad), total = nrow(sample_data),
                                            details = flag_counts(bad))))
     }
 
-    rownames(sample_data) <- NULL
+    qc <- NULL
+    qc_rows <- data[data$type == 'QC', , drop = FALSE]
+    if (nrow(qc_rows) > 0) {
+        measured <- quantify(qc_rows)
+        qc <- measured[, intersect(c('well', 'id'), names(measured)), drop = FALSE]
+        qc$nominal <- qc_rows$conc
+        qc$conc <- measured$conc
+        qc$recovery <- round(100 * measured$conc / qc_rows$conc, 1)
+        qc$OD <- measured$OD
+        qc$flag <- measured$flag
+        qc <- drop_empty_columns(qc, c('well', 'id'))
+    }
+
     rownames(standard_data) <- NULL
     sample_data$type <- NULL
+    sample_data <- drop_empty_columns(sample_data, c('well', 'id'))
 
     list(model_direct = fit,
          model = model,
@@ -359,5 +398,21 @@ calculate <- function(data, model = 'LRM', linear = FALSE,
          excluded_standards = std$excluded,
          calibration_range = conc_range,
          notes = notes,
-         result = sample_data)
+         result = sample_data,
+         qc = qc)
+}
+
+
+#' Drop Columns Without Values
+#'
+#' @param data A data.frame.
+#' @param columns Columns to drop if they are absent or contain only `NA`.
+#'
+#' @return The data.frame.
+#' @keywords internal
+drop_empty_columns <- function(data, columns) {
+    for (col in columns) {
+        if (is.null(data[[col]]) || all(is.na(data[[col]]))) data[[col]] <- NULL
+    }
+    data
 }

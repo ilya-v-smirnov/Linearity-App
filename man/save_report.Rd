@@ -14,6 +14,7 @@ save_report(
   model_table,
   result_table,
   means_table = NULL,
+  qc_table = NULL,
   notes = character(0),
   lang = "en"
 )
@@ -36,6 +37,8 @@ save_report(
 \item{result_table}{Sample results.}
 
 \item{means_table}{Optional aggregated results.}
+
+\item{qc_table}{Optional quality control results.}
 
 \item{notes}{Character vector of warnings.}
 

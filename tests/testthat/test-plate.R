@@ -1,0 +1,235 @@
+# Writes a plate workbook; grids are matrices with row letters / column numbers
+write_plate <- function(layout, od, standards = NULL, samples = NULL, qc = NULL,
+                        start_row = 1, start_col = 1, names = c(layout = 'Layout', od = 'OD',
+                                                                 standards = 'Standards',
+                                                                 samples = 'Samples', qc = 'QC')) {
+    wb <- openxlsx::createWorkbook()
+    add_grid <- function(sheet, values) {
+        openxlsx::addWorksheet(wb, sheet)
+        openxlsx::writeData(wb, sheet, t(as.character(seq_len(ncol(values)))),
+                            startRow = start_row, startCol = start_col + 1, colNames = FALSE)
+        openxlsx::writeData(wb, sheet, LETTERS[seq_len(nrow(values))],
+                            startRow = start_row + 1, startCol = start_col, colNames = FALSE)
+        openxlsx::writeData(wb, sheet, as.data.frame(values),
+                            startRow = start_row + 1, startCol = start_col + 1, colNames = FALSE)
+    }
+    add_grid(names[['layout']], layout)
+    add_grid(names[['od']], od)
+    for (kind in c('standards', 'samples', 'qc')) {
+        tab <- get(kind)
+        if (!is.null(tab)) {
+            openxlsx::addWorksheet(wb, names[[kind]])
+            openxlsx::writeData(wb, names[[kind]], tab)
+        }
+    }
+    path <- tempfile(fileext = '.xlsx')
+    openxlsx::saveWorkbook(wb, path)
+    path
+}
+
+# A small plate: 6 standard levels in duplicate (columns 1-2), NC in row G,
+# samples X1-X3 in duplicate in columns 3-4; OD = 0.1 * conc + 0.05
+small_plate <- function(extra_layout = NULL, extra_od = NULL) {
+    conc <- c(32, 16, 8, 4, 2, 1)
+    layout <- matrix(NA_character_, 7, 4)
+    od <- matrix(NA_real_, 7, 4)
+    layout[, 1:2] <- c(paste0('S', 1:6), 'NC')
+    od[, 1:2] <- c(0.1 * conc + 0.05, 0.05)
+    layout[1:3, 3:4] <- paste0('X', 1:3)
+    od[1:3, 3:4] <- 0.1 * c(5, 10, 20) + 0.05
+    list(layout = layout, od = od,
+         standards = data.frame(level = paste0('S', 1:6), conc = conc),
+         samples = data.frame(id = paste0('X', 1:3), name = c('a', 'b', 'c'), dilution = c(1, 2, 1),
+                              date = as.Date('2026-11-14')))
+}
+
+test_that('example plate gives the same results as the table format', {
+    plate <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    expect_true(all(c('well', 'id') %in% names(plate)))
+    expect_equal(as.vector(table(plate$type)[c('NC', 'sample', 'standard')]), c(2, 24, 14))
+
+    r_plate <- calculate(plate, 'QRM')
+    r_table <- calculate(load_sample('bca'), 'QRM')
+    a_plate <- aggregate_result(r_plate$result, c('sample.name', 'dilution'))
+    a_table <- aggregate_result(r_table$result, c('sample.name', 'dilution'))
+    expect_equal(a_plate, a_table)
+    expect_true(all(c('well', 'id') %in% names(r_plate$result)))
+    expect_false(any(c('well', 'id') %in% names(r_table$result)))
+})
+
+test_that('plate template can be filled in and read back in any language', {
+    for (lang in supported_languages()) {
+        path <- tempfile(fileext = '.xlsx')
+        make_plate_template(path, start = 32, step = 2, n.levels = 6, n.standard = 2,
+                            n.sample = 3, sample_reps = 2, lang = lang)
+        sheets <- readxl::excel_sheets(path)
+        expect_true(tr('plate.sheet_layout', lang) %in% sheets)
+
+        layout <- LinearityApp:::read_grid(path, tr('plate.sheet_layout', lang))
+        expect_equal(dim(layout), c(8, 12))
+        expect_equal(unname(layout[1:7, 1]), paste0('S', 1:7)[1:7] |> replace(7, 'B'))
+
+        conc <- c(32, 16, 8, 4, 2, 1)
+        od <- matrix(NA_real_, 8, 12)
+        od[1:7, 1:2] <- c(0.1 * conc + 0.05, 0.05)
+        od[1:6, 3] <- 0.1 * c(5, 5, 10, 10, 20, 20) + 0.05
+        wb <- openxlsx::loadWorkbook(path)
+        openxlsx::writeData(wb, tr('plate.sheet_od', lang), as.data.frame(od),
+                            startRow = 2, startCol = 2, colNames = FALSE)
+        openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+
+        data <- check_assay(read_assay(path))
+        r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+        expect_equal(r$result$conc, c(5, 5, 10, 10, 20, 20), tolerance = 1e-8, info = lang)
+        expect_match(message_text(r$notes, lang), tr('note.blank_background', lang),
+                     fixed = TRUE, all = FALSE)
+    }
+})
+
+test_that('grid may be offset; decimal commas and text values are handled', {
+    p <- small_plate()
+    od <- matrix(as.character(p$od), nrow(p$od))
+    od[1, 3] <- '1,05'           # decimal comma
+    od[2, 4] <- 'OVRFLW'         # reader overflow
+    od[7, 4] <- '0.9'            # OD without layout code
+    path <- write_plate(p$layout, od, p$standards, p$samples, start_row = 3, start_col = 2)
+
+    data <- read_assay(path)
+    expect_equal(data$OD[data$well == 'A3'], 1.05)
+    expect_true(is.na(data$OD[data$well == 'B4']))
+    tab <- problems_table(attr(data, 'problems'))
+    expect_equal(nrow(tab), 2)
+    expect_match(tab$Problem, "Non-numeric OD value 'OVRFLW'", fixed = TRUE, all = FALSE)
+    expect_match(tab$Problem, 'ignored: G4', fixed = TRUE, all = FALSE)
+
+    data <- check_assay(data)
+    r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    expect_equal(r$result$flag[r$result$well == 'B4'], 'Missing OD')
+    expect_equal(r$result$conc[r$result$well == 'A3'], 10)
+    expect_equal(r$result$conc[r$result$well == 'B3'], 20)   # dilution 2
+    expect_equal(unique(r$result$sample.date), '14.11.2026')
+})
+
+test_that('all problems of a plate are reported at once', {
+    p <- small_plate()
+    p$layout[7, 3] <- 'Y1'                  # unknown code
+    p$layout[5, 3:4] <- 'X9'                # sample not on the Samples sheet (warning)
+    p$od[5, 3:4] <- 0.5
+    p$standards <- p$standards[-6, ]        # S6 has no concentration
+    path <- write_plate(p$layout, p$od, p$standards, p$samples)
+
+    cnd <- tryCatch(check_assay(read_assay(path)), error = identity)
+    expect_s3_class(cnd, 'lin_error')
+    expect_equal(cnd$key, 'error.invalid_input_many')
+    tab <- problems_table(cnd$problems, 'en')
+    expect_equal(sum(tab$Severity == 'Error'), 2)
+    expect_equal(tab$Severity[1:2], c('Error', 'Error'))
+    expect_match(tab$Problem, 'Unknown well code: Y1', fixed = TRUE, all = FALSE)
+    expect_match(tab$Location, 'well G3', fixed = TRUE, all = FALSE)
+    expect_match(tab$Location, 'wells F1, F2', fixed = TRUE, all = FALSE)
+    expect_match(tab$Problem, 'Sample X9 is not described', fixed = TRUE, all = FALSE)
+    expect_match(conditionMessage(cnd), 'and 1 more error', fixed = TRUE)
+
+    ru <- problems_table(cnd$problems, 'ru')
+    expect_equal(names(ru), c(tr('problem.severity', 'ru'), tr('problem.location', 'ru'),
+                              tr('problem.message', 'ru')))
+})
+
+test_that('structural errors of a plate workbook are reported', {
+    p <- small_plate()
+    path <- write_plate(p$layout, p$od[1:6, ], p$standards, p$samples)
+    expect_error(read_assay(path), 'different sizes')
+
+    wb <- openxlsx::createWorkbook()
+    openxlsx::addWorksheet(wb, 'Layout')
+    openxlsx::writeData(wb, 'Layout', data.frame(x = 1))
+    path <- tempfile(fileext = '.xlsx')
+    openxlsx::saveWorkbook(wb, path)
+    expect_error(read_assay(path), 'Sheet OD is missing')
+
+    openxlsx::addWorksheet(wb, 'OD')
+    openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+    expect_error(read_assay(path), 'No plate grid')
+
+    path <- write_plate(p$layout, p$od, standards = data.frame(x = 1), samples = p$samples)
+    cnd <- tryCatch(check_assay(read_assay(path)), error = identity)
+    expect_match(problems_table(cnd$problems)$Problem, 'Required columns are missing: level, conc',
+                 fixed = TRUE, all = FALSE)
+})
+
+test_that('sheets are optional where possible', {
+    p <- small_plate()
+    path <- write_plate(p$layout, p$od, p$standards)
+    data <- check_assay(read_assay(path))
+    expect_equal(unique(data$dilution[data$type == 'sample']), 1)
+    expect_equal(unique(data$sample.name[data$type == 'sample']), paste0('X', 1:3))
+    expect_match(problems_table(attr(data, 'problems'))$Problem, 'There is no Samples sheet', fixed = TRUE)
+
+    extra <- rbind(p$samples, data.frame(id = 'X7', name = 'g', dilution = 1, date = NA))
+    path <- write_plate(p$layout, p$od, p$standards, extra)
+    data <- check_assay(read_assay(path))
+    expect_match(problems_table(attr(data, 'problems'))$Problem, 'X7 from the Samples sheet', fixed = TRUE)
+})
+
+test_that('sheet names are recognised in Russian and sample ids may be any text', {
+    p <- small_plate()
+    p$layout[1:3, 3:4] <- c('ctrl', 'mouse 2', 'X3')
+    p$samples$id <- c('CTRL', 'mouse 2', 'X3')
+    ru_names <- c(layout = tr('plate.sheet_layout', 'ru'), od = 'OD',
+                  standards = tr('plate.sheet_standards', 'ru'),
+                  samples = tr('plate.sheet_samples', 'ru'), qc = 'QC')
+    path <- write_plate(p$layout, p$od, p$standards, p$samples, names = ru_names)
+    data <- check_assay(read_assay(path))
+    expect_equal(sort(unique(data$sample.name[data$type == 'sample'])), c('a', 'b', 'c'))
+})
+
+test_that('quality controls get recovery', {
+    p <- small_plate()
+    p$layout[4:5, 3:4] <- c('QC-L', 'QC-H')
+    p$od[4:5, 3:4] <- 0.1 * c(3, 24) + 0.05
+    qc <- data.frame(id = c('QC-L', 'QC-H'), conc = c(2.5, 24))
+    path <- write_plate(p$layout, p$od, p$standards, p$samples, qc)
+    r <- calculate(check_assay(read_assay(path)), 'LRM', linear = TRUE)
+    expect_equal(nrow(r$qc), 4)
+    expect_equal(names(r$qc), c('well', 'id', 'nominal', 'conc', 'recovery', 'OD', 'flag'))
+    expect_equal(r$qc$recovery[r$qc$id == 'QC-L'], c(120, 120))
+    expect_equal(r$qc$recovery[r$qc$id == 'QC-H'], c(100, 100))
+    expect_false(any(r$result$id %in% c('QC-L', 'QC-H')))
+
+    path <- write_plate(p$layout, p$od, p$standards, p$samples, qc[1, ])
+    expect_error(check_assay(read_assay(path)), 'nominal concentrations')
+})
+
+test_that('384-well layouts are generated and too large layouts rejected', {
+    grid <- LinearityApp:::plate_layout_codes(384, n.levels = 8, n.standard = 3, n.sample = 100,
+                                              sample_reps = 3)
+    expect_equal(dim(grid), c(16, 24))
+    expect_equal(sum(grid == 'X100', na.rm = TRUE), 3)
+    expect_error(LinearityApp:::plate_layout_codes(96, 7, 2, 50, 2), 'does not fit')
+    expect_error(LinearityApp:::plate_dims(48), '96 or 384')
+})
+
+test_that('minimal table format needs only type and OD', {
+    tab <- data.frame(type = c(rep('Standard', 5), 'blank', 'Sample', 'qc'),
+                      conc = c(1, 2, 4, 8, 16, NA, NA, 4),
+                      OD = c(0.1, 0.2, 0.4, 0.8, 1.6, 0, 0.5, 0.4))
+    data <- check_assay(normalize_table(tab))
+    expect_equal(data$type, c(rep('standard', 5), 'blank', 'sample', 'QC'))
+    expect_equal(data$dilution[7:8], c(1, 1))
+    r <- calculate(data, 'LRM', linear = TRUE)
+    expect_equal(r$result$conc, 5)
+    expect_equal(r$qc$recovery, 100)
+})
+
+test_that('validation collects every problem of a table', {
+    tab <- data.frame(well = c('A1', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6'),
+                      type = c('standard', 'standard', 'standard', 'standard', 'sample', 'sample', 'NC'),
+                      conc = c(1, NA, 4, -8, NA, NA, NA),
+                      dilution = c(NA, NA, NA, NA, NA, 0, NA),
+                      OD = c(0.1, 0.2, 0.4, 0.8, 0.5, 0.5, 0))
+    problems <- validate_assay(tab)
+    keys <- vapply(problems, function(p) p$message$key, '')
+    expect_setequal(keys, c('error.dilution_missing', 'error.dilution_positive', 'error.std_conc_missing',
+                            'error.std_conc_positive', 'error.few_standard_wells', 'error.duplicate_well'))
+    expect_null(problems_table(list()))
+})

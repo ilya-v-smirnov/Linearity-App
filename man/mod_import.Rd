@@ -9,7 +9,7 @@
 \usage{
 mod_import_input_ui(id, lang)
 
-mod_import_table_ui(id)
+mod_import_table_ui(id, lang = "en")
 
 mod_import_server(id, lang)
 }
@@ -22,6 +22,8 @@ mod_import_server(id, lang)
 \code{mod_import_server()} returns a reactive with the validated data.
 }
 \description{
-File input (sidebar) and the table of imported data (main panel).
+File input (sidebar), the table of problems found in the file and the table
+of imported data (main panel). Plate workbooks and tables are recognised
+automatically (see \code{\link[=read_assay]{read_assay()}}).
 }
 \keyword{internal}

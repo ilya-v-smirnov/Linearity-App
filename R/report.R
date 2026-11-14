@@ -9,6 +9,7 @@
 #' @param model_table Coefficients table from [get_coef_ci()].
 #' @param result_table Sample results.
 #' @param means_table Optional aggregated results.
+#' @param qc_table Optional quality control results.
 #' @param notes Character vector of warnings.
 #' @param lang Language of the report headings.
 #'
@@ -23,6 +24,7 @@ save_report <- function(file,
                         model_table,
                         result_table,
                         means_table = NULL,
+                        qc_table = NULL,
                         notes = character(0),
                         lang = 'en') {
     date_text_style <- officer::fp_text(font.size = 11, underlined = TRUE, font.family = 'Calibri')
@@ -57,6 +59,11 @@ save_report <- function(file,
     report <- officer::body_add_table(report, model_table, style = 'table_template')
     report <- officer::body_add_fpar(report, section('report.section_result'))
     report <- officer::body_add_table(report, result_table, style = 'table_template')
+
+    if (!is.null(qc_table)) {
+        report <- officer::body_add_fpar(report, section('report.section_qc'))
+        report <- officer::body_add_table(report, qc_table, style = 'table_template')
+    }
 
     if (length(notes) > 0) {
         report <- officer::body_add_fpar(report, section('report.section_warnings'))

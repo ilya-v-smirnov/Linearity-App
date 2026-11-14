@@ -2,7 +2,7 @@
 % Please edit documentation in R/validate.R
 \name{check_input_file}
 \alias{check_input_file}
-\title{Validate Input Data}
+\title{Validate Input Data (Table Format)}
 \usage{
 check_input_file(data)
 }
@@ -13,10 +13,8 @@ check_input_file(data)
 The validated data.frame.
 }
 \description{
-Checks mandatory columns, numeric columns, allowed values of \code{type},
-dilution factors of samples, concentrations of standards and the number of
-standard wells. Stops with an informative error (class \code{lin_error}) on the
-first problem.
+Normalizes a table read with \code{\link[=read_table]{read_table()}} (see \code{\link[=normalize_table]{normalize_table()}}) and
+validates it with \code{\link[=check_assay]{check_assay()}}.
 }
 \examples{
 path <- system.file('extdata', 'griess.xlsx', package = 'LinearityApp')

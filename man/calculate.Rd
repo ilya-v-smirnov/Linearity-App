@@ -32,8 +32,14 @@ A list with components:
 \item \code{excluded_standards}: standards excluded from the fit with a \code{reason};
 \item \code{calibration_range}: range of standard concentrations used in the fit;
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
-\item \code{result}: sample results with \code{conc} (dilution-corrected) and \code{flag}.
+\item \code{result}: sample results with \code{conc} (dilution-corrected) and \code{flag};
+\item \code{qc}: quality controls with nominal and measured concentration,
+recovery (\%) and flag (\code{NULL} if there are no QC wells).
 }
+
+The background is the geometric mean of NC wells, or of blank wells if
+there are no NC wells. Columns \code{well} and \code{id} are kept in the results
+when they contain values.
 }
 \description{
 Subtracts the background, fits the calibration curve OD = f(conc) on the

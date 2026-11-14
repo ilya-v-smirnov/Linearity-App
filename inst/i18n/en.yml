@@ -25,10 +25,16 @@ template:
   replicates: "Standard columns"
   samples: "N samples"
   download: "Download Template"
+  format: "Template format"
+  format_plate: "Plate (Excel)"
+  format_table: "Table"
+  plate_size: "Plate"
+  sample_reps: "Sample replicates"
 
 import:
   title: "Import Data"
   choose: "Choose file:"
+  problems: "Problems found in the file:"
 
 rounding:
   title: "Rounding Options"
@@ -72,6 +78,7 @@ plot:
 
 results:
   download: "Download results"
+  qc: "Quality controls"
 
 summary:
   aggregation: "Select aggregation parameters:"
@@ -85,6 +92,7 @@ report:
   section_result: "Result"
   section_means: "Means"
   section_warnings: "Warnings"
+  section_qc: "Quality controls"
   method: "Calibration method: "
   scale: "Scale: "
 
@@ -107,6 +115,45 @@ note:
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
   not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
+  blank_background: "There are no NC wells: blank wells were used as background."
+
+plate:
+  sheet_instructions: "Instructions"
+  sheet_layout: "Layout"
+  sheet_od: "OD"
+  sheet_standards: "Standards"
+  sheet_samples: "Samples"
+  sheet_qc: "QC"
+  help_1: "How to fill in this workbook"
+  help_2: "Layout: well codes. S1, S2, ... - standard levels; B - blank; NC - negative control; QC-L, QC-M, QC-H - quality controls; X1, X2, ... - samples. Leave unused wells empty. Wells with the same code are replicates."
+  help_3: "OD: paste optical densities from the plate reader into the grid at the same positions as on the Layout sheet. A decimal comma is accepted."
+  help_4: "Standards: concentration of each standard level (column conc)."
+  help_5: "Samples: name, dilution factor and any additional columns (e.g. date) for each sample code."
+  help_6: "QC: nominal concentration of each quality control (optional)."
+  help_7: "The background is the mean OD of NC wells, or of blank wells if there are no NC wells."
+  help_8: "Do not rename the columns. Sheet names may be in English or Russian."
+
+problem:
+  severity: "Severity"
+  location: "Location"
+  message: "Problem"
+  error: "Error"
+  warning: "Warning"
+  with_location: "{message} ({location})"
+
+location:
+  well: "well {well}"
+  wells: "wells {wells}"
+  row: "row {row}"
+  rows: "rows {rows}"
+  sheet: "sheet {sheet}"
+
+warning:
+  od_not_numeric: "Non-numeric OD value '{value}' is treated as missing"
+  od_without_code: "OD values in wells without a layout code are ignored: {wells}"
+  sample_not_described: "Sample {id} is not described on the Samples sheet: dilution 1 is assumed"
+  sample_not_on_plate: "Sample {id} from the Samples sheet is not on the plate"
+  no_samples_sheet: "There is no Samples sheet: sample codes are used as names, dilution 1 is assumed"
 
 error:
   mandatory_column: "Mandatory {column} column is missing"
@@ -118,12 +165,24 @@ error:
   std_conc_missing: "Not all standard wells have concentrations specified"
   std_conc_positive: "All standard concentrations must be positive"
   few_standard_wells: "Insufficient number of standard wells: {n}"
+  no_background: "There are no NC or blank wells: the background cannot be estimated"
+  qc_conc_missing: "Not all QC wells have nominal concentrations specified"
+  qc_conc_positive: "All QC nominal concentrations must be positive"
+  duplicate_well: "The well occurs more than once"
+  plate_no_grid: "No plate grid (row letters A, B, ... and column numbers 1, 2, ...) found on sheet {sheet}"
+  plate_sheet_missing: "Sheet {sheet} is missing"
+  plate_size_mismatch: "The Layout grid ({layout}) and the OD grid ({od}) have different sizes"
+  plate_too_small: "The layout needs {n} wells and does not fit on a {size}-well plate"
+  unknown_code: "Unknown well code: {code}"
+  sheet_columns: "Required columns are missing: {columns}"
+  invalid_input_one: "{first}"
+  invalid_input_many: "{first} (and {more} more error(s), see the table of problems)"
   file_type: "This file type is not supported: use .xlsx or .csv"
   csv_format: "Unknown CSV format: expected comma- or semicolon-separated values"
   csv_dialect: "Unknown CSV dialect: {dialect}"
   template_start: "Start concentration must be a positive number"
   template_step: "Dilution step must be greater than 1"
   template_levels: "At least 3 standard levels are required"
-  no_nc: "No valid OD values in NC wells"
+  no_nc: "No valid OD values in the background wells (NC or blank)"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
   too_few_levels: "At least {min} standard concentration levels with valid OD are required for this model (found {found})"

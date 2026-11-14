@@ -8,12 +8,14 @@
 \usage{
 lin_message(key, ...)
 
-lin_abort(key, ...)
+lin_abort(key, ..., .fields = list())
 }
 \arguments{
 \item{key}{Dictionary key.}
 
 \item{...}{Placeholder values.}
+
+\item{.fields}{Additional fields of the condition (e.g. \code{problems}).}
 }
 \description{
 Calculation functions return warnings as \code{lin_message} objects and signal

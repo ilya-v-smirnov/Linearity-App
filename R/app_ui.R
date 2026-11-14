@@ -27,7 +27,7 @@ app_ui <- function(request, default_lang = 'en') {
                 shiny::navbarPage(
                     t('tab.steps'), id = 'tabs',
                     shiny::tabPanel(t('tab.imported'), value = 'imported',
-                                    mod_import_table_ui('import')),
+                                    mod_import_table_ui('import', lang)),
                     shiny::tabPanel(t('tab.curve'), value = 'curve',
                                     mod_curve_ui('curve', lang)),
                     shiny::tabPanel(t('tab.results'), value = 'results',

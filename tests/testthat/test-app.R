@@ -16,8 +16,8 @@ test_that('import errors are shown in Russian', {
     shiny::testServer(LinearityApp:::mod_import_server, args = list(lang = 'ru'), {
         session$setInputs(file = list(datapath = sample_path('invalid', '06_zero_dilution.xlsx')))
         err <- tryCatch(session$returned(), error = identity)
-        expect_equal(conditionMessage(err),
-                     tr('common.import_error', 'ru', message = tr('error.dilution_positive', 'ru')))
+        expect_match(conditionMessage(err), tr('error.dilution_positive', 'ru'), fixed = TRUE)
+        expect_match(conditionMessage(err), tr('common.import_error', 'ru', message = ''), fixed = TRUE)
     })
 })
 
@@ -141,4 +141,39 @@ test_that('server takes the language from the page URL', {
     LinearityApp:::app_server(list(), list(), fake_session(''), default_lang = 'ru')
     LinearityApp:::app_server(list(), list(), fake_session(''))
     expect_equal(langs, c('ru', 'ru', 'en'))
+})
+
+test_that('import module reads plate workbooks and shows problems', {
+    shiny::testServer(LinearityApp:::mod_import_server, args = list(lang = 'en'), {
+        session$setInputs(file = list(datapath = sample_path('bca_plate.xlsx')))
+        expect_true('well' %in% names(session$returned()))
+        expect_null(output$problems)
+        expect_match(output$table, 'A1', fixed = TRUE)
+
+        session$setInputs(file = list(datapath = sample_path('invalid', '05_dilution_missing.xlsx')))
+        expect_match(output$problems$html, 'Problems found in the file', fixed = TRUE)
+        expect_match(output$problems_table, 'Not all samples have dilution factors specified', fixed = TRUE)
+        expect_match(output$problems_table, 'rows 26', fixed = TRUE)
+    })
+})
+
+test_that('template module downloads a plate workbook', {
+    shiny::testServer(LinearityApp:::mod_template_server, args = list(lang = 'ru'), {
+        session$setInputs(format = 'plate', size = '96', start = 100, step = 2, levels = 7,
+                          replicates = 2, samples = 10, sample_reps = 2)
+        path <- output$download_plate
+        expect_true(LinearityApp:::is_plate_workbook(path))
+        expect_true(tr('plate.sheet_samples', 'ru') %in% readxl::excel_sheets(path))
+    })
+})
+
+test_that('results module shows quality controls', {
+    curve <- fake_curve()
+    qc_result <- shiny::isolate(curve$result())
+    qc_result$qc <- data.frame(id = 'QC-L', nominal = 2, conc = 2.2, recovery = 110, OD = 0.3, flag = 'OK')
+    curve$result <- shiny::reactive(qc_result)
+    shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve), {
+        expect_match(output$qc$html, 'Quality controls', fixed = TRUE)
+        expect_match(output$qc_table, 'QC-L', fixed = TRUE)
+    })
 })
