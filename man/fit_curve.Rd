@@ -17,9 +17,10 @@ fit_curve(standard_data, model = "LRM", linear = FALSE, weights = "none")
 }
 \value{
 A \code{lin_fit} object: list with \code{model}, \code{log_scale}, \code{weights},
-\code{par} (internal parameters), \code{vcov}, \code{df}, \code{sigma}, \code{x}, \code{y}, \code{w},
-\code{conc_range}, \code{weight_fun}, \code{w_scale}, \code{theta}, \code{notes} and the
-underlying \code{lm}/\code{nls} object in \code{object}.
+\code{par} (internal parameters), \code{vcov}, \code{df}, \code{sigma}, \code{rss} (weighted
+residual sum of squares), \code{loglik}, \code{x}, \code{y}, \code{w}, \code{conc_range},
+\code{weight_fun}, \code{w_scale}, \code{theta}, \code{notes} and, for LRM and QRM, the
+underlying \code{lm} object in \code{object}.
 }
 \description{
 Fit a Calibration Curve

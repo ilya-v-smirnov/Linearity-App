@@ -32,7 +32,7 @@ test_that('4PL agrees with drc', {
     ours <- fit_curve(std, '4PL')
     ref <- drc::drm(OD ~ conc, data = std, fct = drc::LL.4())
     cf <- stats::coef(ref)
-    expect_lte(stats::deviance(ours$object), sum(stats::residuals(ref)^2) * (1 + 1e-6))
+    expect_lte(ours$rss, sum(stats::residuals(ref)^2) * (1 + 1e-6))
     # drc: c = lower, d = upper, e = EC50, b = -slope
     expect_equal(ours$par[['a']], unname(cf['c:(Intercept)']), tolerance = 1e-3)
     expect_equal(ours$par[['d']], unname(cf['d:(Intercept)']), tolerance = 1e-3)
@@ -43,7 +43,40 @@ test_that('4PL agrees with drc', {
     # but our fit must not be worse than drc
     bca <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), '4PL')$standard_data
     ref <- drc::drm(OD ~ conc, data = bca, fct = drc::LL.4())
-    expect_lte(stats::deviance(fit_curve(bca, '4PL')$object), sum(stats::residuals(ref)^2) * (1 + 1e-6))
+    expect_lte(fit_curve(bca, '4PL')$rss, sum(stats::residuals(ref)^2) * (1 + 1e-6))
+})
+
+test_that('logistic fits survive parameters that are not identifiable', {
+    # flat curve: the slope is zero, so the inflection point does not affect the fit
+    v <- LinearityApp:::logistic_vcov('4PL', c(a = 0.1, b = 0, lc = 1, d = 1), levels_7,
+                                      rep(1, 7), sigma = 0.01)
+    expect_false(v$identifiable)
+    expect_false(v$exact)
+    expect_true(all(is.finite(v$vcov)))
+    expect_equal(dimnames(v$vcov)[[1]], c('a', 'b', 'lc', 'd'))
+
+    std <- make_standards(function(x) logistic(x, 0.05, 1.2, 10, 2), sd = 0.02)
+    v <- LinearityApp:::logistic_vcov('4PL', fit_curve(std, '4PL')$par, std$conc, rep(1, 14), 0.02)
+    expect_true(v$identifiable)
+
+    # a curve far from its upper asymptote (BCA example): concentrations still work
+    bca <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), '4PL')
+    expect_equal(sum(bca$result$flag == 'OK'), 24)
+    expect_true(all(is.finite(bca$result$conc.lower)))
+    expect_match(message_text(bca$notes), 'not determined by the standards', all = FALSE)
+
+    # with a pseudo-inverse the parameter intervals are not shown
+    fake <- bca$fit
+    fake$vcov_exact <- FALSE
+    expect_true(all(is.na(get_coef_ci(fake)$ci.lower)))
+
+    # the log-likelihood matches logLik() of the equivalent nls fit
+    std <- make_standards(function(x) logistic(x, 0.05, 1.2, 10, 2), sd = 0.02, seed = 3)
+    ours <- fit_curve(std, '4PL')
+    ref <- stats::nls(OD ~ d + (a - d) / (1 + exp(b * (log(conc) - lc))), data = std,
+                      start = as.list(ours$par))
+    expect_equal(ours$loglik, as.numeric(stats::logLik(ref)), tolerance = 1e-6)
+    expect_equal(unname(sqrt(diag(ours$vcov))), unname(sqrt(diag(stats::vcov(ref)))), tolerance = 1e-3)
 })
 
 test_that('confidence intervals of concentrations cover the true value', {
