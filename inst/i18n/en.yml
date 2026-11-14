@@ -1,0 +1,129 @@
+# English dictionary of LinearityApp.
+# Keys must be identical in all language files; placeholders look like {name}.
+
+language:
+  name: "English"
+
+app:
+  title: "Linearity App"
+
+common:
+  file_type: "File type"
+  sep: "Sep"
+  excel: "Excel"
+  csv: "CSV"
+  warnings: "Warnings:"
+  import_error: "Import error: {message}"
+  calc_error: "Calculation error: {message}"
+  language: "Language"
+
+template:
+  title: "Template Parameters"
+  start: "Start"
+  step: "Step"
+  levels: "Standard levels"
+  replicates: "Standard columns"
+  samples: "N samples"
+  download: "Download Template"
+
+import:
+  title: "Import Data"
+  choose: "Choose file:"
+
+rounding:
+  title: "Rounding Options"
+  function: "Rounding function"
+  signif: "Significant"
+  round: "Round"
+  number: "Number"
+
+tab:
+  steps: "Steps:"
+  imported: "Imported data"
+  curve: "Standard curve"
+  results: "Results"
+  summary: "Result Summary"
+  report: "Report"
+  manual: "User Manual"
+  about: "About"
+
+model:
+  LRM: "Linear regression model"
+  QRM: "Quadratic regression model"
+
+scale:
+  linear: "linear"
+  log: "log10"
+
+curve:
+  model: "Choose regression model"
+  linear: "Linear scales"
+  xtitle: "X-axis title:"
+  xunits: "X units:"
+  ytitle: "Y-axis title:"
+  xdefault: "Concentration"
+  ydefault: "Optical density"
+  unit_none: "None"
+  save_plot: "Save plot"
+
+plot:
+  fitted: "Fitted OD"
+  residuals: "Residuals"
+
+results:
+  download: "Download results"
+
+summary:
+  aggregation: "Select aggregation parameters:"
+  download: "Download Summary Table"
+
+report:
+  title_label: "Title:"
+  title_placeholder: "Experiment name"
+  download: "Download report"
+  section_curve: "Standard curve"
+  section_result: "Result"
+  section_means: "Means"
+  section_warnings: "Warnings"
+  method: "Calibration method: "
+  scale: "Scale: "
+
+about:
+  designed: "This application was designed by Ilya Smirnov."
+  source: "The source code is published on GitHub:"
+  contact: "Please report problems or suggestions for improvement by email:"
+  manual_language: "The user manual is available in English only."
+
+flag:
+  ok: "OK"
+  below: "< LLOQ"
+  above: "> ULOQ"
+  od_le_nc: "OD <= NC"
+  no_solution: "No solution"
+  missing: "Missing OD"
+
+note:
+  nc_arithmetic: "Some NC values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
+  standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
+  not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
+  not_quantified: "{n} of {total} sample wells were not quantified: {details}."
+
+error:
+  mandatory_column: "Mandatory {column} column is missing"
+  non_numeric: "Non-numeric values in {column} column"
+  type_not_allowed: "Not allowed values in the type column: {values}"
+  type_missing: "Missing values in the type column: {values}"
+  dilution_missing: "Not all samples have dilution factors specified"
+  dilution_positive: "All dilution factors must be positive"
+  std_conc_missing: "Not all standard wells have concentrations specified"
+  std_conc_positive: "All standard concentrations must be positive"
+  few_standard_wells: "Insufficient number of standard wells: {n}"
+  file_type: "This file type is not supported: use .xlsx or .csv"
+  csv_format: "Unknown CSV format: expected comma- or semicolon-separated values"
+  csv_dialect: "Unknown CSV dialect: {dialect}"
+  template_start: "Start concentration must be a positive number"
+  template_step: "Dilution step must be greater than 1"
+  template_levels: "At least 3 standard levels are required"
+  no_nc: "No valid OD values in NC wells"
+  unknown_model: "Unknown model: {model}. Use one of: {choices}"
+  too_few_levels: "At least {min} standard concentration levels with valid OD are required for this model (found {found})"

@@ -47,7 +47,7 @@ test_that('samples below the background are flagged, not reported as zero', {
     expect_equal(unique(m0$flag), 'OD <= NC')
     expect_true(all(is.na(m0$conc)))
     expect_false(any(r$result$conc == 0, na.rm = TRUE))
-    expect_match(r$notes, 'OD <= NC \\(4\\)', all = FALSE)
+    expect_match(message_text(r$notes), 'OD <= NC (4)', fixed = TRUE, all = FALSE)
 })
 
 test_that('standards with missing OD are excluded from the fit and reported', {
@@ -55,7 +55,8 @@ test_that('standards with missing OD are excluded from the fit and reported', {
     expect_equal(nrow(r$excluded_standards), 1)
     expect_equal(r$excluded_standards$reason, 'Missing OD')
     expect_equal(nrow(r$standard_data), 13)
-    expect_match(r$notes, 'excluded from the fit', all = FALSE)
+    expect_match(message_text(r$notes), 'excluded from the fit: Missing OD (1)', fixed = TRUE,
+                 all = FALSE)
 })
 
 test_that('linear model is inverted exactly', {
@@ -87,11 +88,11 @@ test_that('dilution is applied after inverse prediction', {
 test_that('background is the unrounded geometric mean of NC wells', {
     bg <- background_value(c(0.0784, 0.0753))
     expect_equal(bg$value, sqrt(0.0784 * 0.0753))
-    expect_length(bg$note, 0)
+    expect_length(bg$notes, 0)
 
     bg <- background_value(c(0.01, -0.01, 0.03))
     expect_equal(bg$value, mean(c(0.01, -0.01, 0.03)))
-    expect_match(bg$note, 'arithmetic mean')
+    expect_match(message_text(bg$notes), 'arithmetic mean')
 
     expect_error(background_value(c(NA, NA)), 'No valid OD')
 })

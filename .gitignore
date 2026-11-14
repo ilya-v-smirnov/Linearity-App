@@ -3,3 +3,5 @@
 .Rproj.user
 .Rprofile
 renv/
+*.Rcheck/
+LinearityApp_*.tar.gz

@@ -1,0 +1,14 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^\.claude$
+^\.lintr$
+^LICENSE\.md$
+^README\.md$
+^ROADMAP\.md$
+^app\.R$
+^doc$
+^renv$
+^renv\.lock$
+^\.Rprofile$
+^codecov\.yml$

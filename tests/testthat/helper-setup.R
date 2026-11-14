@@ -1,14 +1,11 @@
-# testthat runs tests with tests/testthat as the working directory
-project_root <- normalizePath(file.path('..', '..'))
-
-suppressMessages(source(file.path(project_root, 'linearity.R')))
-
-sample_path <- function(...) file.path(project_root, 'Sample Data', ...)
+sample_path <- function(...) {
+    system.file('extdata', ..., package = 'LinearityApp', mustWork = TRUE)
+}
 
 sample_files <- c(
-    bca = '#01_BCA assay_semicolon-delimited.csv',
-    elisa = '#02_Sandwich ELISA (sMICB)_comma-delimited.csv',
-    griess = '#03_Griess assay_Excel.xlsx'
+    bca = 'bca_semicolon.csv',
+    elisa = 'elisa_smicb_comma.csv',
+    griess = 'griess.xlsx'
 )
 
 load_sample <- function(name) {

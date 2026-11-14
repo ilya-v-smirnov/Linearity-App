@@ -1,0 +1,39 @@
+Package: LinearityApp
+Title: Standard Curve Analysis for Laboratory Assays
+Version: 0.2.0
+Authors@R:
+    person("Ilya", "Smirnov", , "smirnov.iv.mail@gmail.com", role = c("aut", "cre"))
+Description: A 'shiny' application and a set of functions to calculate analyte
+    concentrations from optical densities measured in laboratory assays
+    (sandwich ELISA, BCA, Griess and others). Fits linear and quadratic
+    calibration models on log-log or linear scales, inverts the fitted curve
+    for samples, flags results outside the calibration range and produces
+    Excel, CSV and Word outputs. The interface is available in English and
+    Russian.
+License: MIT + file LICENSE
+URL: https://github.com/ilya-v-smirnov/Linearity-App
+BugReports: https://github.com/ilya-v-smirnov/Linearity-App/issues
+Depends:
+    R (>= 4.1.0)
+Imports:
+    cowplot (>= 1.1.1),
+    dplyr (>= 1.1.0),
+    ggplot2 (>= 3.4.0),
+    officer (>= 0.4.2),
+    openxlsx (>= 4.2.5),
+    readxl (>= 1.4.0),
+    rlang,
+    shiny (>= 1.7.1),
+    stats,
+    tools,
+    utils,
+    yaml
+Suggests:
+    covr,
+    lintr,
+    pkgload,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.1
