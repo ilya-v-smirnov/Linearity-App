@@ -6,6 +6,9 @@
 #' @param plot Plot from [get_plots()].
 #' @param method Calibration method (text shown in the report).
 #' @param scale Scale of the fit (text shown in the report).
+#' @param weights Weighting (text shown in the report).
+#' @param exclusions Optional table of standard points excluded by the user.
+#' @param comparison Optional table comparing the calibration models.
 #' @param model_table Coefficients table from [get_coef_ci()].
 #' @param result_table Sample results.
 #' @param means_table Optional aggregated results.
@@ -21,10 +24,13 @@ save_report <- function(file,
                         plot,
                         method,
                         scale = NULL,
+                        weights = NULL,
                         model_table,
                         result_table,
                         means_table = NULL,
                         qc_table = NULL,
+                        exclusions = NULL,
+                        comparison = NULL,
                         notes = character(0),
                         lang = 'en') {
     date_text_style <- officer::fp_text(font.size = 11, underlined = TRUE, font.family = 'Calibri')
@@ -55,8 +61,20 @@ save_report <- function(file,
     report <- officer::body_add_gg(report, plot, width = 6.5, height = 3)
     report <- officer::body_add_fpar(report, labelled_line('report.method', method))
     report <- officer::body_add_fpar(report, labelled_line('report.scale', scale))
+    if (!is.null(weights)) {
+        report <- officer::body_add_fpar(report, labelled_line('report.weights', weights))
+    }
     report <- officer::body_add_par(report, '', style = 'Normal')
     report <- officer::body_add_table(report, model_table, style = 'table_template')
+
+    if (!is.null(exclusions) && nrow(exclusions) > 0) {
+        report <- officer::body_add_fpar(report, section('report.section_exclusions'))
+        report <- officer::body_add_table(report, exclusions, style = 'table_template')
+    }
+    if (!is.null(comparison)) {
+        report <- officer::body_add_fpar(report, section('report.section_models'))
+        report <- officer::body_add_table(report, comparison, style = 'table_template')
+    }
     report <- officer::body_add_fpar(report, section('report.section_result'))
     report <- officer::body_add_table(report, result_table, style = 'table_template')
 

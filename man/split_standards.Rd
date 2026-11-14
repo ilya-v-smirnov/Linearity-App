@@ -4,19 +4,21 @@
 \alias{split_standards}
 \title{Select Standard Wells Usable for Fitting}
 \usage{
-split_standards(standard_data, linear = FALSE)
+split_standards(standard_data, log_scale = TRUE, exclude = NULL)
 }
 \arguments{
-\item{standard_data}{Background-subtracted standard rows.}
+\item{standard_data}{Background-subtracted standard rows with \code{.key}.}
 
-\item{linear}{Logical.}
+\item{log_scale}{Logical; \code{TRUE} if the model is fitted on log10 scales.}
+
+\item{exclude}{Data.frame with columns \code{key} and \code{reason}, or \code{NULL}.}
 }
 \value{
 A list with \code{used} and \code{excluded} data.frames; \code{excluded} has a
-\code{reason} column with flag codes.
+\code{reason} column with flag codes and a \code{comment} column with the user's reason.
 }
 \description{
-Standards with a missing OD, or (on log scales) a non-positive OD after
-background subtraction, cannot be used for fitting.
+Standards with a missing OD, (on log scales) a non-positive OD after
+background subtraction, or excluded by the user are not used for fitting.
 }
 \keyword{internal}

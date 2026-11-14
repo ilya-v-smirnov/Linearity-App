@@ -30,7 +30,8 @@ mod_summary_ui <- function(id, lang) {
 mod_summary_server <- function(id, lang, curve, rounding) {
     shiny::moduleServer(id, function(input, output, session) {
         columns <- shiny::reactive({
-            setdiff(colnames(curve$result()$result), c('type', 'conc', 'OD', 'flag', 'well'))
+            setdiff(colnames(curve$result()$result),
+                    c('type', 'conc', 'conc.lower', 'conc.upper', 'OD', 'flag', 'well'))
         })
 
         # Update the choices but keep the current selection when possible

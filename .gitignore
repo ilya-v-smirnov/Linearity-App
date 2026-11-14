@@ -5,3 +5,4 @@
 renv/
 *.Rcheck/
 LinearityApp_*.tar.gz
+data-raw/real examples/

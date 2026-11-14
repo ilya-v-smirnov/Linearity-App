@@ -8,31 +8,44 @@ calculate(
   data,
   model = "LRM",
   linear = FALSE,
+  weights = "none",
+  exclude = NULL,
   round_fun = signif,
-  round_par = 3
+  round_par = 3,
+  level = 0.95
 )
 }
 \arguments{
-\item{data}{Validated input data (see \code{\link[=check_input_file]{check_input_file()}}).}
+\item{data}{Validated input data (see \code{\link[=check_assay]{check_assay()}}).}
 
-\item{model}{\code{"LRM"} or \code{"QRM"} (see \code{\link[=calibration_models]{calibration_models()}}).}
+\item{model}{Model code (see \code{\link[=calibration_models]{calibration_models()}}).}
 
-\item{linear}{Logical; if \code{TRUE} the model is fitted on untransformed values.}
+\item{linear}{For LRM and QRM: fit on untransformed values instead of log10 scales.}
+
+\item{weights}{Weighting code (see \code{\link[=weighting_schemes]{weighting_schemes()}}).}
+
+\item{exclude}{Standard points excluded by the user: a data.frame with
+columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}.}
 
 \item{round_fun, round_par}{Rounding applied to the final concentrations only.}
+
+\item{level}{Confidence level of the concentration intervals.}
 }
 \value{
 A list with components:
 \itemize{
-\item \code{model_direct}: fitted calibration model (OD = f(conc));
-\item \code{model}: model code;
-\item \code{linear_scale}: logical;
+\item \code{model_direct}, \code{fit}: the fitted calibration (\code{lin_fit}, see \code{\link[=fit_curve]{fit_curve()}});
+\item \code{model}, \code{linear_scale}, \code{weights}: settings;
 \item \code{nc_value}: background value subtracted from all ODs;
-\item \code{standard_data}: standards used in the fit;
-\item \code{excluded_standards}: standards excluded from the fit with a \code{reason};
+\item \code{standard_data}: standards used in the fit (with \code{.key});
+\item \code{excluded_standards}: standards not used in the fit with a \code{reason};
+\item \code{exclusions}: standards excluded by the user (\code{key}, \code{conc}, \code{OD}, \code{reason});
 \item \code{calibration_range}: range of standard concentrations used in the fit;
+\item \code{back_calc}: back-calculated standards (see \code{\link[=back_calculate]{back_calculate()}});
+\item \code{lack_of_fit}: lack-of-fit test (see \code{\link[=lack_of_fit]{lack_of_fit()}});
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
-\item \code{result}: sample results with \code{conc} (dilution-corrected) and \code{flag};
+\item \code{result}: sample results with \code{conc} (dilution-corrected), its
+confidence interval \code{conc.lower}, \code{conc.upper} and \code{flag};
 \item \code{qc}: quality controls with nominal and measured concentration,
 recovery (\%) and flag (\code{NULL} if there are no QC wells).
 }
@@ -43,14 +56,14 @@ when they contain values.
 }
 \description{
 Subtracts the background, fits the calibration curve OD = f(conc) on the
-standards, inverts the curve for the samples and multiplies the result by
-the dilution factor. Samples outside the calibration range are flagged and
-receive \code{NA} instead of a concentration.
+standards, inverts the curve for samples and quality controls and
+multiplies the result by the dilution factor. Samples outside the
+calibration range are flagged and receive \code{NA} instead of a concentration.
 }
 \examples{
-path <- system.file('extdata', 'griess.xlsx', package = 'LinearityApp')
-data <- format_input_table(check_input_file(read_table(path)))
-res <- calculate(data, 'LRM')
+path <- system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp')
+data <- check_assay(read_assay(path))
+res <- calculate(data, '4PL', weights = '1/y2')
 head(res$result)
 message_text(res$notes, 'en')
 }

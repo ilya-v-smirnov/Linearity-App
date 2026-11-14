@@ -14,9 +14,7 @@ test_that('sample concentrations lie on the plotted calibration curve', {
         ok <- r$result$flag == 'OK'
         expect_gt(sum(ok), 0)
 
-        k <- curve_coefs(r$model_direct)
-        od_on_curve <- qrm_fun(r$result$conc[ok] / r$result$dilution[ok],
-                               a = k$a, b = k$b, c = k$c, linear = s$linear)
+        od_on_curve <- curve_fun(r$fit, r$result$conc[ok] / r$result$dilution[ok])
         net_od <- subtract_nc(data, r$nc_value)
         net_od <- net_od$OD[net_od$type == 'sample'][ok]
         expect_equal(od_on_curve, net_od, tolerance = 1e-8, info = info)
@@ -74,7 +72,7 @@ test_that('quadratic model uses the branch that contains the standards', {
     data$OD[data$type == 'sample'] <- f(c(3, 10, 15)) + 0.05
     r <- calculate(data, 'QRM', linear = TRUE, round_fun = no_rounding)
     expect_equal(r$result$conc, c(3, 10, 15), tolerance = 1e-8)
-    expect_true(is_monotonic(r$model_direct, r$calibration_range, linear = TRUE))
+    expect_true(is_monotonic(r$fit))
 })
 
 test_that('dilution is applied after inverse prediction', {
@@ -103,24 +101,26 @@ test_that('unsupported models and too few levels are rejected', {
 
     f <- function(x) 0.1 * x
     few <- synthetic_data(f, conc = c(1, 2, 4))
-    expect_s3_class(calculate(few, 'LRM', linear = TRUE)$model_direct, 'lm')
+    expect_s3_class(calculate(few, 'LRM', linear = TRUE)$model_direct, 'lin_fit')
     expect_error(calculate(few, 'QRM', linear = TRUE), 'At least 4')
 })
 
 test_that('coefficient table labels match the model terms', {
     r <- calculate(load_sample('bca'), 'QRM')
     tab <- get_coef_ci(r$model_direct)
-    cf <- coef(r$model_direct)
+    cf <- coef(r$fit$object)
     expect_equal(tab$coef, c('a', 'b', 'c'))
     expect_equal(tab$est[tab$coef == 'c'], unname(cf['(Intercept)']))
     expect_equal(tab$est[tab$coef == 'a'], unname(cf[grepl('^2', names(cf), fixed = TRUE)]))
+    expect_equal(tab$est[tab$coef == 'b'], unname(cf['u']))
     expect_true(all(tab$ci.lower < tab$est & tab$est < tab$ci.upper))
 })
 
 test_that('residual plot uses fitted ODs, not concentrations', {
     r <- calculate(load_sample('bca'), 'LRM')
-    fr <- get_fit_resid(r$model_direct)
-    expect_equal(fr$fitted, unname(10^fitted(r$model_direct)))
+    fr <- fit_residuals(r$fit)
+    expect_equal(fr$fitted, unname(10^fitted(r$fit$object)))
+    expect_equal(fr$resid, unname(resid(r$fit$object)))
     expect_false(isTRUE(all.equal(fr$fitted, r$standard_data$conc)))
 })
 

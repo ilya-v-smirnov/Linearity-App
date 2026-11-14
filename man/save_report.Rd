@@ -11,10 +11,13 @@ save_report(
   plot,
   method,
   scale = NULL,
+  weights = NULL,
   model_table,
   result_table,
   means_table = NULL,
   qc_table = NULL,
+  exclusions = NULL,
+  comparison = NULL,
   notes = character(0),
   lang = "en"
 )
@@ -32,6 +35,8 @@ save_report(
 
 \item{scale}{Scale of the fit (text shown in the report).}
 
+\item{weights}{Weighting (text shown in the report).}
+
 \item{model_table}{Coefficients table from \code{\link[=get_coef_ci]{get_coef_ci()}}.}
 
 \item{result_table}{Sample results.}
@@ -39,6 +44,10 @@ save_report(
 \item{means_table}{Optional aggregated results.}
 
 \item{qc_table}{Optional quality control results.}
+
+\item{exclusions}{Optional table of standard points excluded by the user.}
+
+\item{comparison}{Optional table comparing the calibration models.}
 
 \item{notes}{Character vector of warnings.}
 

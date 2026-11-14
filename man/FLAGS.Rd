@@ -7,9 +7,9 @@
 FLAGS
 }
 \description{
-Status codes assigned to every sample well. Only wells flagged \code{"OK"}
-receive a numeric concentration; all other wells get \code{NA} in \code{conc}.
-The codes are stored in English; use \code{\link[=translate_flags]{translate_flags()}} for display.
+Status codes assigned to wells. Only sample wells flagged \code{"OK"} receive a
+numeric concentration; all other wells get \code{NA} in \code{conc}. The codes are
+stored in English; use \code{\link[=translate_flags]{translate_flags()}} for display.
 }
 \details{
 \itemize{
@@ -17,7 +17,8 @@ The codes are stored in English; use \code{\link[=translate_flags]{translate_fla
 \item \code{below} (\code{"< LLOQ"}): below the lowest standard used in the fit.
 \item \code{above} (\code{"> ULOQ"}): above the highest standard used in the fit.
 \item \code{od_le_nc} (\code{"OD <= NC"}): background-subtracted OD is zero or negative.
-\item \code{no_solution} (\code{"No solution"}): the OD cannot be reached by the quadratic curve.
+\item \code{no_solution} (\code{"No solution"}): the OD cannot be reached by the curve.
 \item \code{missing} (\code{"Missing OD"}): the OD value is empty.
+\item \code{excluded} (\code{"Excluded"}): a standard point excluded by the user.
 }
 }

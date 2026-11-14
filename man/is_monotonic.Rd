@@ -4,19 +4,15 @@
 \alias{is_monotonic}
 \title{Check Monotonicity of the Calibration Curve}
 \usage{
-is_monotonic(fit, conc_range, linear = FALSE)
+is_monotonic(fit)
 }
 \arguments{
-\item{fit}{A fitted calibration model.}
-
-\item{conc_range}{Range of standard concentrations used in the fit.}
-
-\item{linear}{Logical; \code{TRUE} if the model was fitted on untransformed values.}
+\item{fit}{A \code{lin_fit} object.}
 }
 \value{
 \code{TRUE} if the curve is monotonic within the standard range.
 }
 \description{
-Check Monotonicity of the Calibration Curve
+Only the quadratic model can turn within the standard range.
 }
 \keyword{internal}

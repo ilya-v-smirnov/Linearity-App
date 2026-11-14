@@ -1,15 +1,16 @@
 #' Result Flags
 #'
-#' Status codes assigned to every sample well. Only wells flagged `"OK"`
-#' receive a numeric concentration; all other wells get `NA` in `conc`.
-#' The codes are stored in English; use [translate_flags()] for display.
+#' Status codes assigned to wells. Only sample wells flagged `"OK"` receive a
+#' numeric concentration; all other wells get `NA` in `conc`. The codes are
+#' stored in English; use [translate_flags()] for display.
 #'
 #' - `ok` (`"OK"`): the OD lies within the calibration range.
 #' - `below` (`"< LLOQ"`): below the lowest standard used in the fit.
 #' - `above` (`"> ULOQ"`): above the highest standard used in the fit.
 #' - `od_le_nc` (`"OD <= NC"`): background-subtracted OD is zero or negative.
-#' - `no_solution` (`"No solution"`): the OD cannot be reached by the quadratic curve.
+#' - `no_solution` (`"No solution"`): the OD cannot be reached by the curve.
 #' - `missing` (`"Missing OD"`): the OD value is empty.
+#' - `excluded` (`"Excluded"`): a standard point excluded by the user.
 #'
 #' @export
 FLAGS <- list(ok = 'OK',
@@ -17,14 +18,8 @@ FLAGS <- list(ok = 'OK',
               above = '> ULOQ',
               od_le_nc = 'OD <= NC',
               no_solution = 'No solution',
-              missing = 'Missing OD')
-
-
-#' Calibration Model Codes
-#'
-#' @return Character vector of supported model codes.
-#' @export
-calibration_models <- function() c('LRM', 'QRM')
+              missing = 'Missing OD',
+              excluded = 'Excluded')
 
 
 ##################### BACKGROUND (NC) ##########################################
@@ -42,12 +37,12 @@ geom_mean <- function(x) {
 }
 
 
-#' Estimate the Background (Negative Control) Value
+#' Estimate the Background Value
 #'
-#' The background is the geometric mean of NC optical densities. If some NC
-#' values are zero or negative, the arithmetic mean is used instead.
+#' The background is the geometric mean of the background ODs. If some values
+#' are zero or negative, the arithmetic mean is used instead.
 #'
-#' @param od Numeric vector of NC optical densities.
+#' @param od Numeric vector of background ODs.
 #'
 #' @return A list with `value` and `notes` (list of `lin_message`).
 #' @keywords internal
@@ -94,147 +89,56 @@ subtract_nc <- function(data, nc_value = NULL) {
 }
 
 
-##################### CALIBRATION MODELS #######################################
+##################### STANDARDS ################################################
 
-#' Fit a Calibration Model
+#' Keys of Wells
 #'
-#' `fit_lrm()` fits OD ~ conc, `fit_qrm()` fits OD ~ conc^2 + conc; both on
-#' log10 scales unless `linear` is `TRUE`.
+#' Well names when available, otherwise spreadsheet rows (`"row 5"`).
+#' Used to identify standard points excluded by the user.
 #'
-#' @param data Background-subtracted standard data.
-#' @param xvar,yvar Names of the concentration and OD columns.
-#' @param linear Logical; if `TRUE` the model is fitted on untransformed values.
+#' @param data Input data.
 #'
-#' @return An object of class `lm`.
-#' @name fit_models
-#' @keywords internal
-NULL
-
-#' @rdname fit_models
-fit_lrm <- function(data, xvar = 'conc', yvar = 'OD', linear = FALSE) {
-    if (linear) {
-        formula_str <- paste0(yvar, ' ~ ', xvar)
-    } else {
-        formula_str <- paste0('log10(', yvar, ') ~ log10(', xvar, ')')
-    }
-    lm(as.formula(formula_str), data)
-}
-
-#' @rdname fit_models
-fit_qrm <- function(data, xvar = 'conc', yvar = 'OD', linear = FALSE) {
-    if (linear) {
-        formula_str <- paste0(yvar, ' ~ I(', xvar, '^2) + ', xvar)
-    } else {
-        formula_str <- paste0('log10(', yvar, ') ~ I(log10(', xvar, ')^2) + log10(', xvar, ')')
-    }
-    lm(as.formula(formula_str), data)
-}
-
-
-#' Name Model Coefficients
-#'
-#' Maps `lm` coefficient names to the notation y = a*x^2 + b*x + c.
-#'
-#' @param term_names Character vector of coefficient names.
-#'
-#' @return Character vector with values `"a"`, `"b"` or `"c"`.
-#' @keywords internal
-coef_labels <- function(term_names) {
-    ifelse(term_names == '(Intercept)', 'c',
-           ifelse(grepl('^2', term_names, fixed = TRUE), 'a', 'b'))
-}
-
-
-#' Curve Coefficients as a Named List
-#'
-#' @param fit A fitted calibration model.
-#'
-#' @return A list with `a` (0 for linear models), `b` and `c`.
-#' @keywords internal
-curve_coefs <- function(fit) {
-    cf <- coef(fit)
-    lab <- coef_labels(names(cf))
-    list(a = if ('a' %in% lab) unname(cf[lab == 'a']) else 0,
-         b = unname(cf[lab == 'b']),
-         c = unname(cf[lab == 'c']))
-}
-
-
-#' Extract Coefficients and Confidence Intervals
-#'
-#' @param fit A fitted calibration model (`lm`).
-#' @param round_fun Optional rounding function (e.g. `signif`).
-#' @param round_par Optional rounding parameter.
-#'
-#' @return A data.frame with columns `coef`, `est`, `ci.lower`, `ci.upper`.
+#' @return Character vector.
 #' @export
-get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
-    if (!inherits(fit, 'lm')) {
-        stop('Unsupported model object', call. = FALSE)
+well_keys <- function(data) {
+    keys <- paste('row', seq_len(nrow(data)) + 1)
+    if ('well' %in% names(data)) {
+        has_well <- !is.na(data$well)
+        keys[has_well] <- as.character(data$well[has_well])
     }
-    tab <- as.data.frame(cbind(coef(fit), confint(fit)))
-    tab <- stats::setNames(tab, c('est', 'ci.lower', 'ci.upper'))
-    tab$coef <- coef_labels(rownames(tab))
-    tab <- tab[order(tab$coef), c('coef', 'est', 'ci.lower', 'ci.upper')]
-    rownames(tab) <- NULL
-
-    if (!is.null(round_fun) && !is.null(round_par)) {
-        num <- c('est', 'ci.lower', 'ci.upper')
-        tab[num] <- lapply(tab[num], round_fun, round_par)
-    }
-    tab
+    keys
 }
 
 
-#' Inverse Prediction from the Calibration Curve
+#' Select Standard Wells Usable for Fitting
 #'
-#' Calculates the concentration that corresponds to a background-subtracted
-#' OD by inverting the fitted curve OD = f(conc). For the quadratic model the
-#' root on the same branch of the parabola as the standards is returned.
+#' Standards with a missing OD, (on log scales) a non-positive OD after
+#' background subtraction, or excluded by the user are not used for fitting.
 #'
-#' @param fit A fitted calibration model.
-#' @param od Numeric vector of background-subtracted ODs.
-#' @param conc_range Range of standard concentrations used in the fit.
-#' @param linear Logical; `TRUE` if the model was fitted on untransformed values.
+#' @param standard_data Background-subtracted standard rows with `.key`.
+#' @param log_scale Logical; `TRUE` if the model is fitted on log10 scales.
+#' @param exclude Data.frame with columns `key` and `reason`, or `NULL`.
 #'
-#' @return Numeric vector of concentrations (`NA` where no solution exists or OD <= 0).
+#' @return A list with `used` and `excluded` data.frames; `excluded` has a
+#'   `reason` column with flag codes and a `comment` column with the user's reason.
 #' @keywords internal
-inverse_predict <- function(fit, od, conc_range, linear = FALSE) {
-    k <- curve_coefs(fit)
-
-    y <- rep(NA_real_, length(od))
-    positive <- !is.na(od) & od > 0
-    y[positive] <- if (linear) od[positive] else log10(od[positive])
-
-    x_lim <- if (linear) conc_range else log10(conc_range)
-
-    if (k$a == 0) {
-        x <- (y - k$c) / k$b
-    } else {
-        disc <- k$b^2 - 4 * k$a * (k$c - y)
-        vertex <- -k$b / (2 * k$a)
-        side <- if (mean(x_lim) >= vertex) 1 else -1
-        x <- rep(NA_real_, length(y))
-        ok <- !is.na(disc) & disc >= 0
-        x[ok] <- vertex + side * sqrt(disc[ok]) / (2 * abs(k$a))
+split_standards <- function(standard_data, log_scale = TRUE, exclude = NULL) {
+    reason <- rep(NA_character_, nrow(standard_data))
+    comment <- rep(NA_character_, nrow(standard_data))
+    if (!is.null(exclude) && nrow(exclude) > 0) {
+        idx <- match(standard_data$.key, exclude$key)
+        manual <- !is.na(idx)
+        reason[manual] <- FLAGS$excluded
+        comment[manual] <- as.character(exclude$reason[idx[manual]])
     }
+    if (log_scale) reason[is.na(reason) & !is.na(standard_data$OD) & standard_data$OD <= 0] <- FLAGS$od_le_nc
+    reason[is.na(standard_data$OD)] <- FLAGS$missing
 
-    if (linear) x else 10^x
-}
-
-
-#' Check Monotonicity of the Calibration Curve
-#'
-#' @inheritParams inverse_predict
-#'
-#' @return `TRUE` if the curve is monotonic within the standard range.
-#' @keywords internal
-is_monotonic <- function(fit, conc_range, linear = FALSE) {
-    k <- curve_coefs(fit)
-    if (k$a == 0) return(TRUE)
-    x_lim <- if (linear) conc_range else log10(conc_range)
-    vertex <- -k$b / (2 * k$a)
-    !(vertex > x_lim[1] && vertex < x_lim[2])
+    excluded <- standard_data[!is.na(reason), , drop = FALSE]
+    excluded$reason <- reason[!is.na(reason)]
+    excluded$comment <- comment[!is.na(reason)]
+    list(used = standard_data[is.na(reason), , drop = FALSE],
+         excluded = excluded)
 }
 
 
@@ -258,51 +162,75 @@ assign_flags <- function(od, conc, conc_range) {
 }
 
 
-#' Select Standard Wells Usable for Fitting
+#' Check Monotonicity of the Calibration Curve
 #'
-#' Standards with a missing OD, or (on log scales) a non-positive OD after
-#' background subtraction, cannot be used for fitting.
+#' Only the quadratic model can turn within the standard range.
 #'
-#' @param standard_data Background-subtracted standard rows.
-#' @param linear Logical.
+#' @param fit A `lin_fit` object.
 #'
-#' @return A list with `used` and `excluded` data.frames; `excluded` has a
-#'   `reason` column with flag codes.
+#' @return `TRUE` if the curve is monotonic within the standard range.
 #' @keywords internal
-split_standards <- function(standard_data, linear = FALSE) {
-    reason <- rep(NA_character_, nrow(standard_data))
-    if (!linear) reason[!is.na(standard_data$OD) & standard_data$OD <= 0] <- FLAGS$od_le_nc
-    reason[is.na(standard_data$OD)] <- FLAGS$missing
-
-    excluded <- standard_data[!is.na(reason), , drop = FALSE]
-    excluded$reason <- reason[!is.na(reason)]
-    list(used = standard_data[is.na(reason), , drop = FALSE],
-         excluded = excluded)
+is_monotonic <- function(fit) {
+    if (fit$model != 'QRM' || fit$par[['a']] == 0) return(TRUE)
+    x_lim <- if (fit$log_scale) log10(fit$conc_range) else fit$conc_range
+    vertex <- -fit$par[['b']] / (2 * fit$par[['a']])
+    !(vertex > x_lim[1] && vertex < x_lim[2])
 }
 
+
+#' Extract Coefficients and Confidence Intervals
+#'
+#' @param fit A fitted calibration (`lin_fit`, see [fit_curve()]).
+#' @param round_fun Optional rounding function (e.g. `signif`).
+#' @param round_par Optional rounding parameter.
+#'
+#' @return A data.frame with columns `coef`, `est`, `ci.lower`, `ci.upper`.
+#' @export
+get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
+    if (!inherits(fit, 'lin_fit')) {
+        stop('Unsupported model object', call. = FALSE)
+    }
+    tab <- coef_table_fit(fit)
+    rownames(tab) <- NULL
+    if (!is.null(round_fun) && !is.null(round_par)) {
+        num <- c('est', 'ci.lower', 'ci.upper')
+        tab[num] <- lapply(tab[num], round_fun, round_par)
+    }
+    tab
+}
+
+
+##################### CALCULATION ##############################################
 
 #' Calculate Sample Concentrations
 #'
 #' Subtracts the background, fits the calibration curve OD = f(conc) on the
-#' standards, inverts the curve for the samples and multiplies the result by
-#' the dilution factor. Samples outside the calibration range are flagged and
-#' receive `NA` instead of a concentration.
+#' standards, inverts the curve for samples and quality controls and
+#' multiplies the result by the dilution factor. Samples outside the
+#' calibration range are flagged and receive `NA` instead of a concentration.
 #'
-#' @param data Validated input data (see [check_input_file()]).
-#' @param model `"LRM"` or `"QRM"` (see [calibration_models()]).
-#' @param linear Logical; if `TRUE` the model is fitted on untransformed values.
+#' @param data Validated input data (see [check_assay()]).
+#' @param model Model code (see [calibration_models()]).
+#' @param linear For LRM and QRM: fit on untransformed values instead of log10 scales.
+#' @param weights Weighting code (see [weighting_schemes()]).
+#' @param exclude Standard points excluded by the user: a data.frame with
+#'   columns `key` (see [well_keys()]) and `reason`.
 #' @param round_fun,round_par Rounding applied to the final concentrations only.
+#' @param level Confidence level of the concentration intervals.
 #'
 #' @return A list with components:
-#'   * `model_direct`: fitted calibration model (OD = f(conc));
-#'   * `model`: model code;
-#'   * `linear_scale`: logical;
+#'   * `model_direct`, `fit`: the fitted calibration (`lin_fit`, see [fit_curve()]);
+#'   * `model`, `linear_scale`, `weights`: settings;
 #'   * `nc_value`: background value subtracted from all ODs;
-#'   * `standard_data`: standards used in the fit;
-#'   * `excluded_standards`: standards excluded from the fit with a `reason`;
+#'   * `standard_data`: standards used in the fit (with `.key`);
+#'   * `excluded_standards`: standards not used in the fit with a `reason`;
+#'   * `exclusions`: standards excluded by the user (`key`, `conc`, `OD`, `reason`);
 #'   * `calibration_range`: range of standard concentrations used in the fit;
+#'   * `back_calc`: back-calculated standards (see [back_calculate()]);
+#'   * `lack_of_fit`: lack-of-fit test (see [lack_of_fit()]);
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
-#'   * `result`: sample results with `conc` (dilution-corrected) and `flag`;
+#'   * `result`: sample results with `conc` (dilution-corrected), its
+#'     confidence interval `conc.lower`, `conc.upper` and `flag`;
 #'   * `qc`: quality controls with nominal and measured concentration,
 #'     recovery (%) and flag (`NULL` if there are no QC wells).
 #'
@@ -311,16 +239,17 @@ split_standards <- function(standard_data, linear = FALSE) {
 #' when they contain values.
 #' @export
 #' @examples
-#' path <- system.file('extdata', 'griess.xlsx', package = 'LinearityApp')
-#' data <- format_input_table(check_input_file(read_table(path)))
-#' res <- calculate(data, 'LRM')
+#' path <- system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp')
+#' data <- check_assay(read_assay(path))
+#' res <- calculate(data, '4PL', weights = '1/y2')
 #' head(res$result)
 #' message_text(res$notes, 'en')
-calculate <- function(data, model = 'LRM', linear = FALSE,
-                      round_fun = signif, round_par = 3) {
+calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
+                      round_fun = signif, round_par = 3, level = 0.95) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
+    data$.key <- well_keys(data)
 
     # Background subtraction
     bg_type <- background_type(data$type)
@@ -330,35 +259,41 @@ calculate <- function(data, model = 'LRM', linear = FALSE,
     data <- subtract_nc(data, bg$value)
 
     # Standards used for fitting
-    std <- split_standards(data[data$type == 'standard', , drop = FALSE], linear)
+    log_scale <- model %in% c('LRM', 'QRM') && !linear
+    std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude)
     standard_data <- std$used
     if (nrow(std$excluded) > 0) {
         notes <- c(notes, list(lin_message('note.standards_excluded',
                                            n = nrow(std$excluded),
                                            details = flag_counts(std$excluded$reason))))
     }
-    min_levels <- if (model == 'QRM') 4 else 3
+    min_levels <- n_params(model) + 1
     n_levels <- length(unique(standard_data$conc))
     if (n_levels < min_levels) {
         lin_abort('error.too_few_levels', min = min_levels, found = n_levels)
     }
 
     # Fit OD = f(conc)
-    fit_fun <- switch(model, 'LRM' = fit_lrm, 'QRM' = fit_qrm)
-    fit <- fit_fun(standard_data, xvar = 'conc', yvar = 'OD', linear = linear)
-    conc_range <- range(standard_data$conc)
-
-    if (!is_monotonic(fit, conc_range, linear)) {
+    fit <- fit_curve(standard_data, model, linear, weights)
+    notes <- c(notes, fit$notes)
+    conc_range <- fit$conc_range
+    if (!is_monotonic(fit)) {
         notes <- c(notes, list(lin_message('note.not_monotonic')))
+    }
+    lof <- lack_of_fit(fit)
+    if (!is.na(lof$p) && lof$p < 0.05) {
+        notes <- c(notes, list(lin_message('note.lack_of_fit', p = signif(lof$p, 2))))
     }
 
     # Samples and QC: inverse prediction, flags, dilution correction
     quantify <- function(rows) {
         rows$dilution[is.na(rows$dilution)] <- 1
-        conc <- inverse_predict(fit, rows$OD, conc_range, linear)
-        flag <- assign_flags(rows$OD, conc, conc_range)
-        conc[flag != FLAGS$ok] <- NA_real_
-        rows$conc <- round_fun(conc * rows$dilution, round_par)
+        pred <- inverse_predict_ci(fit, rows$OD, level)
+        flag <- assign_flags(rows$OD, pred$conc, conc_range)
+        ok <- flag == FLAGS$ok
+        rows$conc <- ifelse(ok, round_fun(pred$conc * rows$dilution, round_par), NA_real_)
+        rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
+        rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
         rows$OD <- round(rows$OD, 4)
         rows$flag <- flag
         rownames(rows) <- NULL
@@ -386,17 +321,27 @@ calculate <- function(data, model = 'LRM', linear = FALSE,
         qc <- drop_empty_columns(qc, c('well', 'id'))
     }
 
+    manual <- std$excluded[std$excluded$reason == FLAGS$excluded, , drop = FALSE]
+    exclusions <- data.frame(key = manual$.key, conc = manual$conc,
+                             OD = round(manual$OD, 4), reason = manual$comment)
+
     rownames(standard_data) <- NULL
     sample_data$type <- NULL
+    sample_data$.key <- NULL
     sample_data <- drop_empty_columns(sample_data, c('well', 'id'))
 
     list(model_direct = fit,
+         fit = fit,
          model = model,
          linear_scale = linear,
+         weights = weights,
          nc_value = bg$value,
          standard_data = standard_data,
          excluded_standards = std$excluded,
+         exclusions = exclusions,
          calibration_range = conc_range,
+         back_calc = back_calculate(fit),
+         lack_of_fit = lof,
          notes = notes,
          result = sample_data,
          qc = qc)

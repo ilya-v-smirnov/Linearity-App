@@ -2,18 +2,18 @@
 % Please edit documentation in R/calibration.R
 \name{background_value}
 \alias{background_value}
-\title{Estimate the Background (Negative Control) Value}
+\title{Estimate the Background Value}
 \usage{
 background_value(od)
 }
 \arguments{
-\item{od}{Numeric vector of NC optical densities.}
+\item{od}{Numeric vector of background ODs.}
 }
 \value{
 A list with \code{value} and \code{notes} (list of \code{lin_message}).
 }
 \description{
-The background is the geometric mean of NC optical densities. If some NC
-values are zero or negative, the arithmetic mean is used instead.
+The background is the geometric mean of the background ODs. If some values
+are zero or negative, the arithmetic mean is used instead.
 }
 \keyword{internal}

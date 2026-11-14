@@ -2,26 +2,12 @@
 % Please edit documentation in R/plots.R
 \name{plot_standard_curve}
 \alias{plot_standard_curve}
-\title{Plot Standard Curve with Fitted Regression}
+\title{Plot Standard Curve with Fitted Model}
 \usage{
-plot_standard_curve(
-  standard_data,
-  fit,
-  linear = FALSE,
-  xvar = "conc",
-  yvar = "OD",
-  xtitle = "",
-  ytitle = ""
-)
+plot_standard_curve(result, xtitle = "", ytitle = "")
 }
 \arguments{
-\item{standard_data}{Standards used in the fit.}
-
-\item{fit}{Fitted calibration model.}
-
-\item{linear}{Logical.}
-
-\item{xvar, yvar}{Column names.}
+\item{result}{Output of \code{\link[=calculate]{calculate()}}.}
 
 \item{xtitle, ytitle}{Axis titles.}
 }
@@ -29,6 +15,9 @@ plot_standard_curve(
 A ggplot2 object.
 }
 \description{
-Plot Standard Curve with Fitted Regression
+Standards used in the fit are shown as points, standards excluded by the
+user as red crosses. The concentration axis is logarithmic except for the
+LRM and QRM fitted on linear scales; the OD axis is logarithmic for models
+fitted on log10 scales.
 }
 \keyword{internal}

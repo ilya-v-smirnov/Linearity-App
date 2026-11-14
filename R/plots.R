@@ -48,102 +48,89 @@ design_x_scale <- function(x, round_par = 3) {
 }
 
 
-#' Quadratic Calibration Function
+#' Plot Standard Curve with Fitted Model
 #'
-#' y = a*x^2 + b*x + c, on log10 scales unless `linear` is `TRUE`.
+#' Standards used in the fit are shown as points, standards excluded by the
+#' user as red crosses. The concentration axis is logarithmic except for the
+#' LRM and QRM fitted on linear scales; the OD axis is logarithmic for models
+#' fitted on log10 scales.
 #'
-#' @param x Concentrations.
-#' @param a,b,c Coefficients.
-#' @param linear Logical.
-#'
-#' @return Predicted OD.
-#' @keywords internal
-qrm_fun <- function(x, a = 0, b, c, linear = FALSE) {
-    if (linear) {
-        return(a * x^2 + b * x + c)
-    }
-    x <- log10(x)
-    10^(a * x^2 + b * x + c)
-}
-
-
-#' Plot Standard Curve with Fitted Regression
-#'
-#' @param standard_data Standards used in the fit.
-#' @param fit Fitted calibration model.
-#' @param linear Logical.
-#' @param xvar,yvar Column names.
+#' @param result Output of [calculate()].
 #' @param xtitle,ytitle Axis titles.
 #'
 #' @return A ggplot2 object.
 #' @keywords internal
-plot_standard_curve <- function(standard_data, fit, linear = FALSE,
-                                xvar = 'conc', yvar = 'OD',
-                                xtitle = '', ytitle = '') {
-    arg_list <- curve_coefs(fit)
-    arg_list$linear <- linear
+plot_standard_curve <- function(result, xtitle = '', ytitle = '') {
+    fit <- result$fit
+    log_x <- !(fit$model %in% c('LRM', 'QRM') && !fit$log_scale)
+    std <- result$standard_data
+    excl <- result$exclusions
+
+    all_x <- c(std$conc, excl$conc)
+    grid_x <- if (log_x) {
+        exp(seq(log(min(all_x)), log(max(all_x)), length.out = 200))
+    } else {
+        seq(min(all_x), max(all_x), length.out = 200)
+    }
+    curve <- data.frame(conc = grid_x, OD = curve_fun(fit, grid_x))
+    if (fit$log_scale) {
+        curve <- curve[curve$OD > 0, ]
+        excl <- excl[!is.na(excl$OD) & excl$OD > 0, ]
+    }
 
     plot <-
-        ggplot2::ggplot(standard_data, ggplot2::aes(.data[[xvar]], .data[[yvar]])) +
-        ggplot2::geom_point(size = 1.5, alpha = 0.5) +
-        ggplot2::geom_function(fun = qrm_fun, args = arg_list,
-                               color = 'blue', linewidth = 0.75) +
+        ggplot2::ggplot(std, ggplot2::aes(.data$conc, .data$OD)) +
+        ggplot2::geom_point(size = 1.5, alpha = 0.6) +
+        ggplot2::geom_line(data = curve, color = 'blue', linewidth = 0.75) +
         ggplot2::labs(x = xtitle, y = ytitle) +
         lin_theme()
 
-    if (!linear) {
-        x_scale <- design_x_scale(standard_data[[xvar]])
-        plot <- plot +
-            ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale)) +
-            ggplot2::scale_y_log10()
+    if (nrow(excl) > 0) {
+        plot <- plot + ggplot2::geom_point(data = excl, shape = 4, size = 3, stroke = 1.2,
+                                           color = 'red')
     }
-
+    if (log_x) {
+        x_scale <- design_x_scale(all_x)
+        plot <- plot + ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale))
+    }
+    if (fit$log_scale) {
+        plot <- plot + ggplot2::scale_y_log10()
+    }
     plot
-}
-
-
-#' Retrieve Fitted Values and Residuals
-#'
-#' @param fit Fitted calibration model.
-#' @param linear Logical; if `FALSE` fitted values are back-transformed from log10.
-#'
-#' @return A data.frame with `fitted` (OD scale) and `resid` (scale of the fit).
-#' @keywords internal
-get_fit_resid <- function(fit, linear = FALSE) {
-    df <- data.frame(fitted = unname(fitted(fit)),
-                     resid = unname(resid(fit)))
-    if (!linear) {
-        df$fitted <- 10^df$fitted
-    }
-    df
 }
 
 
 #' Plot Fitted Values vs. Residuals
 #'
-#' @inheritParams get_fit_resid
+#' Residuals are on the scale of the fit; weighted residuals are shown for
+#' weighted fits.
+#'
+#' @param fit A `lin_fit` object.
 #' @param lang Language of the axis titles.
 #'
 #' @return A ggplot2 object.
 #' @keywords internal
-plot_fitted_resid <- function(fit, linear = FALSE, lang = 'en') {
-    data <- get_fit_resid(fit, linear = linear)
+plot_fitted_resid <- function(fit, lang = 'en') {
+    data <- fit_residuals(fit)
+    weighted <- fit$weights != 'none'
+    data$y <- if (weighted) data$wresid else data$resid
 
     plot <-
-        ggplot2::ggplot(data, ggplot2::aes(.data$fitted, .data$resid)) +
+        ggplot2::ggplot(data, ggplot2::aes(.data$fitted, .data$y)) +
         ggplot2::geom_point(size = 1.5, alpha = 0.5) +
         ggplot2::geom_hline(yintercept = 0) +
-        ggplot2::geom_smooth(method = 'loess', formula = y ~ x,
-                             color = 'blue', se = FALSE, span = 2, linewidth = 0.75) +
-        ggplot2::labs(x = tr('plot.fitted', lang), y = tr('plot.residuals', lang)) +
+        ggplot2::labs(x = tr('plot.fitted', lang),
+                      y = tr(if (weighted) 'plot.weighted_residuals' else 'plot.residuals', lang)) +
         lin_theme()
 
-    if (!linear) {
-        x_scale <- design_x_scale(data$fitted)
-        plot <- plot +
-            ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale))
+    if (length(unique(data$fitted)) > 3) {
+        plot <- plot + ggplot2::geom_smooth(method = 'loess', formula = y ~ x, color = 'blue',
+                                            se = FALSE, span = 2, linewidth = 0.75)
     }
-
+    if (fit$log_scale) {
+        x_scale <- design_x_scale(data$fitted)
+        plot <- plot + ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale))
+    }
     plot
 }
 
@@ -158,12 +145,8 @@ plot_fitted_resid <- function(fit, linear = FALSE, lang = 'en') {
 #' @return A cowplot grid.
 #' @export
 get_plots <- function(result, xtitle = '', ytitle = '', plot.theme = NULL, lang = 'en') {
-    standard_plot <- plot_standard_curve(standard_data = result$standard_data,
-                                         fit = result$model_direct,
-                                         linear = result$linear_scale,
-                                         xtitle = xtitle, ytitle = ytitle)
-    fit_resid_plot <- plot_fitted_resid(result$model_direct,
-                                        linear = result$linear_scale, lang = lang)
+    standard_plot <- plot_standard_curve(result, xtitle = xtitle, ytitle = ytitle)
+    fit_resid_plot <- plot_fitted_resid(result$fit, lang = lang)
 
     if (!is.null(plot.theme)) {
         standard_plot <- standard_plot + plot.theme

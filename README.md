@@ -15,7 +15,11 @@ The **Linearity App** is an R package with a Shiny application that calculates a
 - Simple table format with only two required columns (`type`, `OD`); old files keep working
 - Validation lists every problem in the file with the well or row where it occurs
 - Blank wells and quality controls (QC) with recovery
-- Supports linear and quadratic regression models (log-log or linear scales)
+- Calibration models: linear and quadratic (log-log or linear scales), four- and five-parameter logistic (4PL, 5PL)
+- Weighting: 1/y, 1/y², 1/x, 1/x² or a variance function estimated from replicates
+- Concentrations with 95 % confidence intervals (delta method)
+- Comparison of models (AIC/BIC on the OD scale, R², back-calculated standards, lack-of-fit test)
+- Exclusion of standard points by clicking on the curve, with a mandatory reason
 - Provides standard curve and residual plots
 - Flags samples outside the calibration range instead of extrapolating
 - Exports results in Excel or CSV format
@@ -43,7 +47,7 @@ The calculations can also be used without the interface:
 library(LinearityApp)
 path <- system.file("extdata", "bca_plate.xlsx", package = "LinearityApp")
 data <- check_assay(read_assay(path))   # plate workbook or table
-res <- calculate(data, model = "LRM")
+res <- calculate(data, model = "4PL", weights = "1/y2")
 res$result                      # sample concentrations and flags
 res$qc                          # quality controls (if any)
 message_text(res$notes, "en")   # warnings
@@ -81,12 +85,23 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
 ### 4. Analyze Standard Curve
 - Navigate to the **Standard Curve** tab.
 - View the **fitted curve** and the **residuals plot**.
-- Choose between **linear regression** (LRM) or **quadratic regression** (QRM).
-- Enable or disable **log transformation** with the "Linear scales" checkbox.
+- Choose the model:
+
+  | Model | Equation | Scales |
+  |-------|----------|--------|
+  | LRM | y = b·x + c | log10 conc / log10 OD, or linear ("Linear scales") |
+  | QRM | y = a·x² + b·x + c | log10 conc / log10 OD, or linear |
+  | 4PL | y = d + (a − d) / (1 + (x/c)^b) | OD linear, concentration log |
+  | 5PL | y = d + (a − d) / (1 + (x/c)^b)^g | OD linear, concentration log |
+
+  In the logistic models `a` is the response at zero concentration, `d` at infinite concentration, `c` the inflection point (EC50), `b` the slope and `g` the asymmetry. They are fitted with the Levenberg-Marquardt algorithm (`minpack.lm`) from several starting points; the fits agree with the `drc` package.
+- Choose the **weighting**. On log scales (LRM, QRM) weighting is usually not needed; for 4PL/5PL `1/y²` or the variance function estimated from replicates (`1/y^θ`) is recommended.
+- The **comparison of models** shows, for the same standards and weighting, AIC and BIC (on the OD scale, so log-log and logistic models are comparable), R², the mean and maximum error of back-calculated standards and the lack-of-fit p-value; the model with the lowest AIC is marked.
+- **Exclude a standard point** by clicking on it and entering a reason; excluded points are shown as red crosses, listed with their reasons and reported. Click a cross to restore the point.
 
 ### 5. View and Export Results
 - The **Results** table displays calculated analyte concentrations.
-- Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor.
+- Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor; `conc.lower` and `conc.upper` give the 95 % confidence interval (uncertainty of the curve and of a single OD measurement).
 - Each sample well gets a **flag**. Only wells flagged `OK` receive a concentration; the others are left empty:
   - `< LLOQ` / `> ULOQ` - outside the range of standards used in the fit;
   - `OD <= NC` - optical density at or below the negative control;
@@ -138,7 +153,8 @@ Continuous integration (GitHub Actions) runs `R CMD check` on Windows, macOS and
 
 | Path | Content |
 |------|---------|
-| `R/calibration.R` | background subtraction, model fitting, inverse prediction, flags |
+| `R/calibration.R` | background subtraction, standards, flags, `calculate()` |
+| `R/models.R` | calibration models, weighting, inverse prediction with confidence intervals, model comparison |
 | `R/io.R`, `R/plate.R`, `R/validate.R`, `R/template.R` | reading (table and plate formats), validation, templates |
 | `R/aggregate.R`, `R/plots.R`, `R/report.R` | summary tables, plots, Word report |
 | `R/i18n.R`, `inst/i18n/*.yml` | translations |

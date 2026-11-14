@@ -7,7 +7,7 @@
 get_coef_ci(fit, round_fun = NULL, round_par = NULL)
 }
 \arguments{
-\item{fit}{A fitted calibration model (\code{lm}).}
+\item{fit}{A fitted calibration (\code{lin_fit}, see \code{\link[=fit_curve]{fit_curve()}}).}
 
 \item{round_fun}{Optional rounding function (e.g. \code{signif}).}
 

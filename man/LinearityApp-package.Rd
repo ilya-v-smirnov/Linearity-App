@@ -6,7 +6,7 @@
 \alias{LinearityApp-package}
 \title{LinearityApp: Standard Curve Analysis for Laboratory Assays}
 \description{
-A 'shiny' application and a set of functions to calculate analyte concentrations from optical densities measured in laboratory assays (sandwich ELISA, BCA, Griess and others). Fits linear and quadratic calibration models on log-log or linear scales, inverts the fitted curve for samples, flags results outside the calibration range and produces Excel, CSV and Word outputs. The interface is available in English and Russian.
+A 'shiny' application and a set of functions to calculate analyte concentrations from optical densities measured in laboratory assays (sandwich ELISA, BCA, Griess and others). Fits linear, quadratic, four- and five-parameter logistic calibration models with optional weighting, compares the models, inverts the fitted curve for samples with confidence intervals, flags results outside the calibration range, lets the user exclude standard points with a reason and produces Excel, CSV and Word outputs. The interface is available in English and Russian.
 }
 \seealso{
 Useful links:

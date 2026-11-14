@@ -35,7 +35,15 @@ test_that('curve module recalculates when the model changes', {
         expect_equal(session$returned$result()$model, 'QRM')
         expect_true(session$returned$result()$linear_scale)
         expect_equal(nrow(session$returned$coef_table()), 3)
-        expect_match(output$plots$src, '^data:image/png')
+        expect_match(output$curve$src, '^data:image/png')
+        expect_match(output$resid$src, '^data:image/png')
+        expect_equal(nrow(session$returned$comparison()), 4)
+
+        session$setInputs(model = '4PL', weights = '1/y2')
+        expect_equal(session$returned$result()$model, '4PL')
+        expect_equal(session$returned$weights(), '1/y2')
+        expect_false(session$returned$linear())
+        expect_equal(nrow(session$returned$coef_table()), 4)
     })
 })
 
@@ -57,7 +65,10 @@ fake_curve <- function(lang = 'en') {
          notes = shiny::reactive(message_text(r$notes, lang)),
          plot_args = shiny::reactive(list(xtitle = 'x', ytitle = 'y')),
          model = shiny::reactive('LRM'),
-         linear = shiny::reactive(FALSE))
+         linear = shiny::reactive(FALSE),
+         weights = shiny::reactive('none'),
+         exclusions = shiny::reactive(data.frame(key = character(0), reason = character(0))),
+         comparison = shiny::reactive(compare_models(r$standard_data)))
 }
 
 test_that('results module translates flags and downloads tables', {
@@ -175,5 +186,38 @@ test_that('results module shows quality controls', {
     shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve), {
         expect_match(output$qc$html, 'Quality controls', fixed = TRUE)
         expect_match(output$qc_table, 'QC-L', fixed = TRUE)
+    })
+})
+
+test_that('standard points are excluded and restored by clicking on the curve', {
+    data <- shiny::reactive(check_assay(read_assay(sample_path('bca_plate.xlsx'))))
+    clicked_point <- NULL
+    local_mocked_bindings(nearPoints = function(df, ...) df[df$key == clicked_point, ], .package = 'shiny')
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = data, rounding = rounding_3()), {
+        session$setInputs(model = 'QRM', weights = 'none', linear_scale = FALSE,
+                          xtitle = 'x', xunits = '', ytitle = 'y')
+        n_used <- nrow(session$returned$result()$standard_data)
+
+        clicked_point <<- 'B1'
+        session$setInputs(curve_click = list(x = 1, y = 1))
+        session$setInputs(reason = '   ', confirm_exclude = 1)
+        expect_equal(nrow(session$returned$exclusions()), 0)
+
+        session$setInputs(reason = 'bubble in the well', confirm_exclude = 2)
+        expect_equal(session$returned$exclusions()$key, 'B1')
+        expect_equal(nrow(session$returned$result()$standard_data), n_used - 1)
+        expect_equal(session$returned$result()$exclusions$reason, 'bubble in the well')
+        expect_match(output$exclusions_table, 'bubble in the well', fixed = TRUE)
+
+        session$setInputs(curve_click = list(x = 2, y = 2))
+        session$setInputs(confirm_restore = 1)
+        expect_equal(nrow(session$returned$exclusions()), 0)
+
+        clicked_point <<- 'C2'
+        session$setInputs(curve_click = list(x = 3, y = 3))
+        session$setInputs(reason = 'outlier', confirm_exclude = 3)
+        session$setInputs(restore_all = 1)
+        expect_equal(nrow(session$returned$exclusions()), 0)
     })
 })

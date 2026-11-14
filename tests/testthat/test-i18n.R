@@ -12,6 +12,11 @@ test_that('all languages have the same keys and placeholders', {
     }
 })
 
+test_that('placeholders do not clash with the arguments of tr()', {
+    all_placeholders <- unique(unlist(lapply(LinearityApp:::i18n_dict('en'), placeholders)))
+    expect_false(any(c('{key}', '{lang}') %in% all_placeholders))
+})
+
 test_that('texts are translated and placeholders are filled', {
     expect_equal(tr('tab.results', 'en'), 'Results')
     expect_equal(tr('tab.results', 'ru'), 'Результаты')

@@ -56,10 +56,21 @@ tab:
 model:
   LRM: "Linear regression model"
   QRM: "Quadratic regression model"
+  4PL: "Four-parameter logistic (4PL)"
+  5PL: "Five-parameter logistic (5PL)"
+
+weights:
+  none: "None"
+  inv_y: "1/y"
+  inv_y2: "1/y²"
+  inv_x: "1/x"
+  inv_x2: "1/x²"
+  power: "1/y^θ (estimated from replicates)"
 
 scale:
   linear: "linear"
   log: "log10"
+  logistic: "OD linear, concentration log10"
 
 curve:
   model: "Choose regression model"
@@ -71,10 +82,44 @@ curve:
   ydefault: "Optical density"
   unit_none: "None"
   save_plot: "Save plot"
+  weights: "Weighting"
+  weights_help: "Weighting is usually not needed for LRM and QRM on log scales; for 4PL and 5PL use 1/y² or 1/y^θ."
+  compare: "Comparison of models"
+  exclusions: "Excluded standard points"
+  click_hint: "Click a standard point on the curve to exclude it from the fit; click a red cross to restore it."
+  exclude_title: "Exclude standard point"
+  restore_title: "Restore standard point"
+  point: "Point {well}: concentration {conc}, OD {od}"
+  reason: "Reason for exclusion"
+  reason_required: "Please enter a reason for the exclusion."
+  exclude: "Exclude"
+  restore: "Restore"
+  cancel: "Cancel"
+  restore_all: "Restore all points"
+
+compare:
+  model: "Model"
+  n_par: "Parameters"
+  aic: "AIC"
+  bic: "BIC"
+  r2: "R²"
+  mean_error: "Mean |error|, %"
+  max_error: "Max |error|, %"
+  lof: "Lack of fit, p"
+  recommended: "Lowest AIC"
+  mark: "✓"
+  note: "AIC and BIC are on the OD scale, so all models are comparable; errors are those of back-calculated standards; lack of fit compares the residuals with the scatter of replicates."
+
+exclusion:
+  key: "Well / row"
+  conc: "Concentration"
+  od: "OD"
+  reason: "Reason"
 
 plot:
   fitted: "Fitted OD"
   residuals: "Residuals"
+  weighted_residuals: "Weighted residuals"
 
 results:
   download: "Download results"
@@ -93,6 +138,9 @@ report:
   section_means: "Means"
   section_warnings: "Warnings"
   section_qc: "Quality controls"
+  section_exclusions: "Excluded standard points"
+  section_models: "Comparison of models"
+  weights: "Weighting: "
   method: "Calibration method: "
   scale: "Scale: "
 
@@ -109,6 +157,7 @@ flag:
   od_le_nc: "OD <= NC"
   no_solution: "No solution"
   missing: "Missing OD"
+  excluded: "Excluded"
 
 note:
   nc_arithmetic: "Some NC values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
@@ -116,6 +165,8 @@ note:
   not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
   blank_background: "There are no NC wells: blank wells were used as background."
+  lack_of_fit: "The lack-of-fit test is significant (p = {p}): the model may not describe the standards well; see the comparison of models."
+  power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
 
 plate:
   sheet_instructions: "Instructions"
@@ -185,4 +236,6 @@ error:
   template_levels: "At least 3 standard levels are required"
   no_nc: "No valid OD values in the background wells (NC or blank)"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
+  fit_failed: "The {model} model could not be fitted to the standards"
+  weights_unknown: "Unknown weighting: {weights}"
   too_few_levels: "At least {min} standard concentration levels with valid OD are required for this model (found {found})"

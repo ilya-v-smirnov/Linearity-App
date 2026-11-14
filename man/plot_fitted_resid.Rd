@@ -4,12 +4,10 @@
 \alias{plot_fitted_resid}
 \title{Plot Fitted Values vs. Residuals}
 \usage{
-plot_fitted_resid(fit, linear = FALSE, lang = "en")
+plot_fitted_resid(fit, lang = "en")
 }
 \arguments{
-\item{fit}{Fitted calibration model.}
-
-\item{linear}{Logical; if \code{FALSE} fitted values are back-transformed from log10.}
+\item{fit}{A \code{lin_fit} object.}
 
 \item{lang}{Language of the axis titles.}
 }
@@ -17,6 +15,7 @@ plot_fitted_resid(fit, linear = FALSE, lang = "en")
 A ggplot2 object.
 }
 \description{
-Plot Fitted Values vs. Residuals
+Residuals are on the scale of the fit; weighted residuals are shown for
+weighted fits.
 }
 \keyword{internal}
