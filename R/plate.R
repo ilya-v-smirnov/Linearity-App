@@ -322,28 +322,166 @@ read_plate <- function(path) {
 
 #' Arrange Codes on a Plate
 #'
+#' Each standard series (levels `S1...Sn` followed by a blank `B`) starts in a
+#' new column (`by = "column"`) or row (`by = "row"`). Samples are numbered
+#' `X1...XN` in the order of filling.
+#'
+#' @param size Plate size: 96 or 384.
+#' @param n.levels Number of standard levels.
+#' @param n.standard Number of standard series.
+#' @param n.sample Number of samples.
+#' @param sample_reps Replicates per sample (wells with the same code).
+#' @param by Filling direction: `"column"` or `"row"`.
+#' @param standards Position of the standards: `"before"` or `"after"` the samples.
+#'
+#' @return A character matrix of well codes with row and column names.
 #' @keywords internal
-plate_layout_codes <- function(size, n.levels, n.standard, n.sample, sample_reps) {
+plate_layout_codes <- function(size, n.levels, n.standard, n.sample, sample_reps = 1,
+                               by = c('column', 'row'), standards = c('before', 'after')) {
+    by <- match.arg(by)
+    standards <- match.arg(standards)
     dims <- plate_dims(size)
-    # each standard series starts in a new column
-    series <- c(paste0('S', seq_len(n.levels)), 'B')
-    series <- c(series, rep(NA_character_, (-length(series)) %% length(dims$rows)))
-    codes <- c(rep(series, times = n.standard),
-               rep(paste0('X', seq_len(n.sample)), each = sample_reps))
+    line <- if (by == 'column') length(dims$rows) else length(dims$cols)
+    pad <- function(x) c(x, rep(NA_character_, (-length(x)) %% line))
+    series <- pad(c(paste0('S', seq_len(n.levels)), 'B'))
+    std <- rep(series, times = n.standard)
+    smp <- rep(paste0('X', seq_len(n.sample)), each = sample_reps)
+    codes <- if (standards == 'before') c(std, smp) else c(pad(smp), std)
+    codes <- codes[seq_len(max(c(0, which(!is.na(codes)))))]
     n_wells <- length(dims$rows) * length(dims$cols)
     if (length(codes) > n_wells) lin_abort('error.plate_too_small', size = size, n = length(codes))
     grid <- matrix(NA_character_, nrow = length(dims$rows), ncol = length(dims$cols),
                    dimnames = list(dims$rows, dims$cols))
-    grid[seq_along(codes)] <- codes  # column by column
+    grid[fill_order(grid, by)[seq_along(codes)]] <- codes
     grid
+}
+
+
+#' Linear Indices of a Grid in the Order of Filling
+#'
+#' @param grid A matrix.
+#' @param by `"column"` or `"row"`.
+#'
+#' @return Integer vector of linear (column-major) indices.
+#' @keywords internal
+fill_order <- function(grid, by = 'column') {
+    idx <- matrix(seq_along(grid), nrow = nrow(grid))
+    if (by == 'row') as.vector(t(idx)) else as.vector(idx)
+}
+
+
+#' Edit Wells of a Plate Layout
+#'
+#' Selected wells become standards (levels `S1...Sn` assigned in the order of
+#' filling and repeated as needed), blanks, samples or empty wells. Samples
+#' are then renumbered `X1...XN` in the order of filling.
+#'
+#' @param grid Character matrix of well codes (see [plate_layout_codes()]).
+#' @param wells Well names, e.g. `c("A1", "B1")`.
+#' @param action `"standard"`, `"blank"`, `"sample"` or `"empty"`.
+#' @param n.levels Number of standard levels.
+#' @param by Filling direction: `"column"` or `"row"`.
+#'
+#' @return The edited matrix.
+#' @keywords internal
+edit_layout <- function(grid, wells, action = c('standard', 'blank', 'sample', 'empty'),
+                        n.levels = 7, by = 'column') {
+    action <- match.arg(action)
+    well_names <- outer(rownames(grid), colnames(grid), paste0)
+    order <- fill_order(grid, by)
+    selected <- order[well_names[order] %in% wells]
+    grid[selected] <- switch(action,
+                             standard = paste0('S', (seq_along(selected) - 1) %% n.levels + 1),
+                             blank = rep('B', length(selected)),
+                             sample = rep('X', length(selected)),
+                             empty = rep(NA_character_, length(selected)))
+    renumber_samples(grid, by)
+}
+
+
+#' Renumber Samples of a Layout in the Order of Filling
+#' @keywords internal
+renumber_samples <- function(grid, by = 'column') {
+    order <- fill_order(grid, by)
+    is_sample <- order[!is.na(grid[order]) & grepl('^X[0-9]*$', grid[order])]
+    grid[is_sample] <- paste0('X', seq_along(is_sample))
+    grid
+}
+
+
+#' Number of Samples on a Layout
+#'
+#' @param grid Character matrix of well codes.
+#'
+#' @return The number of sample wells.
+#' @keywords internal
+count_samples <- function(grid) {
+    sum(!is.na(grid) & grepl('^X[0-9]*$', grid))
+}
+
+
+#' Change the Number of Samples on a Layout
+#'
+#' Extra samples are removed from the end (in the order of filling); new
+#' samples take the empty wells after the last sample, then the empty wells
+#' before it.
+#'
+#' @param grid Character matrix of well codes.
+#' @param n New number of samples.
+#' @param by Filling direction: `"column"` or `"row"`.
+#'
+#' @return The edited matrix; an error when the plate has too few empty wells.
+#' @keywords internal
+resize_samples <- function(grid, n, by = 'column') {
+    grid <- renumber_samples(grid, by)
+    order <- fill_order(grid, by)
+    code <- grid[order]
+    is_sample <- !is.na(code) & grepl('^X[0-9]+$', code)
+    k <- sum(is_sample)
+    if (n < k) {
+        grid[order[is_sample][(n + 1):k]] <- NA
+    } else if (n > k) {
+        last <- if (k > 0) max(which(is_sample)) else 0
+        empty <- which(is.na(code))
+        empty <- c(empty[empty > last], empty[empty < last])
+        if (length(empty) < n - k) {
+            lin_abort('error.plate_too_small', size = length(grid), n = sum(!is.na(code)) + n - k)
+        }
+        grid[order[empty[seq_len(n - k)]]] <- 'X'
+    }
+    renumber_samples(grid, by)
+}
+
+
+#' Shift a Layout by One Column or Row
+#'
+#' @param grid Character matrix of well codes.
+#' @param direction `"left"`, `"right"`, `"up"` or `"down"`.
+#'
+#' @return The shifted matrix, or `NULL` when a used well would leave the plate.
+#' @keywords internal
+shift_layout <- function(grid, direction = c('left', 'right', 'up', 'down')) {
+    direction <- match.arg(direction)
+    n_row <- nrow(grid)
+    n_col <- ncol(grid)
+    edge <- switch(direction, left = grid[, 1], right = grid[, n_col], up = grid[1, ], down = grid[n_row, ])
+    if (any(!is.na(edge))) return(NULL)
+    out <- grid
+    out[] <- NA_character_
+    switch(direction,
+           left = out[, -n_col] <- grid[, -1],
+           right = out[, -1] <- grid[, -n_col],
+           up = out[-n_row, ] <- grid[-1, ],
+           down = out[-1, ] <- grid[-n_row, ])
+    out
 }
 
 
 #' Create a Plate Template Workbook
 #'
-#' Standards (in `n.standard` series) and a blank are placed column by column,
-#' followed by the samples in `sample_reps` replicates. The layout can be edited
-#' in the workbook before the measurement.
+#' Standards (in `n.standard` series, each followed by a blank) and samples are
+#' placed on the plate (see [plate_layout_codes()]), or a ready layout is used.
+#' The layout can be edited in the workbook before the measurement.
 #'
 #' @param file Output `.xlsx` path.
 #' @param size Plate size: 96 or 384.
@@ -353,6 +491,11 @@ plate_layout_codes <- function(size, n.levels, n.standard, n.sample, sample_reps
 #' @param n.standard Number of standard series.
 #' @param n.sample Number of samples.
 #' @param sample_reps Replicates per sample.
+#' @param by Filling direction: `"column"` or `"row"`.
+#' @param standards Position of the standards: `"before"` or `"after"` the samples.
+#' @param layout Optional character matrix of well codes of the plate size;
+#'   when given, `n.standard`, `n.sample`, `sample_reps`, `by` and `standards`
+#'   are ignored.
 #' @param lang Language of sheet names and instructions.
 #'
 #' @return The path, invisibly.
@@ -361,12 +504,18 @@ plate_layout_codes <- function(size, n.levels, n.standard, n.sample, sample_reps
 #' path <- tempfile(fileext = '.xlsx')
 #' make_plate_template(path, n.sample = 20, lang = 'ru')
 make_plate_template <- function(file, size = 96, start = 100, step = 2, n.levels = 7,
-                                 n.standard = 2, n.sample = 10, sample_reps = 2, lang = 'en') {
+                                n.standard = 2, n.sample = 10, sample_reps = 1,
+                                by = 'column', standards = 'before', layout = NULL, lang = 'en') {
     lang <- match_lang(lang)
-    standards <- data.frame(level = paste0('S', seq_len(n.levels)),
+    std_table <- data.frame(level = paste0('S', seq_len(n.levels)),
                             conc = standard_series(start, step, n.levels))
-    layout <- plate_layout_codes(size, n.levels, n.standard, n.sample, sample_reps)
+    if (is.null(layout)) {
+        layout <- plate_layout_codes(size, n.levels, n.standard, n.sample, sample_reps,
+                                     by = by, standards = standards)
+    }
     dims <- plate_dims(size)
+    samples <- unique(layout[!is.na(layout) & grepl('^X[0-9]+$', layout)])
+    samples <- samples[order(as.integer(sub('^X', '', samples)))]
 
     wb <- openxlsx::createWorkbook()
     header <- openxlsx::createStyle(textDecoration = 'bold', halign = 'center',
@@ -402,10 +551,11 @@ make_plate_template <- function(file, size = 96, start = 100, step = 2, n.levels
 
     add_grid(tr('plate.sheet_layout', lang), layout)
     add_grid(tr('plate.sheet_od', lang), NULL)
-    add_table(tr('plate.sheet_standards', lang), standards)
+    add_table(tr('plate.sheet_standards', lang), std_table)
+    n <- length(samples)
     add_table(tr('plate.sheet_samples', lang),
-              data.frame(id = paste0('X', seq_len(n.sample)), name = NA_character_,
-                         dilution = rep(1, n.sample), date = NA_character_))
+              data.frame(id = samples, name = rep(NA_character_, n),
+                         dilution = rep(1, n), date = rep(NA_character_, n)))
     add_table(tr('plate.sheet_qc', lang), data.frame(id = character(0), conc = numeric(0)))
     openxlsx::activeSheet(wb) <- 3
 

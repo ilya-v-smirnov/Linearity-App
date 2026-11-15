@@ -209,6 +209,78 @@ test_that('384-well layouts are generated and too large layouts rejected', {
     expect_error(LinearityApp:::plate_dims(48), '96 or 384')
 })
 
+test_that('layouts are filled by column or row with the standards before or after the samples', {
+    by_col <- LinearityApp:::plate_layout_codes(96, 7, 2, 10)
+    expect_equal(unname(by_col[, 1]), c(paste0('S', 1:7), 'B'))
+    expect_equal(unname(by_col[, 3]), paste0('X', 1:8))
+    expect_equal(unname(by_col[1:2, 4]), c('X9', 'X10'))
+
+    by_row <- LinearityApp:::plate_layout_codes(96, 7, 2, 10, by = 'row')
+    expect_equal(unname(by_row['A', 1:8]), c(paste0('S', 1:7), 'B'))
+    expect_true(all(is.na(by_row['A', 9:12])))
+    expect_equal(unname(by_row['C', 1:10]), paste0('X', 1:10))
+
+    after <- LinearityApp:::plate_layout_codes(96, 7, 2, 10, standards = 'after')
+    expect_equal(unname(after[, 1]), paste0('X', 1:8))
+    expect_equal(unname(after[, 3]), c(paste0('S', 1:7), 'B'))
+    expect_equal(sum(!is.na(after)), 26)
+    expect_error(LinearityApp:::plate_layout_codes(96, 7, 2, 10, by = 'diagonal'))
+})
+
+test_that('layout edits assign levels in the filling order and renumber samples', {
+    grid <- LinearityApp:::plate_layout_codes(96, 5, 1, 4)
+    std <- LinearityApp:::edit_layout(grid, c('A4', 'B4', 'A5', 'B5'), 'standard', n.levels = 3)
+    expect_equal(unname(std[1:2, 4]), c('S1', 'S2'))
+    expect_equal(unname(std[1:2, 5]), c('S3', 'S1'))
+    std_row <- LinearityApp:::edit_layout(grid, c('A4', 'B4', 'A5', 'B5'), 'standard', n.levels = 3, by = 'row')
+    expect_equal(unname(std_row['A', 4:5]), c('S1', 'S2'))
+
+    smp <- LinearityApp:::edit_layout(grid, c('A1', 'H12'), 'sample')
+    expect_equal(smp[['A', 1]], 'X1')
+    expect_equal(unname(smp[1:4, 2]), paste0('X', 2:5))
+    expect_equal(smp[['H', 12]], 'X6')
+    expect_true(is.na(LinearityApp:::edit_layout(grid, 'A1', 'empty')[['A', 1]]))
+    expect_equal(LinearityApp:::edit_layout(grid, 'G1', 'blank')[['G', 1]], 'B')
+})
+
+test_that('the number of samples of a layout is changed from its end', {
+    grid <- LinearityApp:::plate_layout_codes(96, 7, 2, 10, standards = 'after')
+    more <- LinearityApp:::resize_samples(grid, 12)
+    expect_equal(unname(more[3:4, 2]), c('X11', 'X12'))
+    expect_equal(unname(more[, 3]), c(paste0('S', 1:7), 'B'))
+    less <- LinearityApp:::resize_samples(more, 3)
+    expect_equal(LinearityApp:::count_samples(less), 3)
+    expect_equal(unname(less[1:3, 1]), paste0('X', 1:3))
+    full <- LinearityApp:::plate_layout_codes(96, 7, 2, 80)
+    expect_error(LinearityApp:::resize_samples(full, 81), 'does not fit')
+    # new samples wrap to the empty wells before the last sample
+    gap <- LinearityApp:::edit_layout(grid, c('A1', 'B1'), 'empty')
+    gap <- LinearityApp:::edit_layout(gap, 'H12', 'sample')
+    wrapped <- LinearityApp:::resize_samples(gap, 11)
+    expect_equal(wrapped[['A', 1]], 'X1')
+    expect_equal(wrapped[['H', 12]], 'X11')
+})
+
+test_that('layouts are shifted while no used well leaves the plate', {
+    grid <- LinearityApp:::plate_layout_codes(96, 7, 1, 4)
+    expect_null(LinearityApp:::shift_layout(grid, 'left'))
+    expect_null(LinearityApp:::shift_layout(grid, 'up'))
+    right <- LinearityApp:::shift_layout(grid, 'right')
+    expect_equal(unname(right[, 2]), unname(grid[, 1]))
+    down <- LinearityApp:::shift_layout(LinearityApp:::edit_layout(grid, 'H1', 'empty'), 'down')
+    expect_equal(down[['B', 1]], 'S1')
+    expect_identical(LinearityApp:::shift_layout(right, 'left'), grid)
+})
+
+test_that('plate template is written from an edited layout', {
+    grid <- LinearityApp:::plate_layout_codes(96, 7, 1, 3)
+    grid <- LinearityApp:::edit_layout(grid, c('A6', 'B6'), 'sample')
+    path <- tempfile(fileext = '.xlsx')
+    make_plate_template(path, n.levels = 7, layout = grid)
+    expect_equal(unname(LinearityApp:::read_grid(path, 'Layout')), unname(grid))
+    expect_equal(readxl::read_excel(path, 'Samples')$id, paste0('X', 1:5))
+})
+
 test_that('minimal table format needs only type and OD', {
     tab <- data.frame(type = c(rep('Standard', 5), 'blank', 'Sample', 'qc'),
                       conc = c(1, 2, 4, 8, 16, NA, NA, 4),

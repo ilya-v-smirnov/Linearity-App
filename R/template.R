@@ -25,6 +25,7 @@ standard_series <- function(start, step, n.levels) {
 #' @param n.standard Number of replicate standard series.
 #' @param n.sample Number of sample rows.
 #' @param n.levels Number of standard concentration levels.
+#' @param standards Position of the standard rows: `"before"` or `"after"` the samples.
 #'
 #' @return A data.frame with columns `sample.name`, `sample.date`, `type`,
 #'   `dilution`, `conc` and `OD`. Empty cells are `NA`, so they are written as
@@ -33,7 +34,9 @@ standard_series <- function(start, step, n.levels) {
 #' @examples
 #' make_template(start = 100, step = 3, n.standard = 3, n.sample = 15)
 make_template <- function(start = 100, step = 2,
-                          n.standard = 2, n.sample = 10, n.levels = 7) {
+                          n.standard = 2, n.sample = 10, n.levels = 7,
+                          standards = c('before', 'after')) {
+    standards <- match.arg(standards)
     titration <- standard_series(start, step, n.levels)
 
     standard_part <- data.frame(
@@ -46,7 +49,8 @@ make_template <- function(start = 100, step = 2,
         dilution = rep(1, n.sample),
         conc = NA_real_
     )
-    template <- rbind(standard_part, sample_part)
+    template <- if (standards == 'before') rbind(standard_part, sample_part) else
+        rbind(sample_part, standard_part)
 
     data.frame(sample.name = NA_character_,
                sample.date = NA_character_,

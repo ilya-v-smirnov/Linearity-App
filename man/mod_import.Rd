@@ -2,11 +2,14 @@
 % Please edit documentation in R/mod_import.R
 \name{mod_import}
 \alias{mod_import}
+\alias{mod_import_ui}
 \alias{mod_import_input_ui}
 \alias{mod_import_table_ui}
 \alias{mod_import_server}
-\title{Import Module}
+\title{Data Import Step Module}
 \usage{
+mod_import_ui(id, lang)
+
 mod_import_input_ui(id, lang)
 
 mod_import_table_ui(id, lang = "en")
@@ -19,11 +22,12 @@ mod_import_server(id, lang)
 \item{lang}{Language code.}
 }
 \value{
-\code{mod_import_server()} returns a reactive with the validated data.
+\code{mod_import_server()} returns a list of reactives: \code{data} (the
+validated data) and \code{file} (the uploaded file).
 }
 \description{
-File input (sidebar), the table of problems found in the file and the table
-of imported data (main panel). Plate workbooks and tables are recognised
-automatically (see \code{\link[=read_assay]{read_assay()}}).
+Step 2 of the analysis: file input (sidebar) and the view of the imported
+data: summary, problems found in the file, plate map and table. Plate
+workbooks and tables are recognised automatically (see \code{\link[=read_assay]{read_assay()}}).
 }
 \keyword{internal}

@@ -4,7 +4,7 @@
 \alias{mod_template}
 \alias{mod_template_ui}
 \alias{mod_template_server}
-\title{Template Module}
+\title{Template Step Module}
 \usage{
 mod_template_ui(id, lang)
 
@@ -16,10 +16,15 @@ mod_template_server(id, lang)
 \item{lang}{Language code.}
 }
 \value{
-\code{mod_template_server()} returns a reactive list of template parameters.
+\code{mod_template_server()} returns a list of reactives: \code{layout} (the
+plate layout, a character matrix), \code{conc} (concentrations of the standard
+levels) and \code{params} (all template parameters).
 }
 \description{
-Parameters of the data template and its download: a plate workbook (see
-\link{plate_format}) or a table with one row per well.
+Step 1 of the analysis. The sidebar holds the parameters of the plate
+layout and the download of the template (a plate maps workbook, see
+\link{plate_maps_format}, or a long table); the main area shows the
+concentrations of the standard and the plate layout, which can be edited by
+selecting wells and choosing their type.
 }
 \keyword{internal}

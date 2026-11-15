@@ -12,7 +12,10 @@ make_plate_template(
   n.levels = 7,
   n.standard = 2,
   n.sample = 10,
-  sample_reps = 2,
+  sample_reps = 1,
+  by = "column",
+  standards = "before",
+  layout = NULL,
   lang = "en"
 )
 }
@@ -33,15 +36,23 @@ make_plate_template(
 
 \item{sample_reps}{Replicates per sample.}
 
+\item{by}{Filling direction: \code{"column"} or \code{"row"}.}
+
+\item{standards}{Position of the standards: \code{"before"} or \code{"after"} the samples.}
+
+\item{layout}{Optional character matrix of well codes of the plate size;
+when given, \code{n.standard}, \code{n.sample}, \code{sample_reps}, \code{by} and \code{standards}
+are ignored.}
+
 \item{lang}{Language of sheet names and instructions.}
 }
 \value{
 The path, invisibly.
 }
 \description{
-Standards (in \code{n.standard} series) and a blank are placed column by column,
-followed by the samples in \code{sample_reps} replicates. The layout can be edited
-in the workbook before the measurement.
+Standards (in \code{n.standard} series, each followed by a blank) and samples are
+placed on the plate (see \code{\link[=plate_layout_codes]{plate_layout_codes()}}), or a ready layout is used.
+The layout can be edited in the workbook before the measurement.
 }
 \examples{
 path <- tempfile(fileext = '.xlsx')

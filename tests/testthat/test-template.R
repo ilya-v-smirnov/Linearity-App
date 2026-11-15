@@ -31,3 +31,8 @@ test_that('a filled template passes validation after an Excel round trip', {
     back$sample.name[back$type == 'sample'] <- c('A', 'B', 'C')
     expect_s3_class(check_input_file(back), 'data.frame')
 })
+
+test_that('standard rows can follow the samples', {
+    t <- make_template(n.standard = 1, n.sample = 3, n.levels = 3, standards = 'after')
+    expect_equal(t$type, c(rep('sample', 3), rep('standard', 3), 'NC'))
+})

@@ -15,6 +15,7 @@ app_ui(request, default_lang = "en")
 A shiny UI.
 }
 \description{
-Application User Interface
+Every step of the analysis is a tab with its own sidebar of parameters
+(left) and the results of these parameters (right).
 }
 \keyword{internal}

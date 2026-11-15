@@ -1,0 +1,218 @@
+/* Linearity App: layout of the steps ------------------------------------- */
+
+.step-plain {
+    padding: 1rem 1.5rem;
+}
+
+.navbar #language_selector {
+    width: auto;
+    margin-left: 0.5rem;
+}
+
+/* Groups of inputs in a sidebar */
+.sidebar-group {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    padding: 0.75rem 0.9rem 0.1rem;
+    background: var(--bs-body-bg);
+}
+
+.sidebar-group-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-primary);
+    margin-bottom: 0.6rem;
+}
+
+.sidebar-group .shiny-download-link {
+    margin-bottom: 0.75rem;
+}
+
+/* Outputs of a step view are wrapped in a block (not flex) container, so that
+   empty outputs do not add gaps and wide content does not shrink */
+.step-view {
+    flex-shrink: 0;
+}
+
+.card-body h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--bs-secondary-color);
+    padding: 3rem 1rem;
+}
+
+.empty-state p {
+    margin-top: 1rem;
+    max-width: 32rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Summary tiles ---------------------------------------------------------- */
+
+.stat-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.stat-tile {
+    flex: 1 1 8rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.5rem 0.75rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+}
+
+/* Plate map -------------------------------------------------------------- */
+
+.plate-map-wrap {
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.plate-map {
+    border-collapse: separate;
+    border-spacing: 4px;
+    font-size: 0.9rem;
+}
+
+.plate-map th {
+    text-align: center;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    padding: 0 0.3rem;
+}
+
+.plate-map td {
+    width: 4.4rem;
+    min-width: 4.4rem;
+    height: 3.2rem;
+    text-align: center;
+    vertical-align: middle;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.plate-map.plate-384 {
+    font-size: 0.7rem;
+    border-spacing: 3px;
+}
+
+.plate-map.plate-384 td {
+    width: 2.8rem;
+    min-width: 2.8rem;
+    height: 2.2rem;
+}
+
+.plate-map .well-code {
+    font-weight: 600;
+}
+
+.plate-map .well-value {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+.well-empty    { background: transparent; border-style: dashed !important; }
+.well-standard { background: #cfe2f3; }
+.well-blank    { background: #e3e3e3; }
+.well-nc       { background: #d9d2e9; }
+.well-qc       { background: #fce5cd; }
+.well-sample   { background: #d9ead3; }
+.well-unknown  { background: #f4cccc; }
+
+.plate-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.plate-legend .legend-item {
+    padding: 0.1rem 0.5rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* Plate editor (template step) ------------------------------------------- */
+
+.plate-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.plate-toolbar [data-action] {
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    color: var(--bs-body-color);
+}
+
+.btn-well-standard { background: #cfe2f3; }
+.btn-well-blank    { background: #e3e3e3; }
+.btn-well-sample   { background: #d9ead3; }
+.btn-well-empty    { background: var(--bs-body-bg); }
+
+.plate-toolbar [data-action]:hover:not(:disabled) {
+    filter: brightness(0.93);
+}
+
+.plate-map.editable {
+    user-select: none;
+}
+
+.plate-map.editable td {
+    cursor: pointer;
+}
+
+.plate-map.editable th {
+    cursor: pointer;
+}
+
+.plate-map.editable th:hover {
+    color: var(--bs-primary);
+}
+
+.plate-map.editable td.selected {
+    outline: 3px solid var(--bs-primary);
+    outline-offset: -1px;
+    box-shadow: 0 0 0 1px #fff inset;
+}
+
+.plate-shift {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Long help texts in tooltips */
+.tooltip {
+    --bs-tooltip-max-width: 360px;
+}
+
+.tooltip .tooltip-inner {
+    text-align: left;
+}

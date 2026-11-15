@@ -4,9 +4,37 @@
 \alias{plate_layout_codes}
 \title{Arrange Codes on a Plate}
 \usage{
-plate_layout_codes(size, n.levels, n.standard, n.sample, sample_reps)
+plate_layout_codes(
+  size,
+  n.levels,
+  n.standard,
+  n.sample,
+  sample_reps = 1,
+  by = c("column", "row"),
+  standards = c("before", "after")
+)
+}
+\arguments{
+\item{size}{Plate size: 96 or 384.}
+
+\item{n.levels}{Number of standard levels.}
+
+\item{n.standard}{Number of standard series.}
+
+\item{n.sample}{Number of samples.}
+
+\item{sample_reps}{Replicates per sample (wells with the same code).}
+
+\item{by}{Filling direction: \code{"column"} or \code{"row"}.}
+
+\item{standards}{Position of the standards: \code{"before"} or \code{"after"} the samples.}
+}
+\value{
+A character matrix of well codes with row and column names.
 }
 \description{
-Arrange Codes on a Plate
+Each standard series (levels \code{S1...Sn} followed by a blank \code{B}) starts in a
+new column (\code{by = "column"}) or row (\code{by = "row"}). Samples are numbered
+\code{X1...XN} in the order of filling.
 }
 \keyword{internal}

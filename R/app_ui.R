@@ -1,5 +1,8 @@
 #' Application User Interface
 #'
+#' Every step of the analysis is a tab with its own sidebar of parameters
+#' (left) and the results of these parameters (right).
+#'
 #' @param request A shiny request.
 #' @param default_lang Language used when the URL has no `lang` parameter.
 #'
@@ -11,43 +14,53 @@ app_ui <- function(request, default_lang = 'en') {
 
     shiny::addResourcePath('linapp', system.file('app', 'www', package = 'LinearityApp'))
 
-    shiny::fluidPage(
-        title = t('app.title'),
-        shiny::div(style = 'float: right; margin-top: 10px;', language_selector(lang)),
-        shiny::titlePanel(title = shiny::h1(t('app.title'), align = 'center')),
+    # The version in the URL makes browsers reload the files after an update
+    asset <- function(file) paste0('linapp/', file, '?v=', utils::packageVersion('LinearityApp'))
 
-        shiny::sidebarLayout(
-            shiny::sidebarPanel(
-                mod_template_ui('template', lang),
-                mod_import_input_ui('import', lang),
-                mod_rounding_ui('rounding', lang),
-                width = 3
-            ),
-            shiny::mainPanel(
-                shiny::navbarPage(
-                    t('tab.steps'), id = 'tabs',
-                    shiny::tabPanel(t('tab.imported'), value = 'imported',
-                                    mod_import_table_ui('import', lang)),
-                    shiny::tabPanel(t('tab.curve'), value = 'curve',
-                                    mod_curve_ui('curve', lang)),
-                    shiny::tabPanel(t('tab.results'), value = 'results',
-                                    mod_results_ui('results', lang)),
-                    shiny::tabPanel(t('tab.quality'), value = 'quality',
-                                    mod_quality_ui('quality', lang)),
-                    shiny::tabPanel(t('tab.summary'), value = 'summary',
-                                    mod_summary_ui('summary', lang)),
-                    shiny::tabPanel(t('tab.report'), value = 'report',
-                                    mod_report_ui('report', lang)),
-                    shiny::tabPanel(t('tab.manual'), value = 'manual',
-                                    icon = shiny::icon('file-pdf'),
-                                    manual_ui(lang)),
-                    shiny::tabPanel(t('tab.about'), value = 'about',
-                                    about_ui(lang))
-                ),
-                width = 9
-            )
-        )
+    # Steps that are not redesigned yet keep their content without a sidebar
+    plain <- function(...) shiny::div(class = 'step-plain', ...)
+
+    bslib::page_navbar(
+        title = t('app.title'),
+        window_title = t('app.title'),
+        id = 'tabs',
+        theme = app_theme(),
+        fillable = c('template', 'data'),
+        header = shiny::tags$head(shiny::tags$link(rel = 'stylesheet', href = asset('linapp.css')),
+                                  shiny::tags$script(src = asset('plate-editor.js'))),
+        bslib::nav_panel(t('tab.template'), value = 'template', icon = shiny::icon('table-cells'),
+                         mod_template_ui('template', lang)),
+        bslib::nav_panel(t('tab.data'), value = 'data', icon = shiny::icon('upload'),
+                         mod_import_ui('import', lang)),
+        bslib::nav_panel(t('tab.curve'), value = 'curve', icon = shiny::icon('chart-line'),
+                         plain(mod_curve_ui('curve', lang))),
+        bslib::nav_panel(t('tab.results'), value = 'results', icon = shiny::icon('list-ol'),
+                         bslib::layout_sidebar(
+                             sidebar = bslib::sidebar(width = 300, mod_rounding_ui('rounding', lang)),
+                             mod_results_ui('results', lang))),
+        bslib::nav_panel(t('tab.quality'), value = 'quality', icon = shiny::icon('circle-check'),
+                         plain(mod_quality_ui('quality', lang))),
+        bslib::nav_panel(t('tab.summary'), value = 'summary', icon = shiny::icon('layer-group'),
+                         plain(mod_summary_ui('summary', lang))),
+        bslib::nav_panel(t('tab.report'), value = 'report', icon = shiny::icon('file-word'),
+                         plain(mod_report_ui('report', lang))),
+        bslib::nav_spacer(),
+        bslib::nav_menu(
+            t('tab.help'), icon = shiny::icon('circle-question'), align = 'right',
+            bslib::nav_panel(t('tab.manual'), value = 'manual', icon = shiny::icon('file-pdf'),
+                             plain(manual_ui(lang))),
+            bslib::nav_panel(t('tab.about'), value = 'about', icon = shiny::icon('circle-info'),
+                             plain(about_ui(lang)))
+        ),
+        bslib::nav_item(language_selector(lang))
     )
+}
+
+
+#' Application Theme
+#' @keywords internal
+app_theme <- function() {
+    bslib::bs_theme(version = 5, preset = 'shiny', primary = '#2c6e9b')
 }
 
 
@@ -64,15 +77,15 @@ language_selector <- function(lang) {
         shiny::tags$option(value = l, selected = if (l == lang) NA else NULL,
                            tr('language.name', l))
     })
-    shiny::tags$label(
-        tr('common.language', lang), ' ',
-        shiny::tags$select(
-            id = 'language_selector',
-            onchange = paste0("var p = new URLSearchParams(window.location.search);",
-                              "p.set('lang', this.value);",
-                              "window.location.search = p.toString();"),
-            options
-        )
+    shiny::tags$select(
+        id = 'language_selector',
+        class = 'form-select form-select-sm',
+        `aria-label` = tr('common.language', lang),
+        title = tr('common.language', lang),
+        onchange = paste0("var p = new URLSearchParams(window.location.search);",
+                          "p.set('lang', this.value);",
+                          "window.location.search = p.toString();"),
+        options
     )
 }
 

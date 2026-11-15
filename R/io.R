@@ -39,8 +39,9 @@ read_table <- function(path) {
 
 #' Read Assay Data from a File
 #'
-#' Detects the format: a plate workbook (see [plate_format]) or a table (Excel
-#' or CSV) with one row per well. Tables are normalized with [normalize_table()].
+#' Detects the format: a plate maps workbook (see [plate_maps_format]), a plate
+#' workbook (see [plate_format]) or a table (Excel or CSV) with one row per
+#' well. Tables are normalized with [normalize_table()].
 #'
 #' @param path Path to an `.xlsx` or `.csv` file.
 #'
@@ -49,6 +50,7 @@ read_table <- function(path) {
 #' @examples
 #' read_assay(system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp'))
 read_assay <- function(path) {
+    if (is_plate_maps_workbook(path)) return(read_plate_maps(path))
     if (is_plate_workbook(path)) return(read_plate(path))
     data <- normalize_table(read_table(path))
     attr(data, 'problems') <- empty_problems()

@@ -13,8 +13,9 @@ read_assay(path)
 A data.frame with an attribute \code{problems}; validate it with \code{\link[=check_assay]{check_assay()}}.
 }
 \description{
-Detects the format: a plate workbook (see \link{plate_format}) or a table (Excel
-or CSV) with one row per well. Tables are normalized with \code{\link[=normalize_table]{normalize_table()}}.
+Detects the format: a plate maps workbook (see \link{plate_maps_format}), a plate
+workbook (see \link{plate_format}) or a table (Excel or CSV) with one row per
+well. Tables are normalized with \code{\link[=normalize_table]{normalize_table()}}.
 }
 \examples{
 read_assay(system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp'))

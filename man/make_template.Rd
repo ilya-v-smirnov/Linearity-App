@@ -9,7 +9,8 @@ make_template(
   step = 2,
   n.standard = 2,
   n.sample = 10,
-  n.levels = 7
+  n.levels = 7,
+  standards = c("before", "after")
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ make_template(
 \item{n.sample}{Number of sample rows.}
 
 \item{n.levels}{Number of standard concentration levels.}
+
+\item{standards}{Position of the standard rows: \code{"before"} or \code{"after"} the samples.}
 }
 \value{
 A data.frame with columns \code{sample.name}, \code{sample.date}, \code{type},
