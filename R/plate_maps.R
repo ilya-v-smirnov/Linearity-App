@@ -19,11 +19,13 @@ NULL
 #' @param layout Character matrix of well codes (see [plate_layout_codes()]).
 #' @param conc Concentrations of the standard levels (`S1`, `S2`, ...).
 #' @param by Filling direction: order of the rows of the result.
+#' @param qc_conc Nominal concentrations of the quality controls (`QC1`,
+#'   `QC2`, ...); missing values stay empty.
 #'
 #' @return A data.frame with `well`, `code`, `type` and `conc`, one row per
 #'   used well.
 #' @keywords internal
-layout_wells <- function(layout, conc, by = 'column') {
+layout_wells <- function(layout, conc, by = 'column', qc_conc = numeric(0)) {
     order <- fill_order(layout, by)
     order <- order[!is.na(layout[order])]
     well_names <- outer(rownames(layout), colnames(layout), paste0)
@@ -31,7 +33,7 @@ layout_wells <- function(layout, conc, by = 'column') {
     type <- classify_codes(code)
     level <- suppressWarnings(as.integer(sub('^S', '', code)))
     data.frame(well = well_names[order], code = code, type = type,
-               conc = ifelse(type %in% 'standard', conc[level], NA_real_))
+               conc = ifelse(type %in% 'standard', conc[level], qc_nominal(code, qc_conc)))
 }
 
 
@@ -40,19 +42,19 @@ layout_wells <- function(layout, conc, by = 'column') {
 #' @inheritParams layout_wells
 #'
 #' @return A data.frame with one row per used well: `well`, `sample.name`,
-#'   `sample.date`, `type`, `dilution` (1 for samples), `conc` (standards) and
-#'   `OD` (empty).
+#'   `sample.date`, `type`, `dilution` (1 for samples and quality controls),
+#'   `conc` (standards and quality controls) and `OD` (empty).
 #' @export
 #' @examples
 #' layout <- LinearityApp:::plate_layout_codes(96, n.levels = 7, n.standard = 2, n.sample = 10)
 #' head(make_long_table(layout, conc = 100 / 2^(0:6)))
-make_long_table <- function(layout, conc, by = 'column') {
-    w <- layout_wells(layout, conc, by)
+make_long_table <- function(layout, conc, by = 'column', qc_conc = numeric(0)) {
+    w <- layout_wells(layout, conc, by, qc_conc)
     data.frame(well = w$well,
                sample.name = NA_character_,
                sample.date = NA_character_,
                type = w$type,
-               dilution = ifelse(w$type %in% 'sample', 1, NA_real_),
+               dilution = ifelse(w$type %in% c('sample', 'QC'), 1, NA_real_),
                conc = w$conc,
                OD = NA_real_)
 }
@@ -62,11 +64,14 @@ make_long_table <- function(layout, conc, by = 'column') {
 #'
 #' Writes a workbook in the [plate_maps_format]: the `type` and `conc` sheets
 #' are filled from the layout, the cells to fill in on the `sample.name`,
-#' `sample.date`, `dilution` and `OD` sheets are marked with `X`.
+#' `sample.date`, `dilution` and `OD` sheets (and on the `conc` sheet for
+#' quality controls without a nominal concentration) are marked with `X`.
 #'
 #' @param file Output `.xlsx` path.
 #' @param layout Character matrix of well codes (see [plate_layout_codes()]).
 #' @param conc Concentrations of the standard levels (`S1`, `S2`, ...).
+#' @param qc_conc Nominal concentrations of the quality controls (`QC1`,
+#'   `QC2`, ...).
 #'
 #' @return The path, invisibly.
 #' @export
@@ -74,11 +79,13 @@ make_long_table <- function(layout, conc, by = 'column') {
 #' layout <- LinearityApp:::plate_layout_codes(96, n.levels = 7, n.standard = 2, n.sample = 10)
 #' path <- tempfile(fileext = '.xlsx')
 #' make_plate_maps(path, layout, conc = 100 / 2^(0:6))
-make_plate_maps <- function(file, layout, conc) {
+make_plate_maps <- function(file, layout, conc, qc_conc = numeric(0)) {
     used <- !is.na(layout)
     type <- matrix(classify_codes(layout), nrow = nrow(layout))
     level <- suppressWarnings(as.integer(sub('^S', '', layout)))
-    conc_grid <- matrix(ifelse(type %in% 'standard', conc[level], NA_real_), nrow = nrow(layout))
+    conc_grid <- matrix(ifelse(type %in% 'standard', conc[level], qc_nominal(layout, qc_conc)),
+                        nrow = nrow(layout))
+    qc_todo <- !is.na(type) & type == 'QC' & is.na(conc_grid)
     mark <- function(where) matrix(ifelse(where, 'X', NA_character_), nrow = nrow(layout))
     is_sample <- !is.na(type) & type == 'sample'
 
@@ -112,7 +119,11 @@ make_plate_maps <- function(file, layout, conc) {
     add_grid('sample.date', mark(is_sample), todo(is_sample))
     add_grid('type', type, type)
     add_grid('dilution', mark(is_sample), todo(is_sample))
-    add_grid('conc', conc_grid, type)
+    add_grid('conc', conc_grid, ifelse(qc_todo, 'todo', type))
+    for (k in which(qc_todo)) {
+        openxlsx::writeData(wb, 'conc', 'X', startRow = (k - 1) %% nrow(layout) + 2,
+                            startCol = (k - 1) %/% nrow(layout) + 2, colNames = FALSE)
+    }
     add_grid('OD', mark(used), todo(used))
     openxlsx::activeSheet(wb) <- 1
 

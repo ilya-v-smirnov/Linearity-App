@@ -11,7 +11,8 @@
 #'
 #' @return `mod_template_server()` returns a list of reactives: `layout` (the
 #'   plate layout, a character matrix), `conc` (concentrations of the standard
-#'   levels) and `params` (all template parameters).
+#'   levels), `qc_conc` (nominal concentrations of the quality controls),
+#'   `params` (all template parameters) and `by` (filling direction).
 #' @name mod_template
 #' @keywords internal
 NULL
@@ -71,6 +72,11 @@ mod_template_ui <- function(id, lang) {
             shiny::numericInput(ns('samples'), t('template.samples'), value = 10, min = 0, step = 1)
         ),
         sidebar_group(
+            with_tooltip(t('template.qc_title'), t('template.qc_help')), 'clipboard-check',
+            shiny::numericInput(ns('qc_levels'), t('template.qc_levels'), value = 0, min = 0, max = 9, step = 1),
+            shiny::uiOutput(ns('qc_inputs'))
+        ),
+        sidebar_group(
             t('template.export'), 'file-excel',
             shiny::radioButtons(ns('export'), NULL,
                                 choiceNames = list(
@@ -104,6 +110,7 @@ mod_template_ui <- function(id, lang) {
                         class = 'plate-toolbar',
                         button('blank', 'template.edit_blank', 'square'),
                         button('sample', 'template.edit_sample', 'flask'),
+                        shiny::uiOutput(ns('qc_tool')),
                         button('empty', 'template.edit_empty', 'eraser'),
                         shiny::span(class = 'plate-selection-count text-muted',
                                     `data-template` = t('template.selected'),
@@ -114,7 +121,8 @@ mod_template_ui <- function(id, lang) {
                     ),
                     shiny::uiOutput(ns('plate')),
                     shiny::uiOutput(ns('shift'))
-                )
+                ),
+                shiny::uiOutput(ns('qc_preview'))
             )
         )
     )
@@ -181,8 +189,62 @@ mod_template_server <- function(id, lang) {
 
         shiny::observeEvent(input$edit, {
             e <- input$edit
-            shiny::req(e$action %in% c('blank', 'sample', 'empty'), length(e$wells) > 0)
-            set_layout(edit_layout(layout(), unlist(e$wells), e$action, by = params()$by))
+            shiny::req(e$action %in% c('blank', 'qc', 'sample', 'empty'), length(e$wells) > 0)
+            level <- suppressWarnings(as.integer(or(e$level, NA)))
+            if (e$action == 'qc') shiny::req(!is.na(level), level >= 1, level <= qc_n())
+            set_layout(edit_layout(layout(), unlist(e$wells), e$action, by = params()$by, qc_level = level))
+        })
+
+        # Quality controls: levels QC1...QCn with nominal concentrations -------
+        qc_n <- shiny::reactive({
+            n <- input$qc_levels
+            if (!is.numeric(n) || length(n) != 1 || is.na(n)) 0L else as.integer(max(0, min(9, n)))
+        })
+        qc_conc <- shiny::reactive({
+            vapply(seq_len(qc_n()), function(k) {
+                v <- input[[paste0('qc_conc_', k)]]
+                if (is.numeric(v) && length(v) == 1 && !is.na(v) && v > 0) v else NA_real_
+            }, 0)
+        })
+        # Fewer levels remove the wells of the other levels
+        shiny::observeEvent(qc_n(), {
+            grid <- edited()
+            if (!is.null(grid)) edited(trim_qc(grid, qc_n()))
+        })
+
+        output$qc_inputs <- shiny::renderUI({
+            n <- qc_n()
+            if (n == 0) return(NULL)
+            inputs <- lapply(seq_len(n), function(k) {
+                id <- session$ns(paste0('qc_conc_', k))
+                shiny::div(
+                    class = 'qc-conc',
+                    shiny::tags$label(`for` = id, paste0('QC', k, ':')),
+                    shiny::numericInput(id, NULL, value = shiny::isolate(input[[paste0('qc_conc_', k)]]), min = 0)
+                )
+            })
+            shiny::tagList(shiny::tags$label(class = 'control-label', tr('template.qc_nominal', lang)), inputs)
+        })
+
+        output$qc_tool <- shiny::renderUI({
+            n <- qc_n()
+            if (n == 0) return(NULL)
+            shiny::tagList(
+                shiny::tags$button(type = 'button', class = 'btn btn-sm btn-well-qc', `data-action` = 'qc',
+                                   disabled = NA, shiny::icon('clipboard-check'), ' ', tr('template.edit_qc', lang)),
+                shiny::tags$select(class = 'form-select form-select-sm plate-qc-level', `data-qc-level` = NA,
+                                   `aria-label` = tr('template.qc_title', lang),
+                                   lapply(seq_len(n), function(k) shiny::tags$option(value = k, paste0('QC', k))))
+            )
+        })
+
+        output$qc_preview <- shiny::renderUI({
+            if (qc_n() == 0) return(NULL)
+            shiny::tagList(shiny::h5(tr('template.qc_title', lang)), shiny::tableOutput(session$ns('qc_table')))
+        })
+        output$qc_table <- shiny::renderTable({
+            values <- vapply(qc_conc(), function(x) if (is.na(x)) 'X' else format(signif(x, 4)), '')
+            stats::setNames(as.data.frame(as.list(values)), paste0('QC', seq_along(values)))
         })
 
         # ... and the edited layout follows the number of samples
@@ -236,9 +298,9 @@ mod_template_server <- function(id, lang) {
             content = function(file) {
                 tryCatch({
                     if (export() == 'maps') {
-                        make_plate_maps(file, layout(), conc())
+                        make_plate_maps(file, layout(), conc(), qc_conc = qc_conc())
                     } else {
-                        save_xlsx(make_long_table(layout(), conc(), by = params()$by), file)
+                        save_xlsx(make_long_table(layout(), conc(), by = params()$by, qc_conc = qc_conc()), file)
                     }
                 }, error = notify_error)
             }
@@ -252,6 +314,7 @@ mod_template_server <- function(id, lang) {
 
         output$plate <- shiny::renderUI(plate_map(layout(), lang = lang, editable = TRUE))
 
-        list(layout = layout, conc = conc, params = params)
+        list(layout = layout, conc = conc, qc_conc = qc_conc, params = params,
+             by = shiny::reactive(or(input$by, 'column')))
     })
 }

@@ -4,7 +4,7 @@
 \alias{make_plate_maps}
 \title{Write a Plate Maps Template}
 \usage{
-make_plate_maps(file, layout, conc)
+make_plate_maps(file, layout, conc, qc_conc = numeric(0))
 }
 \arguments{
 \item{file}{Output \code{.xlsx} path.}
@@ -12,6 +12,9 @@ make_plate_maps(file, layout, conc)
 \item{layout}{Character matrix of well codes (see \code{\link[=plate_layout_codes]{plate_layout_codes()}}).}
 
 \item{conc}{Concentrations of the standard levels (\code{S1}, \code{S2}, ...).}
+
+\item{qc_conc}{Nominal concentrations of the quality controls (\code{QC1},
+\code{QC2}, ...).}
 }
 \value{
 The path, invisibly.
@@ -19,7 +22,8 @@ The path, invisibly.
 \description{
 Writes a workbook in the \link{plate_maps_format}: the \code{type} and \code{conc} sheets
 are filled from the layout, the cells to fill in on the \code{sample.name},
-\code{sample.date}, \code{dilution} and \code{OD} sheets are marked with \code{X}.
+\code{sample.date}, \code{dilution} and \code{OD} sheets (and on the \code{conc} sheet for
+quality controls without a nominal concentration) are marked with \code{X}.
 }
 \examples{
 layout <- LinearityApp:::plate_layout_codes(96, n.levels = 7, n.standard = 2, n.sample = 10)

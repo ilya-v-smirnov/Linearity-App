@@ -10,8 +10,8 @@ app_server <- function(input, output, session, default_lang = 'en') {
     search <- shiny::isolate(session$clientData$url_search)
     lang <- request_lang(list(QUERY_STRING = search), default_lang)
 
-    mod_template_server('template', lang)
-    data <- mod_import_server('import', lang)$data
+    template <- mod_template_server('template', lang)
+    data <- mod_import_server('import', lang, by = template$by)$data
     rounding <- mod_rounding_server('rounding')
     criteria <- mod_criteria_server('quality-criteria', lang)
     curve <- mod_curve_server('curve', lang, data, rounding, criteria)

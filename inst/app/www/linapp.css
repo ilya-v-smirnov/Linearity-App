@@ -165,6 +165,12 @@
     margin-bottom: 0.5rem;
 }
 
+/* Buttons of well types and the QC level have the same width */
+.plate-toolbar [data-action],
+.plate-toolbar .plate-qc-level {
+    width: 7rem;
+}
+
 .plate-toolbar [data-action] {
     border: 1px solid rgba(0, 0, 0, 0.2);
     color: var(--bs-body-color);
@@ -173,6 +179,28 @@
 .btn-well-standard { background: #cfe2f3; }
 .btn-well-blank    { background: #e3e3e3; }
 .btn-well-sample   { background: #d9ead3; }
+.btn-well-qc       { background: #fce5cd; }
+
+/* Nominal concentrations of the quality controls: "QC1: [input]" */
+.qc-conc {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.qc-conc > label {
+    margin-bottom: 1rem;
+    min-width: 2.6rem;
+}
+
+.qc-conc > .form-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.qc-conc > .form-group input {
+    width: 100%;
+}
 .btn-well-empty    { background: var(--bs-body-bg); }
 
 .plate-toolbar [data-action]:hover:not(:disabled) {
@@ -206,6 +234,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
+    margin-bottom: 1rem;
 }
 
 /* Long help texts in tooltips */

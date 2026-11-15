@@ -373,19 +373,21 @@ fill_order <- function(grid, by = 'column') {
 #' Edit Wells of a Plate Layout
 #'
 #' Selected wells become standards (levels `S1...Sn` assigned in the order of
-#' filling and repeated as needed), blanks, samples or empty wells. Samples
-#' are then renumbered `X1...XN` in the order of filling.
+#' filling and repeated as needed), blanks, quality controls of one level
+#' (`QC1`, `QC2`, ...), samples or empty wells. Samples are then renumbered
+#' `X1...XN` in the order of filling.
 #'
 #' @param grid Character matrix of well codes (see [plate_layout_codes()]).
 #' @param wells Well names, e.g. `c("A1", "B1")`.
-#' @param action `"standard"`, `"blank"`, `"sample"` or `"empty"`.
+#' @param action `"standard"`, `"blank"`, `"qc"`, `"sample"` or `"empty"`.
 #' @param n.levels Number of standard levels.
 #' @param by Filling direction: `"column"` or `"row"`.
+#' @param qc_level Level of the quality control (for `action = "qc"`).
 #'
 #' @return The edited matrix.
 #' @keywords internal
-edit_layout <- function(grid, wells, action = c('standard', 'blank', 'sample', 'empty'),
-                        n.levels = 7, by = 'column') {
+edit_layout <- function(grid, wells, action = c('standard', 'blank', 'qc', 'sample', 'empty'),
+                        n.levels = 7, by = 'column', qc_level = 1) {
     action <- match.arg(action)
     well_names <- outer(rownames(grid), colnames(grid), paste0)
     order <- fill_order(grid, by)
@@ -393,9 +395,41 @@ edit_layout <- function(grid, wells, action = c('standard', 'blank', 'sample', '
     grid[selected] <- switch(action,
                              standard = paste0('S', (seq_along(selected) - 1) %% n.levels + 1),
                              blank = rep('B', length(selected)),
+                             qc = rep(paste0('QC', qc_level), length(selected)),
                              sample = rep('X', length(selected)),
                              empty = rep(NA_character_, length(selected)))
     renumber_samples(grid, by)
+}
+
+
+#' Remove Quality Controls Above a Number of Levels
+#'
+#' @param grid Character matrix of well codes.
+#' @param n Number of QC levels to keep (`QC1...QCn`).
+#'
+#' @return The matrix with the wells of other QC levels emptied.
+#' @keywords internal
+trim_qc <- function(grid, n) {
+    level <- suppressWarnings(as.integer(sub('^QC', '', grid)))
+    grid[!is.na(grid) & grepl('^QC', grid) & (is.na(level) | level > n)] <- NA
+    grid
+}
+
+
+#' Nominal Concentrations of the Quality Controls on a Layout
+#'
+#' @param codes Well codes.
+#' @param qc_conc Nominal concentrations of the levels `QC1`, `QC2`, ...
+#'
+#' @return Numeric vector: the nominal concentration of `QCk` wells, `NA`
+#'   for other wells and for levels without a concentration.
+#' @keywords internal
+qc_nominal <- function(codes, qc_conc = numeric(0)) {
+    level <- suppressWarnings(as.integer(sub('^QC', '', codes)))
+    ok <- !is.na(codes) & grepl('^QC[0-9]+$', codes) & !is.na(level) & level <= length(qc_conc)
+    out <- rep(NA_real_, length(codes))
+    out[ok] <- qc_conc[level[ok]]
+    out
 }
 
 

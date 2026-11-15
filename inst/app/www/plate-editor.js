@@ -6,7 +6,8 @@
 // Click or drag selects wells (Ctrl/Cmd/Shift adds to the selection), a click
 // on a row or column header selects the whole row or column, the corner
 // selects the plate, Escape clears the selection. A button sends
-// {action, wells, nonce} to the shiny input named in data-input.
+// {action, wells, level, nonce} to the shiny input named in data-input; the
+// level of a quality control comes from select[data-qc-level].
 (function () {
     'use strict';
 
@@ -100,8 +101,10 @@
             var editor = editorOf(button);
             var wells = selected(editor);
             if (wells.length === 0) return;
+            var level = editor.querySelector('[data-qc-level]');
             Shiny.setInputValue(editor.dataset.input,
-                { action: button.dataset.action, wells: wells, nonce: Date.now() },
+                { action: button.dataset.action, wells: wells, level: level ? level.value : null,
+                  nonce: Date.now() },
                 { priority: 'event' });
         }
     });

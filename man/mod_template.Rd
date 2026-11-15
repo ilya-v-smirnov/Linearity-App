@@ -18,7 +18,8 @@ mod_template_server(id, lang)
 \value{
 \code{mod_template_server()} returns a list of reactives: \code{layout} (the
 plate layout, a character matrix), \code{conc} (concentrations of the standard
-levels) and \code{params} (all template parameters).
+levels), \code{qc_conc} (nominal concentrations of the quality controls),
+\code{params} (all template parameters) and \code{by} (filling direction).
 }
 \description{
 Step 1 of the analysis. The sidebar holds the parameters of the plate

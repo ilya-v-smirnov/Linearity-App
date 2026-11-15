@@ -90,25 +90,54 @@ data_plate_grids <- function(data) {
 }
 
 
+#' Order of Wells
+#'
+#' @param well Well names, e.g. `c("B1", "A2")`.
+#' @param by `"column"` (A1, B1, ..., A2, B2, ...) or `"row"` (A1, A2, ...,
+#'   B1, B2, ...).
+#'
+#' @return Integer permutation (as [order()]); missing wells come last.
+#' @keywords internal
+well_order <- function(well, by = 'column') {
+    row <- match(toupper(sub('[0-9]+$', '', well)), LETTERS)
+    col <- suppressWarnings(as.integer(sub('^[A-Za-z]+', '', well)))
+    if (by == 'row') order(row, col) else order(col, row)
+}
+
+
+#' Columns that Identify a Sample
+#'
+#' `sample.name`, `sample.date` and any additional columns, i.e. all columns
+#' except the technical ones (`well`, `type`, `dilution`, `conc`, `OD`, the
+#' well code `id` and the legacy replicate number `rep`).
+#'
+#' @param data Input data.
+#'
+#' @return Character vector of column names.
+#' @keywords internal
+sample_columns <- function(data) {
+    setdiff(names(data), c('well', 'type', 'dilution', 'conc', 'OD', 'id', 'rep'))
+}
+
+
 #' Summary Counts of Imported Data
 #'
 #' @param data Validated data.
 #'
-#' @return A named integer vector: `wells`, `levels`, `series`, `samples`,
-#'   `qc`, `blanks`.
+#' @return A named integer vector: `wells`, `levels`, `series`, `samples`
+#'   (distinct combinations of [sample_columns()] among the samples), `qc`
+#'   (distinct QC codes, or nominal concentrations without codes) and `blanks`.
 #' @keywords internal
 data_counts <- function(data) {
     is_type <- function(x) !is.na(data$type) & data$type == x
     std <- data[is_type('standard'), , drop = FALSE]
-    smp <- data[is_type('sample'), , drop = FALSE]
-    sample_key <- if ('id' %in% names(smp) && !all(is.na(smp$id))) smp$id else
-        paste(smp$sample.name, smp$dilution)
+    smp <- data[is_type('sample'), sample_columns(data), drop = FALSE]
     qc_key <- if ('id' %in% names(data)) data$id[is_type('QC')] else data$conc[is_type('QC')]
     n_levels <- length(unique(std$conc))
     c(wells = nrow(data),
       levels = n_levels,
       series = if (n_levels > 0) as.integer(round(nrow(std) / n_levels)) else 0L,
-      samples = length(unique(sample_key)),
+      samples = if (ncol(smp) > 0) nrow(unique(smp)) else nrow(smp),
       qc = length(unique(qc_key)),
       blanks = sum(is_type('blank') | is_type('NC')))
 }

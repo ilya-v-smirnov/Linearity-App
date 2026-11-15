@@ -4,7 +4,7 @@
 \alias{layout_wells}
 \title{Columns of a Data Set Prepared from a Layout}
 \usage{
-layout_wells(layout, conc, by = "column")
+layout_wells(layout, conc, by = "column", qc_conc = numeric(0))
 }
 \arguments{
 \item{layout}{Character matrix of well codes (see \code{\link[=plate_layout_codes]{plate_layout_codes()}}).}
@@ -12,6 +12,9 @@ layout_wells(layout, conc, by = "column")
 \item{conc}{Concentrations of the standard levels (\code{S1}, \code{S2}, ...).}
 
 \item{by}{Filling direction: order of the rows of the result.}
+
+\item{qc_conc}{Nominal concentrations of the quality controls (\code{QC1},
+\code{QC2}, ...); missing values stay empty.}
 }
 \value{
 A data.frame with \code{well}, \code{code}, \code{type} and \code{conc}, one row per

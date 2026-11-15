@@ -144,7 +144,10 @@ test_that('unit choices use the micro sign', {
 
 test_that('server takes the language from the page URL', {
     langs <- character(0)
-    local_mocked_bindings(mod_template_server = function(id, lang) langs <<- c(langs, lang))
+    local_mocked_bindings(mod_template_server = function(id, lang) {
+        langs <<- c(langs, lang)
+        list(by = NULL)
+    })
     local_mocked_bindings(
         mod_import_server = function(...) list(data = NULL), mod_rounding_server = function(...) NULL,
         mod_curve_server = function(...) NULL, mod_results_server = function(...) NULL,
@@ -165,6 +168,7 @@ test_that('import module reads plate workbooks and shows problems', {
         expect_null(output$problems)
         expect_null(output$empty)
         expect_match(output$table, 'A1', fixed = TRUE)
+        expect_match(output$table, 'A1 .*B1 .*A2 ')
         expect_match(output$plate$html, 'well-standard', fixed = TRUE)
         expect_match(output$summary$html, 'stat-tile', fixed = TRUE)
 
@@ -172,6 +176,17 @@ test_that('import module reads plate workbooks and shows problems', {
         expect_match(output$problems$html, 'Problems found in the file', fixed = TRUE)
         expect_match(output$problems_table, 'Not all samples have dilution factors specified', fixed = TRUE)
         expect_match(output$problems_table, 'rows 26', fixed = TRUE)
+    })
+})
+
+test_that('imported wells are listed in the filling order', {
+    by <- shiny::reactiveVal('row')
+    shiny::testServer(LinearityApp:::mod_import_server, args = list(lang = 'en', by = by), {
+        session$setInputs(file = list(datapath = sample_path('bca_plate.xlsx')))
+        expect_match(output$table, 'A1 .*A2 .*A3 .*B1 ')
+        by('column')
+        session$flushReact()
+        expect_match(output$table, 'A1 .*B1 .*C1 .*A2 ')
     })
 })
 
@@ -239,6 +254,35 @@ test_that('template layout follows the parameters and is edited by the user', {
     })
 })
 
+test_that('quality controls are added to the template by level', {
+    shiny::testServer(LinearityApp:::mod_template_server, args = list(lang = 'en'), {
+        session$setInputs(size = '96', by = 'column', position = 'before',
+                          start = 100, step = 2, levels = 7, replicates = 2, samples = 10, qc_levels = 0)
+        expect_null(output$qc_tool)
+        session$setInputs(edit = list(action = 'qc', wells = list('A5'), level = '1', nonce = 1))
+        expect_true(is.na(session$returned$layout()[['A', 5]]))
+
+        session$setInputs(qc_levels = 2, qc_conc_1 = 5, qc_conc_2 = NA)
+        expect_match(output$qc_tool$html, 'data-qc-level', fixed = TRUE)
+        expect_match(output$qc_inputs$html, 'Nominal concentrations', fixed = TRUE)
+        expect_match(output$qc_inputs$html, '>QC2:</label>', fixed = TRUE)
+        expect_match(output$qc_table, '<td> X </td>', fixed = TRUE)
+        session$setInputs(edit = list(action = 'qc', wells = list('A5', 'B5'), level = '1', nonce = 2))
+        session$setInputs(edit = list(action = 'qc', wells = list('C5'), level = '2', nonce = 3))
+        grid <- session$returned$layout()
+        expect_equal(unname(grid[1:3, 5]), c('QC1', 'QC1', 'QC2'))
+        expect_equal(session$returned$qc_conc(), c(5, NA))
+
+        session$setInputs(export = 'long')
+        long <- read_table(output$download)
+        expect_equal(long$conc[long$type == 'QC'], c(5, 5, NA))
+
+        session$setInputs(qc_levels = 1)
+        expect_true(is.na(session$returned$layout()[['C', 5]]))
+        expect_equal(session$returned$layout()[['A', 5]], 'QC1')
+    })
+})
+
 test_that('template layout is shifted along the filling direction', {
     shiny::testServer(LinearityApp:::mod_template_server, args = list(lang = 'en'), {
         session$setInputs(size = '96', by = 'column', position = 'before',
@@ -279,6 +323,15 @@ test_that('plate grids and counts describe imported data', {
     expect_gt(counts[['levels']], 0)
     expect_null(LinearityApp:::data_plate_grids(load_sample('griess')))
     expect_equal(LinearityApp:::data_counts(load_sample('griess'))[['qc']], 0)
+    # samples are combinations of names, dates and additional columns, not dilutions
+    expect_equal(counts[['samples']], length(unique(d$sample.name[d$type == 'sample'])))
+    extra <- data.frame(type = c('sample', 'sample', 'sample', 'sample', 'standard'),
+                        sample.name = c('a', 'a', 'a', 'b', NA), sample.date = NA,
+                        group = c('x', 'x', 'y', 'x', NA), dilution = c(1, 2, 1, 1, NA),
+                        conc = c(NA, NA, NA, NA, 1), OD = 1)
+    expect_equal(LinearityApp:::data_counts(extra)[['samples']], 3)
+    expect_equal(LinearityApp:::well_order(c('B1', 'A2', 'A1', 'A10', 'A9')), c(3, 1, 2, 5, 4))
+    expect_equal(LinearityApp:::well_order(c('B1', 'A2', 'A1', 'A10', 'A9'), 'row'), c(3, 2, 5, 4, 1))
 })
 
 test_that('results module shows quality controls', {

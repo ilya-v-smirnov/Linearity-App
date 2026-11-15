@@ -6,6 +6,8 @@
 #'
 #' @param id Module id.
 #' @param lang Language code.
+#' @param by Reactive with the filling direction of the plate (`"column"` or
+#'   `"row"`): the order of the rows of the table.
 #'
 #' @return `mod_import_server()` returns a list of reactives: `data` (the
 #'   validated data) and `file` (the uploaded file).
@@ -49,7 +51,7 @@ mod_import_table_ui <- function(id, lang = 'en') {
 }
 
 #' @rdname mod_import
-mod_import_server <- function(id, lang) {
+mod_import_server <- function(id, lang, by = shiny::reactive('column')) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
         t <- function(key) tr(key, lang)
@@ -120,6 +122,7 @@ mod_import_server <- function(id, lang) {
         output$table <- shiny::renderTable({
             out <- valid()
             attr(out, 'problems') <- NULL
+            if ('well' %in% names(out)) out <- out[well_order(out$well, by()), , drop = FALSE]
             out
         }, digits = 4, na = '')
 

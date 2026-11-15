@@ -14,12 +14,15 @@ mod_import_input_ui(id, lang)
 
 mod_import_table_ui(id, lang = "en")
 
-mod_import_server(id, lang)
+mod_import_server(id, lang, by = shiny::reactive("column"))
 }
 \arguments{
 \item{id}{Module id.}
 
 \item{lang}{Language code.}
+
+\item{by}{Reactive with the filling direction of the plate (\code{"column"} or
+\code{"row"}): the order of the rows of the table.}
 }
 \value{
 \code{mod_import_server()} returns a list of reactives: \code{data} (the

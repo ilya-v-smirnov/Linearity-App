@@ -272,6 +272,19 @@ test_that('layouts are shifted while no used well leaves the plate', {
     expect_identical(LinearityApp:::shift_layout(right, 'left'), grid)
 })
 
+test_that('quality controls are placed by level and trimmed with the number of levels', {
+    grid <- LinearityApp:::plate_layout_codes(96, 7, 1, 4)
+    qc <- LinearityApp:::edit_layout(grid, c('A5', 'B5'), 'qc', qc_level = 2)
+    expect_equal(unname(qc[1:2, 5]), c('QC2', 'QC2'))
+    expect_equal(LinearityApp:::classify_codes(qc[1, 5]), 'QC')
+    qc <- LinearityApp:::edit_layout(qc, 'C5', 'qc', qc_level = 1)
+    expect_equal(LinearityApp:::qc_nominal(qc[1:3, 5], c(10, 50)), c(50, 50, 10))
+    expect_equal(LinearityApp:::qc_nominal(c('QC3', 'S1', NA), c(10, 50)), c(NA_real_, NA, NA))
+    trimmed <- LinearityApp:::trim_qc(qc, 1)
+    expect_true(all(is.na(trimmed[1:2, 5])))
+    expect_equal(trimmed[['C', 5]], 'QC1')
+})
+
 test_that('plate template is written from an edited layout', {
     grid <- LinearityApp:::plate_layout_codes(96, 7, 1, 3)
     grid <- LinearityApp:::edit_layout(grid, c('A6', 'B6'), 'sample')

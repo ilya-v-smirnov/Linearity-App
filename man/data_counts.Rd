@@ -10,8 +10,9 @@ data_counts(data)
 \item{data}{Validated data.}
 }
 \value{
-A named integer vector: \code{wells}, \code{levels}, \code{series}, \code{samples},
-\code{qc}, \code{blanks}.
+A named integer vector: \code{wells}, \code{levels}, \code{series}, \code{samples}
+(distinct combinations of \code{\link[=sample_columns]{sample_columns()}} among the samples), \code{qc}
+(distinct QC codes, or nominal concentrations without codes) and \code{blanks}.
 }
 \description{
 Summary Counts of Imported Data

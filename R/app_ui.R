@@ -14,8 +14,11 @@ app_ui <- function(request, default_lang = 'en') {
 
     shiny::addResourcePath('linapp', system.file('app', 'www', package = 'LinearityApp'))
 
-    # The version in the URL makes browsers reload the files after an update
-    asset <- function(file) paste0('linapp/', file, '?v=', utils::packageVersion('LinearityApp'))
+    # A hash of the content in the URL makes browsers reload changed files
+    asset <- function(file) {
+        hash <- unname(tools::md5sum(system.file('app', 'www', file, package = 'LinearityApp')))
+        paste0('linapp/', file, '?v=', substr(hash, 1, 8))
+    }
 
     # Steps that are not redesigned yet keep their content without a sidebar
     plain <- function(...) shiny::div(class = 'step-plain', ...)

@@ -7,9 +7,10 @@
 edit_layout(
   grid,
   wells,
-  action = c("standard", "blank", "sample", "empty"),
+  action = c("standard", "blank", "qc", "sample", "empty"),
   n.levels = 7,
-  by = "column"
+  by = "column",
+  qc_level = 1
 )
 }
 \arguments{
@@ -17,18 +18,21 @@ edit_layout(
 
 \item{wells}{Well names, e.g. \code{c("A1", "B1")}.}
 
-\item{action}{\code{"standard"}, \code{"blank"}, \code{"sample"} or \code{"empty"}.}
+\item{action}{\code{"standard"}, \code{"blank"}, \code{"qc"}, \code{"sample"} or \code{"empty"}.}
 
 \item{n.levels}{Number of standard levels.}
 
 \item{by}{Filling direction: \code{"column"} or \code{"row"}.}
+
+\item{qc_level}{Level of the quality control (for \code{action = "qc"}).}
 }
 \value{
 The edited matrix.
 }
 \description{
 Selected wells become standards (levels \code{S1...Sn} assigned in the order of
-filling and repeated as needed), blanks, samples or empty wells. Samples
-are then renumbered \code{X1...XN} in the order of filling.
+filling and repeated as needed), blanks, quality controls of one level
+(\code{QC1}, \code{QC2}, ...), samples or empty wells. Samples are then renumbered
+\code{X1...XN} in the order of filling.
 }
 \keyword{internal}

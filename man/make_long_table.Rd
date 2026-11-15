@@ -4,7 +4,7 @@
 \alias{make_long_table}
 \title{Long Table Template from a Plate Layout}
 \usage{
-make_long_table(layout, conc, by = "column")
+make_long_table(layout, conc, by = "column", qc_conc = numeric(0))
 }
 \arguments{
 \item{layout}{Character matrix of well codes (see \code{\link[=plate_layout_codes]{plate_layout_codes()}}).}
@@ -12,11 +12,14 @@ make_long_table(layout, conc, by = "column")
 \item{conc}{Concentrations of the standard levels (\code{S1}, \code{S2}, ...).}
 
 \item{by}{Filling direction: order of the rows of the result.}
+
+\item{qc_conc}{Nominal concentrations of the quality controls (\code{QC1},
+\code{QC2}, ...); missing values stay empty.}
 }
 \value{
 A data.frame with one row per used well: \code{well}, \code{sample.name},
-\code{sample.date}, \code{type}, \code{dilution} (1 for samples), \code{conc} (standards) and
-\code{OD} (empty).
+\code{sample.date}, \code{type}, \code{dilution} (1 for samples and quality controls),
+\code{conc} (standards and quality controls) and \code{OD} (empty).
 }
 \description{
 Long Table Template from a Plate Layout

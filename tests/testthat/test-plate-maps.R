@@ -98,3 +98,43 @@ test_that('long table template follows the layout', {
     expect_equal(long$conc[1:5], c(10, 5, 2.5, 1.25, 0.625))
     expect_equal(long$dilution, c(rep(NA, 6), 1, 1, 1))
 })
+
+test_that('quality controls are written with their nominal concentrations and read back', {
+    layout <- LinearityApp:::plate_layout_codes(96, 6, 2, 4)
+    layout <- LinearityApp:::edit_layout(layout, c('A4', 'B4'), 'qc', qc_level = 1)
+    layout <- LinearityApp:::edit_layout(layout, c('C4', 'D4'), 'qc', qc_level = 2)
+    conc <- c(32, 16, 8, 4, 2, 1)
+
+    long <- make_long_table(layout, conc, qc_conc = c(3, NA))
+    qc <- long[long$type == 'QC', ]
+    expect_equal(qc$well, c('A4', 'B4', 'C4', 'D4'))
+    expect_equal(qc$conc, c(3, 3, NA, NA))
+    expect_equal(qc$dilution, c(1, 1, 1, 1))
+
+    path <- tempfile(fileext = '.xlsx')
+    make_plate_maps(path, layout, conc, qc_conc = c(3, NA))
+    expect_equal(unname(LinearityApp:::read_grid(path, 'type')[1:4, 4]), rep('QC', 4))
+    expect_equal(unname(LinearityApp:::read_grid(path, 'conc')[1:4, 4]), c('3', '3', 'X', 'X'))
+
+    # the user fills in the missing nominal concentration of QC2
+    conc_grid <- matrix(suppressWarnings(as.numeric(LinearityApp:::read_grid(path, 'conc'))), nrow = 8)
+    conc_grid[3:4, 4] <- 24
+    write_grid(path, 'conc', conc_grid)
+    od <- matrix(NA, 8, 12)
+    od[1:7, 1:2] <- c(0.1 * conc + 0.05, 0.05)
+    od[1:4, 3] <- c(0.55, 1.05, 2.05, 0.3)
+    od[1:4, 4] <- c(0.35, 0.35, 2.45, 2.45)
+    write_grid(path, 'OD', od)
+    name <- matrix(NA, 8, 12)
+    name[1:4, 3] <- c('A', 'A', 'B', 'C')
+    write_grid(path, 'sample.name', name)
+    dil <- matrix(NA, 8, 12)
+    dil[1:4, 3] <- 1
+    write_grid(path, 'dilution', dil)
+
+    data <- check_assay(read_assay(path))
+    expect_equal(LinearityApp:::data_counts(data)[['qc']], 2)
+    r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    expect_equal(r$qc$nominal, c(3, 3, 24, 24))
+    expect_equal(r$qc$recovery, c(100, 100, 100, 100))
+})
