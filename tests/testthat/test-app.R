@@ -76,14 +76,28 @@ test_that('results module translates flags and downloads tables', {
     })
 })
 
-test_that('summary module keeps the selection and aggregates', {
+test_that('summary module groups by sample by default, offers quick choices and exports', {
     shiny::testServer(LinearityApp:::mod_summary_server,
                       args = list(lang = 'en', curve = fake_curve(), rounding = rounding_3()), {
-        session$setInputs(group_vars = c('sample.name', 'sample.date'))
+        # before the browser answers, the samples are the groups
         out <- session$returned()
-        expect_true(all(c('sample.name', 'sample.date', 'n', 'n.quantified') %in% names(out)))
+        expect_equal(names(out)[1:2], c('sample.name', 'sample.date'))
+        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv') %in% names(out)))
         expect_equal(sum(out$n), 12)
+        expect_match(output$preview$html, '12 wells', fixed = TRUE)
+
+        session$setInputs(group_vars = c('sample.name', 'sample.date', 'dilution'), stats = c('n', 'mean'))
+        out <- session$returned()
+        expect_equal(names(out), c('sample.name', 'sample.date', 'dilution', 'n', 'mean'))
+        expect_equal(names(readxl::read_excel(output$download)), names(out))
+
+        session$setInputs(group_vars = character(0))
+        expect_null(session$returned())
+        expect_match(output$empty$html, 'Choose at least one column', fixed = TRUE)
     })
+    expect_equal(LinearityApp:::grouping_columns(data.frame(well = 1, id = 1, sample.name = 1, group = 1,
+                                                            dilution = 1, OD = 1, conc = 1, flag = 1)),
+                 c('id', 'sample.name', 'group', 'dilution'))
 })
 
 test_that('download modules write files', {
@@ -93,14 +107,6 @@ test_that('download modules write files', {
         long <- read_table(path)
         expect_equal(nrow(long), 2 * 6 + 4)
         expect_equal(names(long), c('well', 'sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD'))
-    })
-
-    tab <- shiny::reactive(data.frame(a = 1:2, b = c(0.5, NA)))
-    shiny::testServer(LinearityApp:::mod_table_download_server,
-                      args = list(table = tab, prefix = 'x'), {
-        session$setInputs(filetype = 'csv', dialect = 'semicolon')
-        path <- output$download
-        expect_equal(read_table(path)$b, c(0.5, NA))
     })
 
     shiny::testServer(LinearityApp:::mod_report_server,

@@ -403,3 +403,17 @@
 .quality-verdict .alert p {
     margin-bottom: 0.2rem;
 }
+
+/* Summary step: quick grouping choices and the preview of the rows */
+.summary-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.summary-preview {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.75rem;
+}

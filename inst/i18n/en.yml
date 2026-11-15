@@ -8,10 +8,6 @@ app:
   title: "Linearity App"
 
 common:
-  file_type: "File type"
-  sep: "Sep"
-  excel: "Excel"
-  csv: "CSV"
   warnings: "Warnings:"
   import_error: "Import error: {message}"
   calc_error: "Calculation error: {message}"
@@ -256,8 +252,22 @@ dt:
   previous: "Previous"
 
 summary:
-  aggregation: "Select aggregation parameters:"
-  download: "Download Summary Table"
+  group_title: "Group results by"
+  group_help: "Wells with the same values in the ticked columns form one row of the summary: the number of wells, the mean, SD, CV, minimum and maximum of their concentrations. \"Samples\" groups by the sample name, date and additional columns, so that replicates and dilutions of a sample are averaged together; \"Samples and dilutions\" keeps the dilutions apart. The number next to a column is the number of its distinct values."
+  preset_samples: "Samples"
+  preset_dilutions: "Samples and dilutions"
+  values: " · {n} values"
+  preview: "{wells} wells into {rows} rows"
+  choose: "Choose at least one column to group the results by."
+  stats_title: "Statistics"
+  stat_n: "n (all wells)"
+  stat_n.quantified: "n quantified"
+  stat_mean: "Mean"
+  stat_sd: "SD"
+  stat_cv: "CV, %"
+  stat_min: "Minimum"
+  stat_max: "Maximum"
+  download: "Download summary (xlsx)"
 
 report:
   title_label: "Title:"

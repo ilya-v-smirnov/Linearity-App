@@ -4,7 +4,7 @@
 \alias{mod_summary}
 \alias{mod_summary_ui}
 \alias{mod_summary_server}
-\title{Result Summary Module}
+\title{Result Summary Step Module}
 \usage{
 mod_summary_ui(id, lang)
 
@@ -23,6 +23,9 @@ mod_summary_server(id, lang, curve, rounding)
 \code{mod_summary_server()} returns a reactive with the aggregated table.
 }
 \description{
-Aggregation of results by user-selected columns.
+The sidebar holds the grouping columns (with the number of distinct values
+of each column, quick choices and a preview of the number of rows), the
+statistics to show and the download; the main area shows the aggregated
+table.
 }
 \keyword{internal}
