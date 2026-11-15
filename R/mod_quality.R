@@ -90,7 +90,9 @@ criteria_fields <- function() {
     fields <- data.frame(
         name = c('std_bias', 'std_bias_edge', 'cv', 'cv_edge', 'min_fraction', 'min_levels',
                  'qc_bias', 'qc_bias_edge', 'qc_fraction', 'qc_level_fraction', 'dilution_bias', 'dilution_cv'),
-        scale = c(1, 1, 1, 1, 100, 1, 1, 1, 100, 100, 1, 1)
+        scale = c(1, 1, 1, 1, 100, 1, 1, 1, 100, 100, 1, 1),
+        group = c('standards', 'standards', 'replicates', 'replicates', 'standards', 'standards',
+                  'qc', 'qc', 'qc', 'qc', 'dilution', 'dilution')
     )
     fields$default <- vapply(fields$name, function(n) d[[n]], 0) * fields$scale
     fields
@@ -114,19 +116,29 @@ mod_criteria_ui <- function(id, lang) {
     ns <- shiny::NS(id)
     t <- function(key) tr(key, lang)
     fields <- criteria_fields()
-    inputs <- lapply(seq_len(nrow(fields)), function(i) {
-        shiny::column(4, shiny::numericInput(ns(fields$name[i]), t(paste0('crit.', fields$name[i])),
-                                             value = round(fields$default[i], 1), min = 0, step = 1))
-    })
-    shiny::tags$details(
-        shiny::tags$summary(shiny::strong(t('quality.section_criteria'))),
-        shiny::helpText(t('crit.note')),
-        do.call(shiny::fluidRow, inputs),
-        shiny::radioButtons(ns('range'), t('crit.range'),
-                            choices = stats::setNames(c('accepted', 'all'),
-                                                      c(t('crit.range_accepted'), t('crit.range_all'))),
-                            selected = 'accepted', inline = TRUE),
-        shiny::actionButton(ns('reset'), t('crit.reset'), icon = shiny::icon('undo'))
+    # One criterion per row: a short label on the left, the value on the right
+    inputs <- function(group) {
+        f <- fields[fields$group == group, ]
+        lapply(seq_len(nrow(f)), function(i) {
+            id <- ns(f$name[i])
+            shiny::div(class = 'crit-row',
+                       shiny::tags$label(`for` = id, t(paste0('crit.', f$name[i]))),
+                       shiny::numericInput(id, NULL, value = round(f$default[i], 1), min = 0, step = 1))
+        })
+    }
+    group <- function(key, icon, ...) sidebar_group(t(paste0('crit.group_', key)), icon, ...)
+    shiny::tagList(
+        shiny::div(class = 'sidebar-heading', with_tooltip(t('quality.section_criteria'), t('crit.note'))),
+        group('standards', 'vial', inputs('standards'),
+              shiny::radioButtons(ns('range'), t('crit.range'),
+                                  choices = stats::setNames(c('accepted', 'all'),
+                                                            c(t('crit.range_accepted'), t('crit.range_all'))),
+                                  selected = 'accepted')),
+        group('replicates', 'clone', inputs('replicates')),
+        group('qc', 'clipboard-check', inputs('qc')),
+        group('dilution', 'flask', inputs('dilution')),
+        shiny::actionButton(ns('reset'), t('crit.reset'), icon = shiny::icon('rotate-left'),
+                            class = 'btn-outline-secondary w-100')
     )
 }
 
@@ -172,18 +184,30 @@ NULL
 mod_quality_ui <- function(id, lang) {
     ns <- shiny::NS(id)
     t <- function(key) tr(key, lang)
-    shiny::tagList(
-        shiny::uiOutput(ns('verdict')),
-        shiny::h4(t('quality.section_standards')),
-        shiny::tableOutput(ns('standards')),
-        shiny::uiOutput(ns('qc')),
-        shiny::h4(t('quality.section_samples')),
-        shiny::tableOutput(ns('samples')),
-        shiny::uiOutput(ns('dilution')),
-        shiny::h4(t('quality.section_curve')),
-        shiny::tableOutput(ns('curve')),
-        mod_criteria_ui(ns('criteria'), lang),
-        shiny::br()
+    tabs <- bslib::navset_card_underline(
+        full_screen = TRUE,
+        bslib::nav_panel(
+            t('quality.tab_standards'), value = 'standards',
+            shiny::div(class = 'step-view',
+                       shiny::h5(t('quality.section_standards')),
+                       shiny::tableOutput(ns('standards')),
+                       shiny::h5(t('quality.section_curve')),
+                       shiny::tableOutput(ns('curve')))
+        ),
+        bslib::nav_panel(
+            t('quality.tab_samples'), value = 'samples',
+            shiny::div(class = 'step-view',
+                       shiny::uiOutput(ns('qc')),
+                       shiny::h5(t('quality.section_samples')),
+                       shiny::tableOutput(ns('samples')),
+                       shiny::uiOutput(ns('dilution')))
+        )
+    )
+    # The verdict of the run stays above the tabs
+    bslib::layout_sidebar(
+        sidebar = bslib::sidebar(width = 340, mod_criteria_ui(ns('criteria'), lang)),
+        shiny::div(class = 'quality-verdict', shiny::uiOutput(ns('verdict'))),
+        tabs
     )
 }
 
@@ -204,22 +228,22 @@ mod_quality_server <- function(id, lang, curve) {
                 notes_ui(s$warnings, lang)
             )
         })
-        output$standards <- shiny::renderTable(tables()$standards)
-        output$samples <- shiny::renderTable(tables()$samples)
-        output$curve <- shiny::renderTable(tables()$curve)
+        output$standards <- shiny::renderTable(tables()$standards, na = '')
+        output$samples <- shiny::renderTable(tables()$samples, na = '')
+        output$curve <- shiny::renderTable(tables()$curve, na = '')
 
         output$qc <- shiny::renderUI({
             if (is.null(tables()$qc)) return(NULL)
-            shiny::tagList(shiny::h4(tr('quality.section_qc', lang)), shiny::tableOutput(ns('qc_table')))
+            shiny::tagList(shiny::h5(tr('quality.section_qc', lang)), shiny::tableOutput(ns('qc_table')))
         })
-        output$qc_table <- shiny::renderTable(tables()$qc)
+        output$qc_table <- shiny::renderTable(tables()$qc, na = '')
 
         output$dilution <- shiny::renderUI({
             if (is.null(tables()$dilution)) return(NULL)
-            shiny::tagList(shiny::h4(tr('quality.section_dilution', lang)),
+            shiny::tagList(shiny::h5(tr('quality.section_dilution', lang)),
                            shiny::tableOutput(ns('dilution_table')))
         })
-        output$dilution_table <- shiny::renderTable(tables()$dilution)
+        output$dilution_table <- shiny::renderTable(tables()$dilution, na = '')
 
         tables
     })

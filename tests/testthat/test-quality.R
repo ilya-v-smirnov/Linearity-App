@@ -185,3 +185,14 @@ test_that('the report contains the quality section', {
     expect_true('Run accepted' %in% text)
     expect_true('Dilution linearity' %in% text)
 })
+
+test_that('the quality step has grouped criteria in the sidebar and two tabs', {
+    html <- as.character(LinearityApp:::mod_quality_ui('quality', 'en'))
+    expect_match(html, 'bslib-sidebar-layout', fixed = TRUE)
+    expect_match(html, 'id="quality-criteria-std_bias"', fixed = TRUE)
+    expect_match(html, 'id="quality-criteria-dilution_cv"', fixed = TRUE)
+    for (key in c('crit.group_standards', 'crit.group_replicates', 'crit.group_qc', 'crit.group_dilution',
+                  'quality.tab_standards', 'quality.tab_samples')) {
+        expect_match(html, tr(key, 'en'), fixed = TRUE, info = key)
+    }
+})
