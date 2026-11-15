@@ -1,4 +1,8 @@
-#' Report Module
+#' Report Step Module
+#'
+#' The sidebar holds the experiment title, the type of the report (short or
+#' detailed) and the download; the main area shows a preview of the report
+#' built from the same blocks as the Word file (see [report_blocks()]).
 #'
 #' @param id Module id.
 #' @param lang Language code.
@@ -12,42 +16,80 @@ NULL
 #' @rdname mod_report
 mod_report_ui <- function(id, lang) {
     ns <- shiny::NS(id)
-    shiny::tagList(
-        shiny::textInput(ns('title'), tr('report.title_label', lang),
-                         placeholder = tr('report.title_placeholder', lang), width = '100%'),
-        shiny::downloadButton(ns('download'), label = tr('report.download', lang),
-                              icon = shiny::icon('file-word'))
+    t <- function(key) tr(key, lang)
+
+    sidebar <- bslib::sidebar(
+        width = 330,
+        sidebar_group(
+            t('report.group_title'), 'heading',
+            shiny::textAreaInput(ns('title'), NULL, placeholder = t('report.title_placeholder'),
+                                 rows = 4, width = '100%', resize = 'vertical')
+        ),
+        sidebar_group(
+            t('report.type'), 'file-lines',
+            shiny::radioButtons(ns('type'), NULL,
+                                choiceNames = list(with_tooltip(t('report.type_short'), t('report.type_short_help')),
+                                                   with_tooltip(t('report.type_detailed'),
+                                                                t('report.type_detailed_help'))),
+                                choiceValues = c('short', 'detailed'), selected = 'short')
+        ),
+        sidebar_group(
+            t('results.export'), 'file-word',
+            shiny::downloadButton(ns('download'), label = t('report.download'), icon = shiny::icon('download'),
+                                  class = 'btn-primary w-100')
+        )
     )
+
+    main <- bslib::card(
+        full_screen = TRUE,
+        bslib::card_header(t('report.preview')),
+        bslib::card_body(class = 'report-preview', shiny::uiOutput(ns('preview')))
+    )
+
+    bslib::layout_sidebar(sidebar = sidebar, main)
 }
 
 #' @rdname mod_report
 mod_report_server <- function(id, lang, curve, means) {
     shiny::moduleServer(id, function(input, output, session) {
+        type <- shiny::reactive(if (is.null(input$type)) 'short' else input$type)
+
+        plot <- shiny::reactive({
+            args <- curve$plot_args()
+            get_plots(curve$result(), xtitle = args$xtitle, ytitle = args$ytitle,
+                      plot.theme = report_theme(), lang = lang)
+        })
+
+        blocks <- shiny::reactive({
+            r <- curve$result()
+            report_blocks(type(),
+                          date = as.character(Sys.Date()),
+                          title = if (is.null(input$title)) '' else input$title,
+                          method = tr(paste0('model.', curve$model()), lang),
+                          scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic' else 'scale.log', lang),
+                          weights = weight_labels(curve$weights(), lang),
+                          model_table = curve$coef_table(),
+                          result_table = localize_result(r$result, lang),
+                          means_table = means(),
+                          qc_table = localize_result(r$qc, lang),
+                          exclusions = exclusions_table(r$exclusions, lang),
+                          comparison = comparison_table(curve$comparison(), lang),
+                          quality = list(summary = quality_summary(r, lang),
+                                         tables = quality_tables(r$quality, lang)),
+                          notes = curve$notes(),
+                          lang = lang)
+        })
+
+        output$preview <- shiny::renderUI({
+            report_preview(blocks(), shiny::plotOutput(session$ns('plot'), height = '260px'), lang)
+        })
+        output$plot <- shiny::renderPlot(plot())
+
         output$download <- shiny::downloadHandler(
-            filename = function() paste0(Sys.Date(), '_report.docx'),
-            content = function(file) {
-                args <- curve$plot_args()
-                save_report(file,
-                            date = as.character(Sys.Date()),
-                            title = input$title,
-                            plot = get_plots(curve$result(),
-                                             xtitle = args$xtitle, ytitle = args$ytitle,
-                                             plot.theme = report_theme(), lang = lang),
-                            method = tr(paste0('model.', curve$model()), lang),
-                            scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic' else 'scale.log',
-                                       lang),
-                            weights = weight_labels(curve$weights(), lang),
-                            model_table = curve$coef_table(),
-                            result_table = localize_result(curve$result()$result, lang),
-                            means_table = means(),
-                            qc_table = localize_result(curve$result()$qc, lang),
-                            exclusions = exclusions_table(curve$result()$exclusions, lang),
-                            comparison = comparison_table(curve$comparison(), lang),
-                            quality = list(summary = quality_summary(curve$result(), lang),
-                                           tables = quality_tables(curve$result()$quality, lang)),
-                            notes = curve$notes(),
-                            lang = lang)
-            }
+            filename = function() paste0(Sys.Date(), '_report_', type(), '.docx'),
+            content = function(file) write_report(blocks(), file, plot())
         )
+
+        blocks
     })
 }

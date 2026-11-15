@@ -4,7 +4,7 @@
 \alias{mod_report}
 \alias{mod_report_ui}
 \alias{mod_report_server}
-\title{Report Module}
+\title{Report Step Module}
 \usage{
 mod_report_ui(id, lang)
 
@@ -20,6 +20,8 @@ mod_report_server(id, lang, curve, means)
 \item{means}{Reactive with the aggregated table.}
 }
 \description{
-Report Module
+The sidebar holds the experiment title, the type of the report (short or
+detailed) and the download; the main area shows a preview of the report
+built from the same blocks as the Word file (see \code{\link[=report_blocks]{report_blocks()}}).
 }
 \keyword{internal}

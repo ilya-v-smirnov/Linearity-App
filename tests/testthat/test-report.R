@@ -28,3 +28,47 @@ test_that('Word report headings follow the language', {
     expect_true(any(grepl(tr('model.QRM', 'ru'), text, fixed = TRUE)))
     expect_true(any(grepl(tr('flag.below', 'ru'), text, fixed = TRUE)))
 })
+
+report_args <- function(lang = 'en') {
+    r <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), 'QRM')
+    list(date = '2026-11-14', title = 'Plate 1\nOperator: A. B.',
+         method = tr('model.QRM', lang), scale = tr('scale.log', lang), weights = 'None',
+         model_table = get_coef_ci(r$fit), result_table = localize_result(r$result, lang),
+         means_table = aggregate_result(r$result), qc_table = NULL,
+         exclusions = data.frame(key = character(0)), comparison = comparison_table(compare_models(r$standard_data), lang),
+         quality = list(summary = LinearityApp:::quality_summary(r, lang), tables = quality_tables(r$quality, lang)),
+         notes = c('note one'), lang = lang)
+}
+
+test_that('short and detailed reports have different sections', {
+    args <- report_args()
+    short <- do.call(LinearityApp:::report_blocks, c(list('short'), args))
+    detailed <- do.call(LinearityApp:::report_blocks, c(list('detailed'), args))
+    headings <- function(blocks) {
+        vapply(Filter(function(b) b$type %in% c('heading', 'subheading'), blocks), `[[`, '', 'text')
+    }
+    expect_equal(headings(short), c('Standard curve', 'Result', 'Means'))
+    expect_true(all(c('Analysis parameters', 'Standard curve', 'Comparison of models', 'Quality of the run',
+                      'Standards', 'Dilution linearity', 'Result', 'Means', 'Warnings') %in% headings(detailed)))
+    # the empty exclusions table is left out
+    expect_false('Excluded standard points' %in% headings(detailed))
+    expect_equal(sum(vapply(short, function(b) b$type == 'plot', TRUE)), 1)
+
+    path <- tempfile(fileext = '.docx')
+    LinearityApp:::write_report(short, path, get_plots(calculate(load_sample('bca'), 'QRM')))
+    text <- officer::docx_summary(officer::read_docx(path))$text
+    expect_true('Means' %in% text)
+    expect_false('Quality of the run' %in% text)
+    # the title keeps its lines
+    expect_true(any(grepl('Plate 1', text, fixed = TRUE) & grepl('Operator', text, fixed = TRUE)))
+})
+
+test_that('the preview shows the blocks and cuts long tables', {
+    args <- report_args()
+    blocks <- do.call(LinearityApp:::report_blocks, c(list('short'), args))
+    html <- as.character(LinearityApp:::report_preview(blocks, shiny::div(id = 'plot-here'), 'en', max_rows = 5))
+    expect_match(html, 'report-page', fixed = TRUE)
+    expect_match(html, 'plot-here', fixed = TRUE)
+    expect_match(html, '<div>Operator: A. B.</div>', fixed = TRUE)
+    expect_match(html, sprintf('... and %d more rows', nrow(args$result_table) - 5), fixed = TRUE)
+})

@@ -112,8 +112,11 @@ test_that('download modules write files', {
     shiny::testServer(LinearityApp:::mod_report_server,
                       args = list(lang = 'en', curve = fake_curve(),
                                   means = shiny::reactive(NULL)), {
-        session$setInputs(title = 'Test')
+        session$setInputs(title = 'Test', type = 'detailed')
         expect_true(file.exists(output$download))
+        expect_match(output$preview$html, 'Quality of the run', fixed = TRUE)
+        session$setInputs(type = 'short')
+        expect_false(grepl('Quality of the run', output$preview$html, fixed = TRUE))
     })
 })
 

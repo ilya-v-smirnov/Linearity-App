@@ -28,7 +28,7 @@ app_ui <- function(request, default_lang = 'en') {
         window_title = t('app.title'),
         id = 'tabs',
         theme = app_theme(),
-        fillable = c('template', 'data', 'curve', 'results', 'quality', 'summary'),
+        fillable = c('template', 'data', 'curve', 'results', 'quality', 'summary', 'report'),
         header = shiny::tags$head(shiny::tags$link(rel = 'stylesheet', href = asset('linapp.css')),
                                   shiny::tags$script(src = asset('plate-editor.js'))),
         bslib::nav_panel(t('tab.template'), value = 'template', icon = shiny::icon('table-cells'),
@@ -44,7 +44,7 @@ app_ui <- function(request, default_lang = 'en') {
         bslib::nav_panel(t('tab.summary'), value = 'summary', icon = shiny::icon('layer-group'),
                          mod_summary_ui('summary', lang)),
         bslib::nav_panel(t('tab.report'), value = 'report', icon = shiny::icon('file-word'),
-                         plain(mod_report_ui('report', lang))),
+                         mod_report_ui('report', lang)),
         bslib::nav_spacer(),
         bslib::nav_menu(
             t('tab.help'), icon = shiny::icon('circle-question'), align = 'right',

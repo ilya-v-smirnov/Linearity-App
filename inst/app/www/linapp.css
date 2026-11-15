@@ -417,3 +417,74 @@
     color: var(--bs-secondary-color);
     margin-bottom: 0.75rem;
 }
+
+/* Report preview: a page of the Word document ----------------------------- */
+
+.report-preview {
+    background: var(--bs-tertiary-bg);
+}
+
+.report-page {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 2.5rem;
+    background: #fff;
+    color: #212529;
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.08);
+    font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+    font-size: 0.95rem;
+    width: 100%;
+    min-width: 0;
+}
+
+/* Wide tables scroll inside the page, the plot shrinks with it */
+.report-page img {
+    max-width: 100%;
+    height: auto;
+}
+
+.report-table-wrap {
+    overflow-x: auto;
+}
+
+.report-date {
+    text-decoration: underline;
+}
+
+.report-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin: 0.5rem 0 1rem;
+    min-height: 1.4rem;
+}
+
+.report-heading {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin: 1.2rem 0 0.5rem;
+}
+
+.report-subheading {
+    font-weight: 700;
+    font-style: italic;
+    margin: 0.8rem 0 0.4rem;
+}
+
+.report-table {
+    width: auto;
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+}
+
+.report-table th,
+.report-table td {
+    padding: 0.15rem 0.5rem;
+}
+
+.report-more {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--bs-secondary-color);
+}

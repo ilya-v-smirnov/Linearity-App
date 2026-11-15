@@ -20,7 +20,8 @@ save_report(
   comparison = NULL,
   quality = NULL,
   notes = character(0),
-  lang = "en"
+  lang = "en",
+  type = "detailed"
 )
 }
 \arguments{
@@ -28,7 +29,7 @@ save_report(
 
 \item{date}{Analysis date (\code{"YYYY-MM-DD"}).}
 
-\item{title}{Experiment title.}
+\item{title}{Experiment title; it may have several lines.}
 
 \item{plot}{Plot from \code{\link[=get_plots]{get_plots()}}.}
 
@@ -56,6 +57,8 @@ save_report(
 \item{notes}{Character vector of warnings.}
 
 \item{lang}{Language of the report headings.}
+
+\item{type}{\code{"detailed"} (default) or \code{"short"} (see \code{\link[=report_blocks]{report_blocks()}}).}
 }
 \value{
 Called for its side effect.
