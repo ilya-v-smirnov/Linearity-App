@@ -158,7 +158,7 @@ data_summary_ui <- function(counts, has_wells, lang) {
     }
     shiny::div(class = 'stat-tiles',
                tile(counts[['wells']], if (has_wells) 'data.n_wells' else 'data.n_rows'),
-               tile(paste0(counts[['levels']], ' × ', counts[['series']]), 'data.n_standards'),
+               tile(paste0(counts[['levels']], ' \u00d7 ', counts[['series']]), 'data.n_standards'),
                tile(counts[['samples']], 'data.n_samples'),
                tile(counts[['qc']], 'data.n_qc'),
                tile(counts[['blanks']], 'data.n_blanks'))

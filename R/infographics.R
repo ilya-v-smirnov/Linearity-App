@@ -56,7 +56,7 @@ quantification_ui <- function(flags, lang = 'en') {
 
 #' Infographic of the Coefficient of Determination
 #'
-#' The R² of the standard curve on a scale from 0.95 to 1 with zones: below
+#' The \eqn{R^2} of the standard curve on a scale from 0.95 to 1 with zones: below
 #' 0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the criterion of the
 #' quality assessment). Values below 0.95 are shown at the left end.
 #'
@@ -74,7 +74,7 @@ r2_ui <- function(r2, lang = 'en') {
     shiny::div(
         class = 'infographic',
         shiny::div(class = 'infographic-title',
-                   'R² = ', shiny::strong(sprintf('%.4f', r2)), ' ',
+                   'R\u00b2 = ', shiny::strong(sprintf('%.4f', r2)), ' ',
                    shiny::span(class = paste0('r2-badge r2-', zone), tr(paste0('infographic.r2_', zone), lang))),
         shiny::div(
             class = 'r2-scale',

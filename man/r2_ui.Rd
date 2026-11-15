@@ -15,7 +15,7 @@ r2_ui(r2, lang = "en")
 A shiny tag, or \code{NULL} when \code{r2} is missing.
 }
 \description{
-The R² of the standard curve on a scale from 0.95 to 1 with zones: below
+The \eqn{R^2} of the standard curve on a scale from 0.95 to 1 with zones: below
 0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the criterion of the
 quality assessment). Values below 0.95 are shown at the left end.
 }
