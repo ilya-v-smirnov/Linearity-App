@@ -136,7 +136,6 @@
 .well-empty    { background: transparent; border-style: dashed !important; }
 .well-standard { background: #cfe2f3; }
 .well-blank    { background: #e3e3e3; }
-.well-nc       { background: #d9d2e9; }
 .well-qc       { background: #fce5cd; }
 .well-sample   { background: #d9ead3; }
 .well-unknown  { background: #f4cccc; }
@@ -245,3 +244,118 @@
 .tooltip .tooltip-inner {
     text-align: left;
 }
+
+/* Infographics of the standard curve step -------------------------------- */
+
+.infographic {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    padding: 0.6rem 0.9rem 0.7rem;
+    margin-bottom: 1rem;
+}
+
+.infographic-title {
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.quant-bar {
+    display: flex;
+    height: 1.8rem;
+    border-radius: 0.4rem;
+    overflow: hidden;
+}
+
+.quant-segment {
+    flex-basis: 0;
+    min-width: 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.quant-od_le_nc { background: #c62828; }
+.quant-below,
+.quant-above    { background: #ef8f00; }
+.quant-ok       { background: #1b5e20; }
+.quant-other    { background: #9e9e9e; }
+
+.quant-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.quant-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.quant-swatch {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 0.2rem;
+}
+
+.r2-scale {
+    position: relative;
+    display: flex;
+    height: 0.9rem;
+    border-radius: 0.4rem;
+    margin-top: 0.9rem;
+}
+
+.r2-zone:first-child { border-radius: 0.4rem 0 0 0.4rem; }
+.r2-zone:nth-child(3) { border-radius: 0 0.4rem 0.4rem 0; }
+
+/* The same colours as the quantification bar */
+.r2-zone.r2-poor { background: #c62828; }
+.r2-zone.r2-fair { background: #ef8f00; }
+.r2-zone.r2-good { background: #1b5e20; }
+
+.r2-marker {
+    position: absolute;
+    top: -0.55rem;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    border-left: 0.45rem solid transparent;
+    border-right: 0.45rem solid transparent;
+    border-top: 0.6rem solid var(--bs-body-color);
+}
+
+.r2-ticks {
+    position: relative;
+    height: 1.2rem;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+}
+
+.r2-ticks span {
+    position: absolute;
+    top: 0.15rem;
+    transform: translateX(-50%);
+}
+
+.r2-ticks span:first-child { transform: none; }
+.r2-ticks span:last-child { transform: translateX(-100%); }
+
+.r2-badge {
+    display: inline-block;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.6rem;
+    margin-left: 0.3rem;
+    color: #fff;
+}
+
+.r2-badge.r2-good { background: #1b5e20; }
+.r2-badge.r2-fair { background: #ef8f00; }
+.r2-badge.r2-poor { background: #c62828; }

@@ -55,8 +55,8 @@ confidence interval \code{conc.lower}, \code{conc.upper} and \code{flag};
 recovery (\%) and flag (\code{NULL} if there are no QC wells).
 }
 
-The background is the geometric mean of NC wells, or of blank wells if
-there are no NC wells. Columns \code{well} and \code{id} are kept in the results
+The background is the geometric mean of the blank wells (type \code{blank} or
+\code{NC}, which are equivalent). Columns \code{well} and \code{id} are kept in the results
 when they contain values.
 }
 \description{

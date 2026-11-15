@@ -2,7 +2,7 @@ test_that('aggregation counts flagged wells and summarises quantified ones', {
     res <- data.frame(sample.name = c('A', 'A', 'A', 'B', 'B'),
                       dilution = c(1, 1, 2, 1, 1),
                       conc = c(1, 3, NA, NA, NA),
-                      flag = c('OK', 'OK', '< LLOQ', '< LLOQ', 'OD <= NC'))
+                      flag = c('OK', 'OK', '< LLOQ', '< LLOQ', 'OD <= blank'))
 
     out <- aggregate_result(res, 'sample.name')
     expect_equal(out$sample.name, c('A', 'B'))

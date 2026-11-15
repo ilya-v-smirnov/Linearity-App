@@ -42,10 +42,10 @@ test_that('only concentrations within the calibration range are reported', {
 test_that('samples below the background are flagged, not reported as zero', {
     r <- calculate(load_sample('griess'), 'LRM')
     m0 <- r$result[r$result$sample.name == 'M0', ]
-    expect_equal(unique(m0$flag), 'OD <= NC')
+    expect_equal(unique(m0$flag), 'OD <= blank')
     expect_true(all(is.na(m0$conc)))
     expect_false(any(r$result$conc == 0, na.rm = TRUE))
-    expect_match(message_text(r$notes), 'OD <= NC (4)', fixed = TRUE, all = FALSE)
+    expect_match(message_text(r$notes), 'OD <= blank (4)', fixed = TRUE, all = FALSE)
 })
 
 test_that('standards with missing OD are excluded from the fit and reported', {
@@ -62,7 +62,7 @@ test_that('linear model is inverted exactly', {
     data <- synthetic_data(f, sample_od = c(0.25, 1, 2.5, 0.05, 5, -0.01))
     r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_rounding)
     expect_equal(r$result$conc[1:3], c(2.5, 10, 25))
-    expect_equal(r$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', 'OD <= NC'))
+    expect_equal(r$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', 'OD <= blank'))
 })
 
 test_that('quadratic model uses the branch that contains the standards', {
@@ -131,4 +131,33 @@ test_that('plots are built for all scenarios', {
         p <- get_plots(r, xtitle = 'x', ytitle = 'y')
         expect_s3_class(p, 'ggplot')
     }
+})
+
+test_that('blank and NC wells are equivalent background wells', {
+    conc <- c(1, 2, 4, 8, 16)
+    make <- function(bg_types) {
+        data.frame(type = c(rep('standard', 10), bg_types, 'sample'),
+                   conc = c(conc, conc, NA, NA, NA),
+                   dilution = c(rep(NA, 12), 1),
+                   OD = c(0.1 * conc + 0.04, 0.1 * conc + 0.04, 0.02, 0.08, 0.84))
+    }
+    mixed <- calculate(make(c('NC', 'blank')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    blank <- calculate(make(c('blank', 'blank')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    nc <- calculate(make(c('NC', 'NC')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    expect_equal(mixed$result$conc, blank$result$conc)
+    expect_equal(nc$result$conc, blank$result$conc)
+    # the background is the geometric mean of both kinds of wells
+    expect_equal(mixed$result$conc, (0.84 - 0.04) / 0.1, tolerance = 1e-8)
+    expect_equal(normalize_table(data.frame(type = c('NC', 'nc', 'Blank'), OD = 1))$type, rep('blank', 3))
+    expect_equal(LinearityApp:::classify_codes(c('NC', 'B')), c('blank', 'blank'))
+})
+
+test_that('residuals are plotted against the concentrations of the standard curve', {
+    r <- calculate(load_sample('bca'), 'QRM')
+    curve <- LinearityApp:::plot_standard_curve(r, xtitle = 'Conc')
+    resid <- LinearityApp:::plot_fitted_resid(r, xtitle = 'Conc')
+    expect_equal(resid$labels$x, 'Conc')
+    expect_equal(rlang::as_label(resid$mapping$x), 'conc')
+    breaks <- function(p) ggplot2::ggplot_build(p)$layout$panel_params[[1]]$x$breaks
+    expect_equal(breaks(resid), breaks(curve))
 })

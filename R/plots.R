@@ -48,6 +48,21 @@ design_x_scale <- function(x, round_par = 3) {
 }
 
 
+#' Concentration Axis of the Plots
+#'
+#' @param result Output of [calculate()].
+#'
+#' @return A list with `log` (whether the concentration axis is logarithmic)
+#'   and `breaks` (for a logarithmic axis).
+#' @keywords internal
+conc_axis <- function(result) {
+    fit <- result$fit
+    log_x <- !(fit$model %in% c('LRM', 'QRM') && !fit$log_scale)
+    all_x <- c(result$standard_data$conc, result$exclusions$conc)
+    list(log = log_x, breaks = if (log_x) design_x_scale(all_x) else NULL, range = range(all_x))
+}
+
+
 #' Plot Standard Curve with Fitted Model
 #'
 #' Standards used in the fit are shown as points, standards excluded by the
@@ -62,7 +77,8 @@ design_x_scale <- function(x, round_par = 3) {
 #' @keywords internal
 plot_standard_curve <- function(result, xtitle = '', ytitle = '') {
     fit <- result$fit
-    log_x <- !(fit$model %in% c('LRM', 'QRM') && !fit$log_scale)
+    axis <- conc_axis(result)
+    log_x <- axis$log
     std <- result$standard_data
     excl <- result$exclusions
 
@@ -90,8 +106,7 @@ plot_standard_curve <- function(result, xtitle = '', ytitle = '') {
                                            color = 'red')
     }
     if (log_x) {
-        x_scale <- design_x_scale(all_x)
-        plot <- plot + ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale))
+        plot <- plot + ggplot2::scale_x_log10(breaks = axis$breaks, labels = as.character(axis$breaks))
     }
     if (fit$log_scale) {
         plot <- plot + ggplot2::scale_y_log10()
@@ -100,36 +115,42 @@ plot_standard_curve <- function(result, xtitle = '', ytitle = '') {
 }
 
 
-#' Plot Fitted Values vs. Residuals
+#' Plot Residuals vs. Concentration
 #'
 #' Residuals are on the scale of the fit; weighted residuals are shown for
-#' weighted fits.
+#' weighted fits. The concentration axis is the same as on the standard curve
+#' (see [plot_standard_curve()]).
 #'
-#' @param fit A `lin_fit` object.
-#' @param lang Language of the axis titles.
+#' @param result Output of [calculate()].
+#' @param xtitle Title of the concentration axis.
+#' @param lang Language of the residual axis title.
 #'
 #' @return A ggplot2 object.
 #' @keywords internal
-plot_fitted_resid <- function(fit, lang = 'en') {
+plot_fitted_resid <- function(result, xtitle = '', lang = 'en') {
+    fit <- result$fit
+    axis <- conc_axis(result)
     data <- fit_residuals(fit)
     weighted <- fit$weights != 'none'
     data$y <- if (weighted) data$wresid else data$resid
 
     plot <-
-        ggplot2::ggplot(data, ggplot2::aes(.data$fitted, .data$y)) +
+        ggplot2::ggplot(data, ggplot2::aes(.data$conc, .data$y)) +
         ggplot2::geom_point(size = 1.5, alpha = 0.5) +
         ggplot2::geom_hline(yintercept = 0) +
-        ggplot2::labs(x = tr('plot.fitted', lang),
+        ggplot2::labs(x = xtitle,
                       y = tr(if (weighted) 'plot.weighted_residuals' else 'plot.residuals', lang)) +
         lin_theme()
 
-    if (length(unique(data$fitted)) > 3) {
+    if (length(unique(data$conc)) > 3) {
         plot <- plot + ggplot2::geom_smooth(method = 'loess', formula = y ~ x, color = 'blue',
                                             se = FALSE, span = 2, linewidth = 0.75)
     }
-    if (fit$log_scale) {
-        x_scale <- design_x_scale(data$fitted)
-        plot <- plot + ggplot2::scale_x_log10(breaks = x_scale, labels = as.character(x_scale))
+    if (axis$log) {
+        plot <- plot + ggplot2::scale_x_log10(breaks = axis$breaks, labels = as.character(axis$breaks),
+                                              limits = axis$range)
+    } else {
+        plot <- plot + ggplot2::scale_x_continuous(limits = axis$range)
     }
     plot
 }
@@ -146,7 +167,7 @@ plot_fitted_resid <- function(fit, lang = 'en') {
 #' @export
 get_plots <- function(result, xtitle = '', ytitle = '', plot.theme = NULL, lang = 'en') {
     standard_plot <- plot_standard_curve(result, xtitle = xtitle, ytitle = ytitle)
-    fit_resid_plot <- plot_fitted_resid(result$fit, lang = lang)
+    fit_resid_plot <- plot_fitted_resid(result, xtitle = xtitle, lang = lang)
 
     if (!is.null(plot.theme)) {
         standard_plot <- standard_plot + plot.theme

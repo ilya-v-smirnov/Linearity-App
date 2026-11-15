@@ -10,7 +10,7 @@ subtract_nc(data, nc_value = NULL)
 \item{data}{A data.frame with columns \code{type} and \code{OD}.}
 
 \item{nc_value}{Background value; estimated with \code{\link[=background_value]{background_value()}} from
-NC wells (or blank wells if there are no NC wells) if \code{NULL}.}
+the blank (or NC) wells if \code{NULL}.}
 }
 \value{
 A data.frame without NC and blank rows, with background-subtracted \code{OD}.

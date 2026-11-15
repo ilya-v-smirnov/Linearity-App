@@ -172,7 +172,7 @@ classify_codes <- function(code, sample_ids = character(0)) {
     type[grepl('^X[0-9]+$', code) | code %in% sample_ids] <- 'sample'
     type[grepl('^QC', code)] <- 'QC'
     type[code %in% c('B', 'BLANK')] <- 'blank'
-    type[code == 'NC'] <- 'NC'
+    type[code == 'NC'] <- 'blank'  # NC and blank are equivalent
     type[grepl('^S[0-9]+$', code)] <- 'standard'
     type
 }

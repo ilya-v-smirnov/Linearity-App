@@ -62,8 +62,8 @@ read_assay <- function(path) {
 #'
 #' Only `type` and `OD` are required. Missing `dilution` is set to 1 for
 #' samples and QC; missing `conc` to `NA`; missing `sample.name` to `id`.
-#' `type` values are case-insensitive (`standard`, `sample`, `NC`, `blank`,
-#' `QC`). Empty numeric columns are converted to numbers. The old six-column
+#' `type` values are case-insensitive (`standard`, `sample`, `blank`, `QC`;
+#' `NC` is read as `blank`). Empty numeric columns are converted to numbers. The old six-column
 #' format (`sample.name`, `sample.date`, `type`, `dilution`, `conc`, `OD`) is a
 #' special case and needs no conversion.
 #'
@@ -84,7 +84,7 @@ normalize_table <- function(table) {
         low <- tolower(type)
         simple <- low %in% c('standard', 'sample', 'blank')
         type[simple] <- low[simple]
-        type[low %in% 'nc'] <- 'NC'
+        type[low %in% 'nc'] <- 'blank'  # NC and blank are equivalent
         type[low %in% 'qc'] <- 'QC'
         table$type <- type
         if (!'dilution' %in% names(table)) {

@@ -166,8 +166,8 @@ test_that('standard points can be excluded with a reason', {
     expect_equal(r$exclusions$key, c('A1', 'A2'))
     expect_equal(r$exclusions$reason, c('pipetting error', 'bubble'))
     expect_equal(r$calibration_range[2], 1)       # the top level (2) is gone
-    expect_match(message_text(r$notes), 'Excluded (2)', fixed = TRUE, all = FALSE)
-    expect_match(message_text(r$notes, 'ru'), tr('flag.excluded', 'ru'), fixed = TRUE, all = FALSE)
+    # points excluded by the user are listed in `exclusions`, not repeated as a warning
+    expect_false(any(grepl('excluded from the fit', message_text(r$notes), fixed = TRUE)))
 
     expect_equal(nrow(r$standard_data), nrow(calculate(data, 'QRM')$standard_data) - 2)
     expect_equal(nrow(r$excluded_standards), 2)

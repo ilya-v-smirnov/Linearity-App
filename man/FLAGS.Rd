@@ -16,7 +16,7 @@ stored in English; use \code{\link[=translate_flags]{translate_flags()}} for dis
 \item \code{ok} (\code{"OK"}): the OD lies within the calibration range.
 \item \code{below} (\code{"< LLOQ"}): below the lowest standard used in the fit.
 \item \code{above} (\code{"> ULOQ"}): above the highest standard used in the fit.
-\item \code{od_le_nc} (\code{"OD <= NC"}): background-subtracted OD is zero or negative.
+\item \code{od_le_nc} (\code{"OD <= blank"}): background-subtracted OD is zero or negative.
 \item \code{no_solution} (\code{"No solution"}): the OD cannot be reached by the curve.
 \item \code{missing} (\code{"Missing OD"}): the OD value is empty.
 \item \code{excluded} (\code{"Excluded"}): a standard point excluded by the user.

@@ -30,7 +30,7 @@ mod_curve_server(
 \value{
 \code{mod_curve_server()} returns a list of reactives: \code{result}
 (output of \code{\link[=calculate]{calculate()}}), \code{coef_table}, \code{notes} (translated warnings),
-\code{plot_args} (axis titles), \code{model}, \code{linear}, \code{weights} (settings),
+\code{plot_args} (axis titles), \code{model}, \code{weights} (settings),
 \code{exclusions} (user exclusions: \code{key}, \code{reason}) and \code{comparison}
 (see \code{\link[=compare_models]{compare_models()}}).
 }

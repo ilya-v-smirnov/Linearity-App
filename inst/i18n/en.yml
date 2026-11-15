@@ -93,10 +93,9 @@ data:
   n_standards: "standard levels × series"
   n_samples: "samples"
   n_qc: "QC levels"
-  n_blanks: "blank / NC wells"
+  n_blanks: "blank wells"
   type_standard: "Standard"
   type_blank: "Blank"
-  type_nc: "NC"
   type_qc: "QC"
   type_sample: "Sample"
   type_empty: "Empty"
@@ -116,13 +115,15 @@ weights:
   power: "1/y^θ (estimated from replicates)"
 
 scale:
-  linear: "linear"
   log: "log10"
   logistic: "OD linear, concentration log10"
 
 curve:
+  group_model: "Model"
+  group_axes: "Axis titles"
+  title: "Standard curve and residuals"
+  coefs: "Model parameters"
   model: "Choose regression model"
-  linear: "Linear scales"
   xtitle: "X-axis title:"
   xunits: "X units:"
   ytitle: "Y-axis title:"
@@ -144,6 +145,23 @@ curve:
   restore: "Restore"
   cancel: "Cancel"
   restore_all: "Restore all points"
+
+infographic:
+  samples: "{n} of {total} sample wells quantified"
+  quantified: "Quantified"
+  other: "Other"
+  r2_good: "meets the criterion (>= 0.99)"
+  r2_fair: "below the criterion of 0.99"
+  r2_poor: "low (< 0.98)"
+
+reason:
+  outlier: "Outlier"
+  pipetting: "Pipetting error"
+  bubble: "Bubble or contamination in the well"
+  saturation: "Signal saturation"
+  background: "Signal at the background level"
+  other: "Other:"
+  other_placeholder: "Describe the reason"
 
 compare:
   model: "Model"
@@ -207,7 +225,6 @@ exclusion:
   reason: "Reason"
 
 plot:
-  fitted: "Fitted OD"
   residuals: "Residuals"
   weighted_residuals: "Weighted residuals"
 
@@ -245,7 +262,7 @@ flag:
   ok: "OK"
   below: "< LLOQ"
   above: "> ULOQ"
-  od_le_nc: "OD <= NC"
+  od_le_nc: "OD <= blank"
   no_solution: "No solution"
   missing: "Missing OD"
   excluded: "Excluded"
@@ -253,11 +270,10 @@ flag:
   nonlinear: "Dilution non-linear"
 
 note:
-  nc_arithmetic: "Some NC values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
+  nc_arithmetic: "Some blank values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
   not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
-  blank_background: "There are no NC wells: blank wells were used as background."
   lack_of_fit: "The lack-of-fit test is significant (p = {p}): the model may not describe the standards well; see the comparison of models."
   power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
   par_unidentifiable: "Some parameters of the {model} model are not determined by the standards (e.g. the upper asymptote is not reached): the curve and the concentrations are valid, but the confidence intervals of the parameters are not reliable."
@@ -296,12 +312,12 @@ plate:
   sheet_samples: "Samples"
   sheet_qc: "QC"
   help_1: "How to fill in this workbook"
-  help_2: "Layout: well codes. S1, S2, ... - standard levels; B - blank; NC - negative control; QC-L, QC-M, QC-H - quality controls; X1, X2, ... - samples. Leave unused wells empty. Wells with the same code are replicates."
+  help_2: "Layout: well codes. S1, S2, ... - standard levels; B (or NC) - blank; QC-L, QC-M, QC-H - quality controls; X1, X2, ... - samples. Leave unused wells empty. Wells with the same code are replicates."
   help_3: "OD: paste optical densities from the plate reader into the grid at the same positions as on the Layout sheet. A decimal comma is accepted."
   help_4: "Standards: concentration of each standard level (column conc)."
   help_5: "Samples: name, dilution factor and any additional columns (e.g. date) for each sample code."
   help_6: "QC: nominal concentration of each quality control (optional)."
-  help_7: "The background is the mean OD of NC wells, or of blank wells if there are no NC wells."
+  help_7: "The background is the mean OD of the blank wells (B or NC)."
   help_8: "Do not rename the columns. Sheet names may be in English or Russian."
 
 problem:
@@ -340,7 +356,7 @@ error:
   std_conc_missing: "Not all standard wells have concentrations specified"
   std_conc_positive: "All standard concentrations must be positive"
   few_standard_wells: "Insufficient number of standard wells: {n}"
-  no_background: "There are no NC or blank wells: the background cannot be estimated"
+  no_background: "There are no blank wells: the background cannot be estimated"
   qc_conc_missing: "Not all QC wells have nominal concentrations specified"
   qc_conc_positive: "All QC nominal concentrations must be positive"
   duplicate_well: "The well occurs more than once"
@@ -358,7 +374,7 @@ error:
   template_start: "Start concentration must be a positive number"
   template_step: "Dilution step must be greater than 1"
   template_levels: "At least 3 standard levels are required"
-  no_nc: "No valid OD values in the background wells (NC or blank)"
+  no_nc: "No valid OD values in the blank wells"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
   fit_failed: "The {model} model could not be fitted to the standards"
   weights_unknown: "Unknown weighting: {weights}"

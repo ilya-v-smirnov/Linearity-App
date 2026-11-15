@@ -34,8 +34,8 @@ mod_report_server <- function(id, lang, curve, means) {
                                              xtitle = args$xtitle, ytitle = args$ytitle,
                                              plot.theme = report_theme(), lang = lang),
                             method = tr(paste0('model.', curve$model()), lang),
-                            scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic'
-                                       else if (curve$linear()) 'scale.linear' else 'scale.log', lang),
+                            scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic' else 'scale.log',
+                                       lang),
                             weights = weight_labels(curve$weights(), lang),
                             model_table = curve$coef_table(),
                             result_table = localize_result(curve$result()$result, lang),

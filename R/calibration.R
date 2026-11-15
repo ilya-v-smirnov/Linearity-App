@@ -7,7 +7,7 @@
 #' - `ok` (`"OK"`): the OD lies within the calibration range.
 #' - `below` (`"< LLOQ"`): below the lowest standard used in the fit.
 #' - `above` (`"> ULOQ"`): above the highest standard used in the fit.
-#' - `od_le_nc` (`"OD <= NC"`): background-subtracted OD is zero or negative.
+#' - `od_le_nc` (`"OD <= blank"`): background-subtracted OD is zero or negative.
 #' - `no_solution` (`"No solution"`): the OD cannot be reached by the curve.
 #' - `missing` (`"Missing OD"`): the OD value is empty.
 #' - `excluded` (`"Excluded"`): a standard point excluded by the user.
@@ -24,7 +24,7 @@
 FLAGS <- list(ok = 'OK',
               below = '< LLOQ',
               above = '> ULOQ',
-              od_le_nc = 'OD <= NC',
+              od_le_nc = 'OD <= blank',
               no_solution = 'No solution',
               missing = 'Missing OD',
               excluded = 'Excluded',
@@ -70,14 +70,14 @@ background_value <- function(od) {
 
 #' Wells Used as Background
 #'
-#' NC wells if present, otherwise blank wells.
+#' Blank and NC wells are equivalent: both are background wells.
 #'
 #' @param type Vector of well types.
 #'
-#' @return `"NC"` or `"blank"`.
+#' @return Logical vector.
 #' @keywords internal
-background_type <- function(type) {
-    if (any(type %in% 'NC')) 'NC' else 'blank'
+is_background <- function(type) {
+    type %in% c('blank', 'NC')
 }
 
 
@@ -85,15 +85,15 @@ background_type <- function(type) {
 #'
 #' @param data A data.frame with columns `type` and `OD`.
 #' @param nc_value Background value; estimated with [background_value()] from
-#'   NC wells (or blank wells if there are no NC wells) if `NULL`.
+#'   the blank (or NC) wells if `NULL`.
 #'
 #' @return A data.frame without NC and blank rows, with background-subtracted `OD`.
 #' @keywords internal
 subtract_nc <- function(data, nc_value = NULL) {
     if (is.null(nc_value)) {
-        nc_value <- background_value(data$OD[data$type %in% background_type(data$type)])$value
+        nc_value <- background_value(data$OD[is_background(data$type)])$value
     }
-    out <- data[!data$type %in% c('NC', 'blank'), , drop = FALSE]
+    out <- data[!is_background(data$type), , drop = FALSE]
     out$OD <- out$OD - nc_value
     out
 }
@@ -247,8 +247,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `qc`: quality controls with nominal and measured concentration,
 #'     recovery (%) and flag (`NULL` if there are no QC wells).
 #'
-#' The background is the geometric mean of NC wells, or of blank wells if
-#' there are no NC wells. Columns `well` and `id` are kept in the results
+#' The background is the geometric mean of the blank wells (type `blank` or
+#' `NC`, which are equivalent). Columns `well` and `id` are kept in the results
 #' when they contain values.
 #' @export
 #' @examples
@@ -265,20 +265,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     data$.key <- well_keys(data)
 
     # Background subtraction
-    bg_type <- background_type(data$type)
-    bg <- background_value(data$OD[data$type %in% bg_type])
+    bg <- background_value(data$OD[is_background(data$type)])
     notes <- bg$notes
-    if (bg_type == 'blank') notes <- c(notes, list(lin_message('note.blank_background')))
     data <- subtract_nc(data, bg$value)
 
     # Standards used for fitting
     log_scale <- model %in% c('LRM', 'QRM') && !linear
     std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude)
     standard_data <- std$used
-    if (nrow(std$excluded) > 0) {
+    # Points excluded by the user are listed in `exclusions`; warn about the others
+    automatic <- std$excluded$reason[std$excluded$reason != FLAGS$excluded]
+    if (length(automatic) > 0) {
         notes <- c(notes, list(lin_message('note.standards_excluded',
-                                           n = nrow(std$excluded),
-                                           details = flag_counts(std$excluded$reason))))
+                                           n = length(automatic),
+                                           details = flag_counts(automatic))))
     }
     min_levels <- n_params(model) + 1
     n_levels <- length(unique(standard_data$conc))

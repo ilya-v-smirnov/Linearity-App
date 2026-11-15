@@ -56,7 +56,7 @@ validate_assay <- function(data) {
     if (length(missing_types) > 0) {
         err(NULL, 'error.type_missing', values = missing_types)
     }
-    if (!any(type %in% c('NC', 'blank'))) {
+    if (!any(is_background(type))) {
         err(NULL, 'error.no_background')
     }
 

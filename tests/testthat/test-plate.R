@@ -46,7 +46,7 @@ small_plate <- function(extra_layout = NULL, extra_od = NULL) {
 test_that('example plate gives the same results as the table format', {
     plate <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
     expect_true(all(c('well', 'id') %in% names(plate)))
-    expect_equal(as.vector(table(plate$type)[c('NC', 'sample', 'standard')]), c(2, 24, 14))
+    expect_equal(as.vector(table(plate$type)[c('blank', 'sample', 'standard')]), c(2, 24, 14))
 
     r_plate <- calculate(plate, 'QRM')
     r_table <- calculate(load_sample('bca'), 'QRM')
@@ -81,8 +81,6 @@ test_that('plate template can be filled in and read back in any language', {
         data <- check_assay(read_assay(path))
         r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
         expect_equal(r$result$conc, c(5, 5, 10, 10, 20, 20), tolerance = 1e-8, info = lang)
-        expect_match(message_text(r$notes, lang), tr('note.blank_background', lang),
-                     fixed = TRUE, all = FALSE)
     }
 })
 

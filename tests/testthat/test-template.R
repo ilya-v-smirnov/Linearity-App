@@ -4,7 +4,7 @@ test_that('template uses the dilution step and number of levels', {
     expect_equal(nrow(t), 2 * (5 + 1) + 5)
     expect_equal(names(t), c('sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD'))
     expect_equal(t$conc[1:5], signif(100 / 3^(0:4), 3))
-    expect_equal(t$type[1:6], c(rep('standard', 5), 'NC'))
+    expect_equal(t$type[1:6], c(rep('standard', 5), 'blank'))
     expect_equal(sum(t$type == 'sample'), 5)
     expect_true(all(t$dilution[t$type == 'sample'] == 1))
 })
@@ -34,5 +34,5 @@ test_that('a filled template passes validation after an Excel round trip', {
 
 test_that('standard rows can follow the samples', {
     t <- make_template(n.standard = 1, n.sample = 3, n.levels = 3, standards = 'after')
-    expect_equal(t$type, c(rep('sample', 3), rep('standard', 3), 'NC'))
+    expect_equal(t$type, c(rep('sample', 3), rep('standard', 3), 'blank'))
 })

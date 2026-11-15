@@ -40,7 +40,7 @@ make_template <- function(start = 100, step = 2,
     titration <- standard_series(start, step, n.levels)
 
     standard_part <- data.frame(
-        type = rep(c(rep('standard', n.levels), 'NC'), times = n.standard),
+        type = rep(c(rep('standard', n.levels), 'blank'), times = n.standard),
         dilution = NA_real_,
         conc = rep(c(titration, NA_real_), times = n.standard)
     )

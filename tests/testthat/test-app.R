@@ -25,15 +25,15 @@ test_that('curve module recalculates when the model changes', {
     data <- shiny::reactive(load_sample('bca'))
     shiny::testServer(LinearityApp:::mod_curve_server,
                       args = list(lang = 'en', data = data, rounding = rounding_3()), {
-        session$setInputs(model = 'LRM', linear_scale = FALSE,
+        session$setInputs(model = 'LRM',
                           xtitle = 'Concentration', xunits = ', ng/ml', ytitle = 'OD')
         expect_equal(session$returned$result()$model, 'LRM')
         expect_equal(nrow(session$returned$coef_table()), 2)
         expect_equal(session$returned$plot_args()$xtitle, 'Concentration, ng/ml')
 
-        session$setInputs(model = 'QRM', linear_scale = TRUE)
+        session$setInputs(model = 'QRM')
         expect_equal(session$returned$result()$model, 'QRM')
-        expect_true(session$returned$result()$linear_scale)
+        expect_false(session$returned$result()$linear_scale)
         expect_equal(nrow(session$returned$coef_table()), 3)
         expect_match(output$curve$src, '^data:image/png')
         expect_match(output$resid$src, '^data:image/png')
@@ -42,7 +42,6 @@ test_that('curve module recalculates when the model changes', {
         session$setInputs(model = '4PL', weights = '1/y2')
         expect_equal(session$returned$result()$model, '4PL')
         expect_equal(session$returned$weights(), '1/y2')
-        expect_false(session$returned$linear())
         expect_equal(nrow(session$returned$coef_table()), 4)
     })
 })
@@ -51,7 +50,7 @@ test_that('curve module shows calculation errors as validation messages', {
     few <- synthetic_data(function(x) 0.1 * x, conc = c(1, 2, 4))
     shiny::testServer(LinearityApp:::mod_curve_server,
                       args = list(lang = 'en', data = shiny::reactive(few), rounding = rounding_3()), {
-        session$setInputs(model = 'QRM', linear_scale = TRUE)
+        session$setInputs(model = 'QRM')
         err <- tryCatch(session$returned$result(), error = identity)
         expect_s3_class(err, 'validation')
         expect_match(conditionMessage(err), 'Calculation error: At least 4')
@@ -65,7 +64,6 @@ fake_curve <- function(lang = 'en') {
          notes = shiny::reactive(message_text(r$notes, lang)),
          plot_args = shiny::reactive(list(xtitle = 'x', ytitle = 'y')),
          model = shiny::reactive('LRM'),
-         linear = shiny::reactive(FALSE),
          weights = shiny::reactive('none'),
          exclusions = shiny::reactive(data.frame(key = character(0), reason = character(0))),
          comparison = shiny::reactive(compare_models(r$standard_data)))
@@ -351,7 +349,7 @@ test_that('standard points are excluded and restored by clicking on the curve', 
     local_mocked_bindings(nearPoints = function(df, ...) df[df$key == clicked_point, ], .package = 'shiny')
     shiny::testServer(LinearityApp:::mod_curve_server,
                       args = list(lang = 'en', data = data, rounding = rounding_3()), {
-        session$setInputs(model = 'QRM', weights = 'none', linear_scale = FALSE,
+        session$setInputs(model = 'QRM', weights = 'none',
                           xtitle = 'x', xunits = '', ytitle = 'y')
         n_used <- nrow(session$returned$result()$standard_data)
 
@@ -365,15 +363,55 @@ test_that('standard points are excluded and restored by clicking on the curve', 
         expect_equal(nrow(session$returned$result()$standard_data), n_used - 1)
         expect_equal(session$returned$result()$exclusions$reason, 'bubble in the well')
         expect_match(output$exclusions_table, 'bubble in the well', fixed = TRUE)
+        # the exclusion is listed in the table, not repeated as a warning
+        expect_false(any(grepl('excluded from the fit', message_text(session$returned$result()$notes))))
 
         session$setInputs(curve_click = list(x = 2, y = 2))
         session$setInputs(confirm_restore = 1)
         expect_equal(nrow(session$returned$exclusions()), 0)
 
+        # a standard reason is stored with its label
         clicked_point <<- 'C2'
         session$setInputs(curve_click = list(x = 3, y = 3))
-        session$setInputs(reason = 'outlier', confirm_exclude = 3)
+        session$setInputs(reason_choice = 'pipetting', reason = '', confirm_exclude = 3)
+        expect_equal(session$returned$exclusions()$reason, 'Pipetting error')
         session$setInputs(restore_all = 1)
         expect_equal(nrow(session$returned$exclusions()), 0)
+
+        # "other" needs a text
+        session$setInputs(curve_click = list(x = 3, y = 3))
+        session$setInputs(reason_choice = 'other', reason = '', confirm_exclude = 4)
+        expect_equal(nrow(session$returned$exclusions()), 0)
     })
+})
+
+test_that('quantification and R2 are shown as infographics, not as warnings', {
+    data <- shiny::reactive(load_sample('griess'))
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = data, rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        expect_match(output$quantification$html, '4 of 12 sample wells quantified', fixed = TRUE)
+        expect_match(output$r2$html, '<strong>0.9847</strong>', fixed = TRUE)
+        # both warnings of this run are shown as infographics: no warnings box
+        expect_null(output$notes)
+        expect_match(output$coefs, 'ci.lower', fixed = TRUE)
+    })
+})
+
+test_that('infographics count the sample wells and place R2 on its scale', {
+    flags <- c('OD <= blank', 'OD <= blank', rep('< LLOQ', 8), rep('OK', 6), '> ULOQ', 'Missing OD')
+    counts <- LinearityApp:::quantification_counts(flags)
+    expect_equal(unname(counts), c(2, 8, 6, 1, 1))
+    html <- as.character(LinearityApp:::quantification_ui(flags, 'en'))
+    # red, orange and green segments in this order, sized by the counts
+    expect_match(html, 'quant-od_le_nc.*flex-grow: 2;.*quant-below.*flex-grow: 8;.*quant-ok.*flex-grow: 6;')
+    expect_match(html, '6 of 18 sample wells quantified', fixed = TRUE)
+    expect_null(LinearityApp:::quantification_ui(character(0)))
+
+    expect_match(as.character(LinearityApp:::r2_ui(0.995)), 'r2-badge r2-good', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::r2_ui(0.985)), 'r2-badge r2-fair', fixed = TRUE)
+    poor <- as.character(LinearityApp:::r2_ui(0.5))
+    expect_match(poor, 'r2-badge r2-poor', fixed = TRUE)
+    expect_match(poor, 'left: 0.0%', fixed = TRUE)
+    expect_null(LinearityApp:::r2_ui(NA))
 })

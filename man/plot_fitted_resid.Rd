@@ -2,20 +2,23 @@
 % Please edit documentation in R/plots.R
 \name{plot_fitted_resid}
 \alias{plot_fitted_resid}
-\title{Plot Fitted Values vs. Residuals}
+\title{Plot Residuals vs. Concentration}
 \usage{
-plot_fitted_resid(fit, lang = "en")
+plot_fitted_resid(result, xtitle = "", lang = "en")
 }
 \arguments{
-\item{fit}{A \code{lin_fit} object.}
+\item{result}{Output of \code{\link[=calculate]{calculate()}}.}
 
-\item{lang}{Language of the axis titles.}
+\item{xtitle}{Title of the concentration axis.}
+
+\item{lang}{Language of the residual axis title.}
 }
 \value{
 A ggplot2 object.
 }
 \description{
 Residuals are on the scale of the fit; weighted residuals are shown for
-weighted fits.
+weighted fits. The concentration axis is the same as on the standard curve
+(see \code{\link[=plot_standard_curve]{plot_standard_curve()}}).
 }
 \keyword{internal}

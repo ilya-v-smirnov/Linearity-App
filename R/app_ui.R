@@ -28,7 +28,7 @@ app_ui <- function(request, default_lang = 'en') {
         window_title = t('app.title'),
         id = 'tabs',
         theme = app_theme(),
-        fillable = c('template', 'data'),
+        fillable = c('template', 'data', 'curve'),
         header = shiny::tags$head(shiny::tags$link(rel = 'stylesheet', href = asset('linapp.css')),
                                   shiny::tags$script(src = asset('plate-editor.js'))),
         bslib::nav_panel(t('tab.template'), value = 'template', icon = shiny::icon('table-cells'),
@@ -36,7 +36,7 @@ app_ui <- function(request, default_lang = 'en') {
         bslib::nav_panel(t('tab.data'), value = 'data', icon = shiny::icon('upload'),
                          mod_import_ui('import', lang)),
         bslib::nav_panel(t('tab.curve'), value = 'curve', icon = shiny::icon('chart-line'),
-                         plain(mod_curve_ui('curve', lang))),
+                         mod_curve_ui('curve', lang)),
         bslib::nav_panel(t('tab.results'), value = 'results', icon = shiny::icon('list-ol'),
                          bslib::layout_sidebar(
                              sidebar = bslib::sidebar(width = 300, mod_rounding_ui('rounding', lang)),
