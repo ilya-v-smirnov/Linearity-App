@@ -65,11 +65,11 @@ import:
   help: "A plate workbook (.xlsx) made from the template or a table (.xlsx, .csv)."
 
 rounding:
-  title: "Rounding Options"
-  function: "Rounding function"
-  signif: "Significant"
-  round: "Round"
-  number: "Number"
+  title: "Rounding"
+  to: "Round concentrations to"
+  signif: "significant figures"
+  round: "decimal places"
+  help: "How concentrations are rounded in the results, the summary, the report and the model parameters. Rounding is applied once, to the final dilution-corrected values. Significant figures keep the same relative precision for any value: 3 gives 0.0123, 1.23, 123 and 12300. Decimal places fix the number of digits after the decimal point: 2 gives 0.01, 1.23 and 123.46; a negative number rounds to tens, hundreds, ... (-1: 123 becomes 120). OD is always shown with 4 decimal places."
 
 tab:
   template: "Template"
@@ -229,8 +229,27 @@ plot:
   weighted_residuals: "Weighted residuals"
 
 results:
-  download: "Download results"
+  download: "Download results (xlsx)"
   qc: "Quality controls"
+  range_title: "Outside the curve"
+  range_help: "Samples outside the quantification range are flagged and get no concentration by default. Extrapolated concentrations and zeros keep their flags (< LLOQ, > ULOQ, OD <= blank), so they can be told apart. The options apply to samples, not to quality controls, and affect the quality assessment, the summary and the report."
+  extrapolate_below: "Extrapolate below the LLOQ"
+  extrapolate_above: "Extrapolate above the ULOQ"
+  blank_zero: "Concentration 0 for OD <= blank"
+  columns: "Columns"
+  export: "Export"
+
+dt:
+  search: "Search:"
+  length_menu: "Show _MENU_ rows"
+  info: "Rows _START_ to _END_ of _TOTAL_"
+  info_empty: "No rows"
+  info_filtered: "(filtered from _MAX_)"
+  zero_records: "No matching rows"
+  first: "First"
+  last: "Last"
+  next: "Next"
+  previous: "Previous"
 
 summary:
   aggregation: "Select aggregation parameters:"

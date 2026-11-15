@@ -161,3 +161,43 @@ test_that('residuals are plotted against the concentrations of the standard curv
     breaks <- function(p) ggplot2::ggplot_build(p)$layout$panel_params[[1]]$x$breaks
     expect_equal(breaks(resid), breaks(curve))
 })
+
+test_that('samples outside the range can be extrapolated and below-blank samples set to zero', {
+    data <- load_sample('griess')
+    plain <- calculate(data, 'LRM', round_fun = function(x, ...) x)
+    expect_true(all(is.na(plain$result$conc[plain$result$flag != 'OK'])))
+
+    below <- calculate(data, 'LRM', round_fun = function(x, ...) x, extrapolate = 'below')
+    low <- below$result$flag == '< LLOQ'
+    expect_true(all(below$result$conc[low] > 0))
+    expect_true(all(below$result$conc[low] < min(below$standard_data$conc)))
+    expect_true(all(below$result$conc.lower[low] < below$result$conc.upper[low]))
+    expect_equal(below$result$flag, plain$result$flag)       # flags are kept
+
+    # only wells left without a concentration are reported as not quantified
+    expect_match(message_text(plain$notes), '8 of 12 sample wells', fixed = TRUE, all = FALSE)
+    expect_match(message_text(below$notes), '4 of 12 sample wells', fixed = TRUE, all = FALSE)
+
+    zero <- calculate(data, 'LRM', blank_zero = TRUE)
+    expect_equal(unique(zero$result$conc[zero$result$flag == 'OD <= blank']), 0)
+    expect_true(all(is.na(zero$result$conc[zero$result$flag == '< LLOQ'])))
+
+    # above the ULOQ: the top standards are excluded so that samples exceed the range
+    bca <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    keys <- well_keys(bca)
+    top <- data.frame(key = keys[bca$type == 'standard' & bca$conc >= 0.5], reason = 'test')
+    r_plain <- calculate(bca, 'LRM', exclude = top)
+    r_above <- calculate(bca, 'LRM', exclude = top, extrapolate = 'above')
+    high <- r_plain$result$flag == '> ULOQ'
+    expect_true(any(high))
+    expect_true(all(is.na(r_plain$result$conc[high])))
+    expect_true(all(r_above$result$conc[high] > 0.25 * r_above$result$dilution[high]))
+})
+
+test_that('sample and QC results show the OD as measured, before the blank is subtracted', {
+    data <- load_sample('griess')
+    r <- calculate(data, 'LRM')
+    expect_equal(r$result$OD, round(data$OD[data$type == 'sample'], 4))
+    expect_gt(r$nc_value, 0)
+    expect_false('.od_raw' %in% c(names(r$result), names(r$standard_data)))
+})

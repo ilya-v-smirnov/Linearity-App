@@ -13,7 +13,8 @@ mod_curve_server(
   lang,
   data,
   rounding,
-  criteria = shiny::reactive(qc_criteria())
+  criteria = shiny::reactive(qc_criteria()),
+  options = shiny::reactive(list())
 )
 }
 \arguments{
@@ -26,6 +27,9 @@ mod_curve_server(
 \item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}.}
 
 \item{criteria}{Reactive with acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
+
+\item{options}{Reactive from \code{\link[=mod_quant_options_server]{mod_quant_options_server()}}: handling of
+samples outside the quantification range.}
 }
 \value{
 \code{mod_curve_server()} returns a list of reactives: \code{result}

@@ -150,7 +150,8 @@ test_that('server takes the language from the page URL', {
         mod_import_server = function(...) list(data = NULL), mod_rounding_server = function(...) NULL,
         mod_curve_server = function(...) NULL, mod_results_server = function(...) NULL,
         mod_summary_server = function(...) NULL, mod_report_server = function(...) NULL,
-        mod_criteria_server = function(...) NULL, mod_quality_server = function(...) NULL
+        mod_criteria_server = function(...) NULL, mod_quality_server = function(...) NULL,
+        mod_quant_options_server = function(...) NULL
     )
     fake_session <- function(search) list(clientData = list(url_search = search))
     LinearityApp:::app_server(list(), list(), fake_session('?lang=ru'))
@@ -339,7 +340,51 @@ test_that('results module shows quality controls', {
     curve$result <- shiny::reactive(qc_result)
     shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve), {
         expect_match(output$qc$html, 'Quality controls', fixed = TRUE)
-        expect_match(output$qc_table, 'QC-L', fixed = TRUE)
+        expect_match(output$qc_table, 'nominal', fixed = TRUE)
+        path <- output$download
+        expect_equal(readxl::excel_sheets(path), c('Results', 'Quality controls'))
+        expect_equal(readxl::read_excel(path, sheet = 'Quality controls')$id, 'QC-L')
+    })
+})
+
+test_that('results are ordered by well, columns are chosen and exported to Excel', {
+    r <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), 'LRM')
+    curve <- fake_curve()
+    curve$result <- shiny::reactive(r)
+    by <- shiny::reactiveVal('column')
+    shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve, by = by), {
+        out <- session$returned()
+        expect_equal(names(out)[1:3], c('well', 'id', 'sample.name'))
+        expect_equal(tail(names(out), 4), c('conc', 'conc.lower', 'conc.upper', 'flag'))
+        expect_equal(out$well[1:3], c('A3', 'B3', 'C3'))
+        by('row')
+        session$flushReact()
+        expect_equal(session$returned()$well[1:3], c('A3', 'A4', 'A5'))
+
+        session$setInputs(columns = c('well', 'conc', 'flag'))
+        expect_equal(names(session$returned()), c('well', 'conc', 'flag'))
+        saved <- readxl::read_excel(output$download, sheet = 'Results')
+        expect_equal(names(saved), c('well', 'conc', 'flag'))
+        expect_equal(saved$well[1:3], c('A3', 'A4', 'A5'))
+        expect_match(output$table, 'orderData', fixed = TRUE)
+    })
+})
+
+test_that('out-of-range options reach the calculation', {
+    opts <- shiny::reactiveVal(list(extrapolate = 'below', blank_zero = TRUE))
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(load_sample('griess')),
+                                  rounding = rounding_3(), options = opts), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        res <- session$returned$result()$result
+        expect_false(anyNA(res$conc[res$flag == '< LLOQ']))
+        expect_true(all(res$conc[res$flag == 'OD <= blank'] == 0))
+    })
+    shiny::testServer(LinearityApp:::mod_quant_options_server, {
+        session$setInputs(below = TRUE, above = FALSE, blank_zero = FALSE)
+        expect_equal(session$returned(), list(extrapolate = 'below', blank_zero = FALSE))
+        session$setInputs(above = TRUE, blank_zero = TRUE)
+        expect_equal(session$returned(), list(extrapolate = c('below', 'above'), blank_zero = TRUE))
     })
 })
 

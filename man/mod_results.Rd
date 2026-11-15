@@ -4,11 +4,11 @@
 \alias{mod_results}
 \alias{mod_results_ui}
 \alias{mod_results_server}
-\title{Results Module}
+\title{Results Step Module}
 \usage{
 mod_results_ui(id, lang)
 
-mod_results_server(id, lang, curve)
+mod_results_server(id, lang, curve, by = shiny::reactive("column"))
 }
 \arguments{
 \item{id}{Module id.}
@@ -16,11 +16,17 @@ mod_results_server(id, lang, curve)
 \item{lang}{Language code.}
 
 \item{curve}{List of reactives returned by \code{\link[=mod_curve_server]{mod_curve_server()}}.}
+
+\item{by}{Reactive with the filling direction of the plate (\code{"column"} or
+\code{"row"}): the initial order of the wells.}
 }
 \value{
 \code{mod_results_server()} returns a reactive with the translated result table.
 }
 \description{
-Sample results with flags, quality controls, warnings and download.
+The sidebar holds the handling of samples outside the quantification range
+(see \link{mod_quant_options}), the rounding, the columns of the table and the
+download; the main area shows the sample results with flags and the
+quality controls as interactive tables.
 }
 \keyword{internal}

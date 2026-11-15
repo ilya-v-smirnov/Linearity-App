@@ -21,6 +21,7 @@ Imports:
     bslib (>= 0.6.0),
     cowplot (>= 1.1.1),
     dplyr (>= 1.1.0),
+    DT (>= 0.30),
     ggplot2 (>= 3.4.0),
     minpack.lm (>= 1.2-1),
     officer (>= 0.4.2),

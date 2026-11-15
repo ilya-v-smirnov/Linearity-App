@@ -13,7 +13,9 @@ calculate(
   round_fun = signif,
   round_par = 3,
   level = 0.95,
-  criteria = qc_criteria()
+  criteria = qc_criteria(),
+  extrapolate = character(0),
+  blank_zero = FALSE
 )
 }
 \arguments{
@@ -33,6 +35,13 @@ columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}
 \item{level}{Confidence level of the concentration intervals.}
 
 \item{criteria}{Acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
+
+\item{extrapolate}{Samples outside the quantification range that still get
+a concentration: any of \code{"below"} (under the LLOQ) and \code{"above"} (over
+the ULOQ). Their flags are kept.}
+
+\item{blank_zero}{If \code{TRUE}, samples with OD at or below the blank get
+concentration 0 (flag kept).}
 }
 \value{
 A list with components:
@@ -49,9 +58,10 @@ A list with components:
 \item \code{back_calc}: back-calculated standards (see \code{\link[=back_calculate]{back_calculate()}});
 \item \code{lack_of_fit}: lack-of-fit test (see \code{\link[=lack_of_fit]{lack_of_fit()}});
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
-\item \code{result}: sample results with \code{conc} (dilution-corrected), its
-confidence interval \code{conc.lower}, \code{conc.upper} and \code{flag};
-\item \code{qc}: quality controls with nominal and measured concentration,
+\item \code{result}: sample results with \code{OD} as measured (before the blank is
+subtracted), \code{conc} (dilution-corrected), its confidence interval
+\code{conc.lower}, \code{conc.upper} and \code{flag};
+\item \code{qc}: quality controls with nominal and measured concentration, OD as measured,
 recovery (\%) and flag (\code{NULL} if there are no QC wells).
 }
 

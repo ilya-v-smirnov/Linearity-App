@@ -228,6 +228,11 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' @param round_fun,round_par Rounding applied to the final concentrations only.
 #' @param level Confidence level of the concentration intervals.
 #' @param criteria Acceptance criteria (see [qc_criteria()]).
+#' @param extrapolate Samples outside the quantification range that still get
+#'   a concentration: any of `"below"` (under the LLOQ) and `"above"` (over
+#'   the ULOQ). Their flags are kept.
+#' @param blank_zero If `TRUE`, samples with OD at or below the blank get
+#'   concentration 0 (flag kept).
 #'
 #' @return A list with components:
 #'   * `model_direct`, `fit`: the fitted calibration (`lin_fit`, see [fit_curve()]);
@@ -242,9 +247,10 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `back_calc`: back-calculated standards (see [back_calculate()]);
 #'   * `lack_of_fit`: lack-of-fit test (see [lack_of_fit()]);
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
-#'   * `result`: sample results with `conc` (dilution-corrected), its
-#'     confidence interval `conc.lower`, `conc.upper` and `flag`;
-#'   * `qc`: quality controls with nominal and measured concentration,
+#'   * `result`: sample results with `OD` as measured (before the blank is
+#'     subtracted), `conc` (dilution-corrected), its confidence interval
+#'     `conc.lower`, `conc.upper` and `flag`;
+#'   * `qc`: quality controls with nominal and measured concentration, OD as measured,
 #'     recovery (%) and flag (`NULL` if there are no QC wells).
 #'
 #' The background is the geometric mean of the blank wells (type `blank` or
@@ -258,15 +264,17 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' head(res$result)
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
-                      round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria()) {
+                      round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
+                      extrapolate = character(0), blank_zero = FALSE) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
     data$.key <- well_keys(data)
 
-    # Background subtraction
+    # Background subtraction; the results show the OD as measured
     bg <- background_value(data$OD[is_background(data$type)])
     notes <- bg$notes
+    data$.od_raw <- data$OD
     data <- subtract_nc(data, bg$value)
 
     # Standards used for fitting
@@ -312,22 +320,27 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     }
 
     # Samples and QC: inverse prediction, flags, dilution correction
-    quantify <- function(rows) {
+    quantify <- function(rows, extrapolate = character(0), blank_zero = FALSE) {
         rows$dilution[is.na(rows$dilution)] <- 1
         pred <- inverse_predict_ci(fit, rows$OD, level)
         flag <- assign_flags(rows$OD, pred$conc, conc_range)
-        ok <- flag == FLAGS$ok
+        ok <- flag == FLAGS$ok |
+            (flag == FLAGS$below & 'below' %in% extrapolate) |
+            (flag == FLAGS$above & 'above' %in% extrapolate)
         rows$conc <- ifelse(ok, round_fun(pred$conc * rows$dilution, round_par), NA_real_)
         rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
         rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
-        rows$OD <- round(rows$OD, 4)
+        if (blank_zero) rows$conc[flag == FLAGS$od_le_nc] <- 0
+        rows$OD <- round(rows$.od_raw, 4)
+        rows$.od_raw <- NULL
         rows$flag <- flag
         rownames(rows) <- NULL
         rows
     }
 
-    sample_data <- quantify(data[data$type == 'sample', , drop = FALSE])
-    bad <- sample_data$flag[sample_data$flag != FLAGS$ok]
+    sample_data <- quantify(data[data$type == 'sample', , drop = FALSE], extrapolate, blank_zero)
+    # Wells without a concentration (extrapolated values and zeros are reported)
+    bad <- sample_data$flag[is.na(sample_data$conc)]
     if (length(bad) > 0) {
         notes <- c(notes, list(lin_message('note.not_quantified',
                                            n = length(bad), total = nrow(sample_data),
@@ -352,6 +365,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
                              OD = round(manual$OD, 4), reason = manual$comment)
 
     rownames(standard_data) <- NULL
+    standard_data$.od_raw <- NULL
     sample_data$type <- NULL
     sample_data$.key <- NULL
     sample_data <- drop_empty_columns(sample_data, c('well', 'id'))

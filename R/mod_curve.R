@@ -9,6 +9,8 @@
 #' @param data Reactive with validated input data.
 #' @param rounding Reactive from [mod_rounding_server()].
 #' @param criteria Reactive with acceptance criteria (see [qc_criteria()]).
+#' @param options Reactive from [mod_quant_options_server()]: handling of
+#'   samples outside the quantification range.
 #'
 #' @return `mod_curve_server()` returns a list of reactives: `result`
 #'   (output of [calculate()]), `coef_table`, `notes` (translated warnings),
@@ -157,7 +159,8 @@ mod_curve_ui <- function(id, lang) {
 }
 
 #' @rdname mod_curve
-mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactive(qc_criteria())) {
+mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactive(qc_criteria()),
+                             options = shiny::reactive(list())) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
         t <- function(key, ...) tr(key, lang, ...)
@@ -178,10 +181,13 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             d <- data()
             r <- rounding()
             s <- settings()
+            o <- options()
             with_validation(
                 calculate(d, model = s$model, weights = s$weights,
                           exclude = exclusions(), round_fun = r$fun, round_par = r$par,
-                          criteria = criteria()),
+                          criteria = criteria(),
+                          extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,
+                          blank_zero = isTRUE(o$blank_zero)),
                 'common.calc_error', lang)
         })
 

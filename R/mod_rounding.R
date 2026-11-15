@@ -13,17 +13,13 @@ NULL
 mod_rounding_ui <- function(id, lang) {
     ns <- shiny::NS(id)
     t <- function(key) tr(key, lang)
-    shiny::wellPanel(
-        shiny::h4(t('rounding.title')),
-        shiny::fluidRow(
-            shiny::column(7, shiny::selectInput(ns('fun'), t('rounding.function'),
-                                                choices = stats::setNames(c('signif', 'round'),
-                                                                          c(t('rounding.signif'),
-                                                                            t('rounding.round'))),
-                                                selected = 'signif')),
-            shiny::column(5, shiny::numericInput(ns('par'), t('rounding.number'),
-                                                 value = 3, step = 1, min = 1, max = 7))
-        )
+    # Reads as a sentence: "Round concentrations to [3] (o) significant figures ( ) decimal places"
+    shiny::tagList(
+        shiny::numericInput(ns('par'), t('rounding.to'), value = 3, step = 1, min = 1, max = 7, width = '100%'),
+        shiny::radioButtons(ns('fun'), NULL,
+                            choices = stats::setNames(c('signif', 'round'),
+                                                      c(t('rounding.signif'), t('rounding.round'))),
+                            selected = 'signif')
     )
 }
 
