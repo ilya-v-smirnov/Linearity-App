@@ -75,8 +75,9 @@ results_datatable <- function(table, lang, page_length = 25) {
                        language = dt_language(lang))
     )
     if ('flag' %in% names(table)) {
-        flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing)
-        colours <- c('#1b5e20', '#ef8f00', '#ef8f00', '#c62828', '#757575', '#757575')
+        flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
+                   FLAGS$high_cv, FLAGS$nonlinear)
+        colours <- c('#1b5e20', '#ef8f00', '#ef8f00', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
         widget <- DT::formatStyle(widget, 'flag', fontWeight = 'bold',
                                   color = DT::styleEqual(translate_flags(flags, lang), colours))
     }

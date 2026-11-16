@@ -4,12 +4,16 @@
 \alias{quality_summary}
 \title{Verdict Lines of a Quality Assessment}
 \usage{
-quality_summary(result, lang = "en")
+quality_summary(result, lang = "en", sample_warnings = NULL)
 }
 \arguments{
 \item{result}{Output of \code{\link[=calculate]{calculate()}}.}
 
 \item{lang}{Language code.}
+
+\item{sample_warnings}{Warnings of the samples (list of messages, see
+\code{\link[=assess_samples]{assess_samples()}}) that replace those of the default grouping; \code{NULL}
+keeps the warnings of \code{\link[=calculate]{calculate()}}.}
 }
 \value{
 A list with \code{title}, \code{range}, \code{levels}, \code{reasons} and \code{warnings}

@@ -20,12 +20,18 @@ mod_summary_server(id, lang, curve, rounding)
 \item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}.}
 }
 \value{
-\code{mod_summary_server()} returns a reactive with the aggregated table.
+\code{mod_summary_server()} returns a list of reactives: \code{table} (the
+aggregated table shown), \code{assessment} (see \code{\link[=assess_samples]{assess_samples()}}) and
+\code{warnings} (translated warnings of the samples).
 }
 \description{
 The sidebar holds the grouping columns (with the number of distinct values
 of each column, quick choices and a preview of the number of rows), the
-statistics to show and the download; the main area shows the aggregated
-table.
+statistics to show, the acceptance criteria of the samples and the
+download. The grouping defines the replicates: the precision of each group
+and the dilution linearity of the samples are assessed with it (see
+\code{\link[=assess_samples]{assess_samples()}}). The main area has two tabs: the aggregated table with
+the dilution linearity and the quality controls, and the infographics of
+the samples.
 }
 \keyword{internal}

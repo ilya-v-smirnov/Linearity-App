@@ -4,16 +4,19 @@
 \alias{replicate_groups}
 \title{Replicate Groups of Samples}
 \usage{
-replicate_groups(result)
+replicate_groups(result, group_vars = NULL)
 }
 \arguments{
 \item{result}{Well-level results.}
+
+\item{group_vars}{Grouping columns, or \code{NULL} for the default grouping.}
 }
 \value{
 Character vector of group labels.
 }
 \description{
-Wells with the same \code{id} (plate format), or with the same \code{sample.name},
-\code{dilution} and \code{sample.date} (table format), are replicates.
+Wells with the same values of \code{group_vars} are replicates. Without
+grouping columns, wells with the same \code{id} (plate format), or with the same
+\code{sample.name}, \code{dilution} and \code{sample.date} (table format), are replicates.
 }
 \keyword{internal}

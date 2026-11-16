@@ -7,6 +7,7 @@
 criteria_fields()
 }
 \description{
-Criteria Inputs: Codes, Defaults and Scaling
+The criteria of the standards are set in the standard curve step, those of
+the samples, quality controls and dilutions in the result summary step.
 }
 \keyword{internal}

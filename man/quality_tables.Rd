@@ -7,7 +7,8 @@
 quality_tables(quality, lang = "en")
 }
 \arguments{
-\item{quality}{The \code{quality} element of \code{\link[=calculate]{calculate()}}.}
+\item{quality}{The \code{quality} element of \code{\link[=calculate]{calculate()}}, or a list with the
+same elements (e.g. \code{samples} and \code{dilution} from \code{\link[=assess_samples]{assess_samples()}}).}
 
 \item{lang}{Language code.}
 }

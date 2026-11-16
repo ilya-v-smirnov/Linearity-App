@@ -4,17 +4,20 @@
 \alias{dilution_linearity}
 \title{Dilution Linearity}
 \usage{
-dilution_linearity(samples, criteria = qc_criteria())
+dilution_linearity(samples, criteria = qc_criteria(), key_cols = NULL)
 }
 \arguments{
-\item{samples}{Output of \code{\link[=summarise_samples]{summarise_samples()}}.}
+\item{samples}{Output of \code{\link[=summarise_samples]{summarise_samples()}} with a \code{dilution} column.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
+
+\item{key_cols}{Columns identifying a sample; by default \code{sample.name} and
+\code{sample.date}.}
 }
 \value{
-A data.frame with \code{sample.name} (and \code{sample.date} if present),
-\code{dilution}, \code{mean}, \code{deviation} (\%), \code{cv} (\% across dilutions) and
-\code{pass}; \code{NULL} if no sample has several dilutions.
+A data.frame with the \code{key_cols}, \code{dilution}, \code{mean}, \code{deviation}
+(\%), \code{cv} (\% across dilutions) and \code{pass}; \code{NULL} if no sample has
+several dilutions.
 }
 \description{
 For each sample measured at two or more dilutions, compares the

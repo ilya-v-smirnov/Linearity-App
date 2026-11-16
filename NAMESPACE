@@ -3,6 +3,7 @@
 S3method(print,lin_message)
 export(FLAGS)
 export(aggregate_result)
+export(assess_samples)
 export(assess_standards)
 export(back_calculate)
 export(calculate)

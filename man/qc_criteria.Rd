@@ -11,6 +11,8 @@ qc_criteria(
   cv_edge = 25,
   min_fraction = 0.75,
   min_levels = 6,
+  sample_cv = cv,
+  sample_cv_edge = cv_edge,
   qc_bias = 20,
   qc_bias_edge = 25,
   qc_fraction = 2/3,
@@ -25,9 +27,14 @@ qc_criteria(
 \item{std_bias, std_bias_edge}{Allowed bias of back-calculated standards (\%),
 inside the range and at its ends.}
 
-\item{cv, cv_edge}{Allowed CV of replicates (\%), inside the range and near its ends.}
+\item{cv, cv_edge}{Allowed CV of the ODs of a standard level (\%), inside the
+range and at its ends.}
 
 \item{min_fraction, min_levels}{Minimum fraction and number of accepted standard levels.}
+
+\item{sample_cv, sample_cv_edge}{Allowed CV of the concentrations of sample
+replicates (\%), inside the range and near its ends; by default the same as
+\code{cv} and \code{cv_edge}.}
 
 \item{qc_bias, qc_bias_edge}{Allowed bias of QC (\%), inside the range and near its ends.}
 

@@ -1,8 +1,10 @@
 #' Standard Curve Module
 #'
-#' Model and weighting selection, standard curve and residual plots,
-#' coefficients, warnings, exclusion of standard points (click on a point,
-#' a reason is required) and comparison of models.
+#' Model and weighting selection, acceptance criteria of the standards,
+#' standard curve and residual plots, warnings, exclusion of standard points
+#' (click on a point, a reason is required), comparison of models and the
+#' model parameters with the verdict of the run and the quality of the
+#' standards.
 #'
 #' @param id Module id.
 #' @param lang Language code.
@@ -13,7 +15,8 @@
 #'   samples outside the quantification range.
 #'
 #' @return `mod_curve_server()` returns a list of reactives: `result`
-#'   (output of [calculate()]), `coef_table`, `notes` (translated warnings),
+#'   (output of [calculate()]), `coef_table`, `notes` (translated warnings
+#'   without those of the samples, see [sample_warning_keys()]),
 #'   `plot_args` (axis titles), `model`, `weights` (settings),
 #'   `exclusions` (user exclusions: `key`, `reason`) and `comparison`
 #'   (see [compare_models()]).
@@ -118,6 +121,7 @@ mod_curve_ui <- function(id, lang) {
                                choices = stats::setNames(weights, weight_labels(weights, lang)),
                                selected = 'none')
         ),
+        mod_criteria_ui('criteria', lang, 'standards'),
         sidebar_group(
             t('curve.group_axes'), 'pen',
             shiny::textInput(ns('xtitle'), t('curve.xtitle'), value = t('curve.xdefault'), width = '100%'),
@@ -151,7 +155,14 @@ mod_curve_ui <- function(id, lang) {
         ),
         bslib::nav_panel(
             t('curve.coefs'), value = 'coefs',
-            shiny::div(class = 'step-view', shiny::tableOutput(ns('coefs')))
+            shiny::div(class = 'step-view',
+                       shiny::uiOutput(ns('verdict')),
+                       shiny::h5(t('curve.section_coefs')),
+                       shiny::tableOutput(ns('coefs')),
+                       shiny::h5(t('quality.section_standards')),
+                       shiny::tableOutput(ns('standards')),
+                       shiny::h5(t('quality.section_curve')),
+                       shiny::tableOutput(ns('curve_quality')))
         )
     )
 
@@ -200,7 +211,11 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             get_plots(result(), xtitle = args$xtitle, ytitle = args$ytitle, lang = lang)
         })
 
-        notes <- shiny::reactive(message_text(result()$notes, lang))
+        # Warnings of the samples depend on the grouping chosen in the result summary
+        notes <- shiny::reactive({
+            message_text(Filter(function(m) !m$key %in% sample_warning_keys(), result()$notes), lang)
+        })
+        quality <- shiny::reactive(quality_tables(result()$quality, lang))
 
         coef_table <- shiny::reactive({
             r <- rounding()
@@ -228,7 +243,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         }, height = plot_height('resid'))
         # Warnings shown as infographics are left out of the warnings box
         output$notes <- shiny::renderUI({
-            shown <- Filter(function(m) !m$key %in% c('note.not_quantified', 'quality.warn_r2'), result()$notes)
+            hidden <- c('note.not_quantified', 'quality.warn_r2', sample_warning_keys())
+            shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
         })
         output$quantification <- shiny::renderUI(quantification_ui(result()$result$flag, lang))
@@ -238,6 +254,9 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             tab[-1] <- lapply(tab[-1], as.character)
             tab
         })
+        output$verdict <- shiny::renderUI(verdict_ui(result(), lang))
+        output$standards <- shiny::renderTable(quality()$standards, na = '')
+        output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
 
         # Exclusion of standard points --------------------------------------

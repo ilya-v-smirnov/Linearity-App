@@ -80,20 +80,30 @@ test_that('summary module groups by sample by default, offers quick choices and 
     shiny::testServer(LinearityApp:::mod_summary_server,
                       args = list(lang = 'en', curve = fake_curve(), rounding = rounding_3()), {
         # before the browser answers, the samples are the groups
-        out <- session$returned()
+        out <- session$returned$table()
         expect_equal(names(out)[1:2], c('sample.name', 'sample.date'))
-        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv') %in% names(out)))
+        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv', 'flag') %in% names(out)))
         expect_equal(sum(out$n), 12)
+        expect_equal(out$sample.name, c('M0', 'M0', 'M1', 'M1', 'M2', 'M2'))
         expect_match(output$preview$html, '12 wells', fixed = TRUE)
 
+        session$setInputs(group_vars = c('sample.name', 'sample.date'))
+        expect_equal(nrow(session$returned$assessment()$samples), 6)
+
+        # the infographics show the groups
+        expect_match(output$infographics$html, 'stat-tile', fixed = TRUE)
+        expect_match(output$infographics$html, 'groups_plot', fixed = TRUE)
+        expect_match(output$groups_plot$src, '^data:image/png')
+
         session$setInputs(group_vars = c('sample.name', 'sample.date', 'dilution'), stats = c('n', 'mean'))
-        out <- session$returned()
+        out <- session$returned$table()
         expect_equal(names(out), c('sample.name', 'sample.date', 'dilution', 'n', 'mean'))
         expect_equal(names(readxl::read_excel(output$download)), names(out))
 
         session$setInputs(group_vars = character(0))
-        expect_null(session$returned())
+        expect_null(session$returned$table())
         expect_match(output$empty$html, 'Choose at least one column', fixed = TRUE)
+        expect_match(output$infographics$html, 'Choose at least one column', fixed = TRUE)
     })
     expect_equal(LinearityApp:::grouping_columns(data.frame(well = 1, id = 1, sample.name = 1, group = 1,
                                                             dilution = 1, OD = 1, conc = 1, flag = 1)),
@@ -109,9 +119,9 @@ test_that('download modules write files', {
         expect_equal(names(long), c('well', 'sample.name', 'sample.date', 'type', 'dilution', 'conc', 'OD'))
     })
 
+    summary <- list(table = shiny::reactive(NULL), assessment = shiny::reactive(NULL))
     shiny::testServer(LinearityApp:::mod_report_server,
-                      args = list(lang = 'en', curve = fake_curve(),
-                                  means = shiny::reactive(NULL)), {
+                      args = list(lang = 'en', curve = fake_curve(), summary = summary), {
         session$setInputs(title = 'Test', type = 'detailed')
         expect_true(file.exists(output$download))
         expect_match(output$preview$html, 'Quality of the run', fixed = TRUE)
@@ -159,7 +169,7 @@ test_that('server takes the language from the page URL', {
         mod_import_server = function(...) list(data = NULL), mod_rounding_server = function(...) NULL,
         mod_curve_server = function(...) NULL, mod_results_server = function(...) NULL,
         mod_summary_server = function(...) NULL, mod_report_server = function(...) NULL,
-        mod_criteria_server = function(...) NULL, mod_quality_server = function(...) NULL,
+        mod_criteria_server = function(...) NULL,
         mod_quant_options_server = function(...) NULL
     )
     fake_session <- function(search) list(clientData = list(url_search = search))

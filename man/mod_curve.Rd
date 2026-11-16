@@ -33,14 +33,17 @@ samples outside the quantification range.}
 }
 \value{
 \code{mod_curve_server()} returns a list of reactives: \code{result}
-(output of \code{\link[=calculate]{calculate()}}), \code{coef_table}, \code{notes} (translated warnings),
+(output of \code{\link[=calculate]{calculate()}}), \code{coef_table}, \code{notes} (translated warnings
+without those of the samples, see \code{\link[=sample_warning_keys]{sample_warning_keys()}}),
 \code{plot_args} (axis titles), \code{model}, \code{weights} (settings),
 \code{exclusions} (user exclusions: \code{key}, \code{reason}) and \code{comparison}
 (see \code{\link[=compare_models]{compare_models()}}).
 }
 \description{
-Model and weighting selection, standard curve and residual plots,
-coefficients, warnings, exclusion of standard points (click on a point,
-a reason is required) and comparison of models.
+Model and weighting selection, acceptance criteria of the standards,
+standard curve and residual plots, warnings, exclusion of standard points
+(click on a point, a reason is required), comparison of models and the
+model parameters with the verdict of the run and the quality of the
+standards.
 }
 \keyword{internal}

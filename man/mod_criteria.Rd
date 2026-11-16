@@ -6,7 +6,7 @@
 \alias{mod_criteria_server}
 \title{Acceptance Criteria Module}
 \usage{
-mod_criteria_ui(id, lang)
+mod_criteria_ui(id, lang, part = c("standards", "samples"))
 
 mod_criteria_server(id, lang)
 }
@@ -14,11 +14,15 @@ mod_criteria_server(id, lang)
 \item{id}{Module id.}
 
 \item{lang}{Language code.}
+
+\item{part}{\code{"standards"} or \code{"samples"}.}
 }
 \value{
 \code{mod_criteria_server()} returns a reactive with a \code{lin_criteria} object.
 }
 \description{
-Inputs for the acceptance criteria, shown in a collapsible block.
+Inputs for the acceptance criteria. The inputs are split in two parts shown
+in different steps (\code{part = "standards"} in the standard curve step,
+\code{part = "samples"} in the result summary step) and read by one server.
 }
 \keyword{internal}

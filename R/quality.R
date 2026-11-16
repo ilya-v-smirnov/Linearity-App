@@ -9,7 +9,11 @@
 #'
 #' @param std_bias,std_bias_edge Allowed bias of back-calculated standards (%),
 #'   inside the range and at its ends.
-#' @param cv,cv_edge Allowed CV of replicates (%), inside the range and near its ends.
+#' @param cv,cv_edge Allowed CV of the ODs of a standard level (%), inside the
+#'   range and at its ends.
+#' @param sample_cv,sample_cv_edge Allowed CV of the concentrations of sample
+#'   replicates (%), inside the range and near its ends; by default the same as
+#'   `cv` and `cv_edge`.
 #' @param min_fraction,min_levels Minimum fraction and number of accepted standard levels.
 #' @param qc_bias,qc_bias_edge Allowed bias of QC (%), inside the range and near its ends.
 #' @param qc_fraction,qc_level_fraction Minimum fraction of all QC wells and of
@@ -27,11 +31,12 @@
 #' qc_criteria()
 #' qc_criteria(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20)  # chromatography
 qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25,
-                        min_fraction = 0.75, min_levels = 6,
+                        min_fraction = 0.75, min_levels = 6, sample_cv = cv, sample_cv_edge = cv_edge,
                         qc_bias = 20, qc_bias_edge = 25, qc_fraction = 2 / 3, qc_level_fraction = 0.5,
                         dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25) {
     out <- list(std_bias = std_bias, std_bias_edge = std_bias_edge, cv = cv, cv_edge = cv_edge,
                 min_fraction = min_fraction, min_levels = min_levels,
+                sample_cv = sample_cv, sample_cv_edge = sample_cv_edge,
                 qc_bias = qc_bias, qc_bias_edge = qc_bias_edge, qc_fraction = qc_fraction,
                 qc_level_fraction = qc_level_fraction, dilution_bias = dilution_bias,
                 dilution_cv = dilution_cv, range = range, edge = edge)
@@ -115,49 +120,74 @@ calibration_acceptance <- function(standards, criteria = qc_criteria()) {
 
 #' Replicate Groups of Samples
 #'
-#' Wells with the same `id` (plate format), or with the same `sample.name`,
-#' `dilution` and `sample.date` (table format), are replicates.
+#' Wells with the same values of `group_vars` are replicates. Without
+#' grouping columns, wells with the same `id` (plate format), or with the same
+#' `sample.name`, `dilution` and `sample.date` (table format), are replicates.
 #'
 #' @param result Well-level results.
+#' @param group_vars Grouping columns, or `NULL` for the default grouping.
 #'
 #' @return Character vector of group labels.
 #' @keywords internal
-replicate_groups <- function(result) {
-    if ('id' %in% names(result) && !anyNA(result$id)) return(as.character(result$id))
-    cols <- intersect(c('sample.name', 'dilution', 'sample.date'), names(result))
-    do.call(paste, c(lapply(result[cols], as.character), sep = ' | '))
+replicate_groups <- function(result, group_vars = NULL) {
+    if (length(group_vars) == 0) {
+        if ('id' %in% names(result) && !anyNA(result$id)) return(as.character(result$id))
+        group_vars <- intersect(c('sample.name', 'dilution', 'sample.date'), names(result))
+    }
+    do.call(paste, c(lapply(result[group_vars], as.character), sep = ' | '))
 }
 
 
 #' Summary of Sample Replicates
 #'
 #' @param result Well-level sample results from [calculate()].
-#' @param range Quantification range.
+#' @param range Quantification range; `NULL` uses the limit inside the range
+#'   (`sample_cv`) for every group.
 #' @param criteria See [qc_criteria()].
+#' @param group_vars Columns defining a replicate group (see
+#'   [replicate_groups()]); `NULL` for the default grouping.
 #'
-#' @return A data.frame with one row per replicate group: identification
-#'   columns, `n`, `n.quantified`, `mean`, `sd`, `cv` (%), `cv.limit` and
-#'   `flag` (codes from [FLAGS] separated by `"; "`).
+#' @return A data.frame with one row per replicate group (in the order of the
+#'   wells; with `group_vars`, ordered by the columns, each in the order of
+#'   its first appearance): identification columns (`group_vars`, or `id`, `sample.name`,
+#'   `dilution`, `sample.date` for the default grouping), `n`, `n.quantified`,
+#'   `mean`, `sd`, `cv` (%), `min`, `max`, `cv.limit` and `flag` (codes from
+#'   [FLAGS] separated by `"; "`); `NULL` without wells.
 #' @keywords internal
-summarise_samples <- function(result, range, criteria = qc_criteria()) {
-    if (nrow(result) == 0) return(NULL)
-    group <- replicate_groups(result)
-    id_cols <- intersect(c('id', 'sample.name', 'dilution', 'sample.date'), names(result))
-    rows <- lapply(unique(group), function(g) {
-        r <- result[group == g, , drop = FALSE]
-        conc <- r$conc[!is.na(r$conc)]
+summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), group_vars = NULL) {
+    if (is.null(result) || nrow(result) == 0) return(NULL)
+    if (length(group_vars) > 0) {
+        # Groups ordered column by column, each column in the order of its first appearance
+        ranks <- lapply(group_vars, function(v) {
+            x <- as.character(result[[v]])
+            match(x, unique(x))
+        })
+        result <- result[do.call(order, ranks), , drop = FALSE]
+    }
+    group <- replicate_groups(result, group_vars)
+    id_cols <- if (length(group_vars) > 0) group_vars else
+        intersect(c('id', 'sample.name', 'dilution', 'sample.date'), names(result))
+    dilution <- if ('dilution' %in% names(result)) result$dilution else rep(1, nrow(result))
+    flag <- if ('flag' %in% names(result)) result$flag else rep(FLAGS$ok, nrow(result))
+    rows <- lapply(split(seq_len(nrow(result)), factor(group, levels = unique(group))), function(i) {
+        quantified <- i[!is.na(result$conc[i])]
+        conc <- result$conc[quantified]
         m <- if (length(conc) > 0) mean(conc) else NA_real_
         cv <- cv_percent(conc)
-        undiluted <- m / r$dilution[1]
-        cv_limit <- if (near_edge(undiluted, range, criteria$edge)) criteria$cv_edge else criteria$cv
-        flags <- unique(r$flag[r$flag != FLAGS$ok])
+        # The limit near the ends of the range follows the concentration in the well
+        measured <- if (length(conc) > 0) mean(conc / dilution[quantified]) else NA_real_
+        edge <- !is.null(range) && near_edge(measured, range, criteria$edge)
+        cv_limit <- if (edge) criteria$sample_cv_edge else criteria$sample_cv
+        flags <- unique(flag[i][!is.na(flag[i]) & flag[i] != FLAGS$ok])
         if (!is.na(cv) && cv > cv_limit) flags <- c(FLAGS$high_cv, flags)
-        out <- r[1, id_cols, drop = FALSE]
-        out$n <- nrow(r)
+        out <- result[i[1], id_cols, drop = FALSE]
+        out$n <- length(i)
         out$n.quantified <- length(conc)
         out$mean <- m
         out$sd <- if (length(conc) >= 2) stats::sd(conc) else NA_real_
         out$cv <- cv
+        out$min <- if (length(conc) > 0) min(conc) else NA_real_
+        out$max <- if (length(conc) > 0) max(conc) else NA_real_
         out$cv.limit <- cv_limit
         out$flag <- if (length(flags) == 0) FLAGS$ok else paste(flags, collapse = '; ')
         out
@@ -174,22 +204,24 @@ summarise_samples <- function(result, range, criteria = qc_criteria()) {
 #' dilution-corrected mean concentration at each dilution with the mean over
 #' all dilutions and computes the CV across dilutions.
 #'
-#' @param samples Output of [summarise_samples()].
+#' @param samples Output of [summarise_samples()] with a `dilution` column.
 #' @param criteria See [qc_criteria()].
+#' @param key_cols Columns identifying a sample; by default `sample.name` and
+#'   `sample.date`.
 #'
-#' @return A data.frame with `sample.name` (and `sample.date` if present),
-#'   `dilution`, `mean`, `deviation` (%), `cv` (% across dilutions) and
-#'   `pass`; `NULL` if no sample has several dilutions.
+#' @return A data.frame with the `key_cols`, `dilution`, `mean`, `deviation`
+#'   (%), `cv` (% across dilutions) and `pass`; `NULL` if no sample has
+#'   several dilutions.
 #' @export
-dilution_linearity <- function(samples, criteria = qc_criteria()) {
-    if (is.null(samples) || !all(c('sample.name', 'dilution') %in% names(samples))) return(NULL)
-    key_cols <- intersect(c('sample.name', 'sample.date'), names(samples))
+dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NULL) {
+    if (is.null(samples) || !'dilution' %in% names(samples)) return(NULL)
+    if (is.null(key_cols)) key_cols <- intersect(c('sample.name', 'sample.date'), names(samples))
+    if (length(key_cols) == 0 || !all(key_cols %in% names(samples))) return(NULL)
     key <- do.call(paste, c(lapply(samples[key_cols], as.character), sep = ' | '))
     rows <- lapply(unique(key), function(k) {
         s <- samples[key == k & !is.na(samples$mean), , drop = FALSE]
         if (length(unique(s$dilution)) < 2) return(NULL)
         by_dil <- stats::aggregate(s$mean, list(dilution = s$dilution), mean)
-        if (nrow(by_dil) < 2) return(NULL)
         overall <- mean(by_dil$x)
         dev <- 100 * (by_dil$x - overall) / overall
         cv <- cv_percent(by_dil$x)
@@ -206,6 +238,66 @@ dilution_linearity <- function(samples, criteria = qc_criteria()) {
     rownames(out) <- NULL
     out
 }
+
+
+#' Quality Assessment of Samples
+#'
+#' Precision of the replicates and dilution linearity of the samples. The
+#' replicate groups are the rows of the result summary: with `group_vars`
+#' given, the dilutions are compared within the groups of `group_vars`
+#' without `dilution`.
+#'
+#' @param result Well-level sample results from [calculate()].
+#' @param range Quantification range.
+#' @param criteria See [qc_criteria()].
+#' @param group_vars Columns defining a replicate group; `NULL` for the
+#'   default grouping (see [replicate_groups()]).
+#'
+#' @return A list with `samples` (see [summarise_samples()], with the
+#'   `"Dilution non-linear"` flag added), `dilution` (see
+#'   [dilution_linearity()]) and `warnings` (list of messages).
+#' @export
+assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group_vars = NULL) {
+    samples <- summarise_samples(result, range, criteria, group_vars)
+    dilution <- NULL
+    if (!is.null(samples) && 'dilution' %in% names(result)) {
+        if (length(group_vars) == 0) {
+            key_cols <- intersect(c('sample.name', 'sample.date'), names(samples))
+            by_dilution <- samples
+        } else {
+            key_cols <- setdiff(group_vars, 'dilution')
+            by_dilution <- if ('dilution' %in% group_vars) samples else
+                summarise_samples(result, range, criteria, c(key_cols, 'dilution'))
+        }
+        if (length(key_cols) > 0) dilution <- dilution_linearity(by_dilution, criteria, key_cols)
+        if (!is.null(dilution) && any(!dilution$pass)) {
+            key <- function(x) do.call(paste, c(lapply(x[key_cols], as.character), sep = ' | '))
+            hit <- key(samples) %in% key(dilution[!dilution$pass, , drop = FALSE])
+            samples$flag[hit] <- ifelse(samples$flag[hit] == FLAGS$ok, FLAGS$nonlinear,
+                                        paste(FLAGS$nonlinear, samples$flag[hit], sep = '; '))
+        }
+    }
+
+    warnings <- list()
+    n_cv <- if (is.null(samples)) 0 else sum(grepl(FLAGS$high_cv, samples$flag, fixed = TRUE))
+    if (n_cv > 0) warnings <- c(warnings, list(lin_message('quality.warn_cv', n = n_cv)))
+    if (!is.null(dilution) && any(!dilution$pass)) {
+        cols <- setdiff(names(dilution), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
+        n_bad <- nrow(unique(dilution[!dilution$pass, cols, drop = FALSE]))
+        warnings <- c(warnings, list(lin_message('quality.warn_dilution', n = n_bad)))
+    }
+    list(samples = samples, dilution = dilution, warnings = warnings)
+}
+
+
+#' Message Keys of the Sample Assessment
+#'
+#' Warnings that depend on the grouping of the replicates; the app shows them
+#' in the result summary, where the grouping is chosen.
+#'
+#' @return Character vector of dictionary keys.
+#' @keywords internal
+sample_warning_keys <- function() c('quality.warn_cv', 'quality.warn_dilution')
 
 
 #' Assess Quality Controls
@@ -260,20 +352,9 @@ assess_qc <- function(qc, range, criteria = qc_criteria()) {
 #' @keywords internal
 assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_fit,
                        criteria = qc_criteria()) {
-    samples <- summarise_samples(result, range, criteria)
-    dilution <- dilution_linearity(samples, criteria)
-    if (!is.null(dilution) && !is.null(samples)) {
-        bad <- dilution[!dilution$pass, intersect(c('sample.name', 'sample.date'), names(dilution)),
-                        drop = FALSE]
-        if (nrow(bad) > 0) {
-            key_cols <- names(bad)
-            k_s <- do.call(paste, c(lapply(samples[key_cols], as.character), sep = ' | '))
-            k_b <- do.call(paste, c(lapply(bad[key_cols], as.character), sep = ' | '))
-            hit <- k_s %in% k_b
-            samples$flag[hit] <- ifelse(samples$flag[hit] == FLAGS$ok, FLAGS$nonlinear,
-                                        paste(FLAGS$nonlinear, samples$flag[hit], sep = '; '))
-        }
-    }
+    sample_assessment <- assess_samples(result, range, criteria)
+    samples <- sample_assessment$samples
+    dilution <- sample_assessment$dilution
     qc_assessment <- assess_qc(qc, range, criteria)
 
     res <- fit$y - curve_fun(fit, fit$x)
@@ -290,16 +371,7 @@ assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_f
     }
     accepted <- length(reasons) == 0
 
-    warnings <- list()
-    if (!is.null(samples) && any(grepl(FLAGS$high_cv, samples$flag, fixed = TRUE))) {
-        warnings <- c(warnings, list(lin_message('quality.warn_cv',
-                                                 n = sum(grepl(FLAGS$high_cv, samples$flag, fixed = TRUE)))))
-    }
-    if (!is.null(dilution) && any(!dilution$pass)) {
-        n_bad <- nrow(unique(dilution[!dilution$pass, intersect(c('sample.name', 'sample.date'),
-                                                                  names(dilution)), drop = FALSE]))
-        warnings <- c(warnings, list(lin_message('quality.warn_dilution', n = n_bad)))
-    }
+    warnings <- sample_assessment$warnings
     if (!is.na(curve$r2) && curve$r2 < 0.99) {
         warnings <- c(warnings, list(lin_message('quality.warn_r2', r2 = round(curve$r2, 4))))
     }

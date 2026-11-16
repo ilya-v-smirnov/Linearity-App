@@ -2,15 +2,21 @@
 #'
 #' The sidebar holds the grouping columns (with the number of distinct values
 #' of each column, quick choices and a preview of the number of rows), the
-#' statistics to show and the download; the main area shows the aggregated
-#' table.
+#' statistics to show, the acceptance criteria of the samples and the
+#' download. The grouping defines the replicates: the precision of each group
+#' and the dilution linearity of the samples are assessed with it (see
+#' [assess_samples()]). The main area has two tabs: the aggregated table with
+#' the dilution linearity and the quality controls, and the infographics of
+#' the samples.
 #'
 #' @param id Module id.
 #' @param lang Language code.
 #' @param curve List of reactives returned by [mod_curve_server()].
 #' @param rounding Reactive from [mod_rounding_server()].
 #'
-#' @return `mod_summary_server()` returns a reactive with the aggregated table.
+#' @return `mod_summary_server()` returns a list of reactives: `table` (the
+#'   aggregated table shown), `assessment` (see [assess_samples()]) and
+#'   `warnings` (translated warnings of the samples).
 #' @name mod_summary
 #' @keywords internal
 NULL
@@ -32,7 +38,28 @@ grouping_columns <- function(result) {
 
 #' Statistics of the Summary Table
 #' @keywords internal
-summary_statistics <- function() c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min', 'max')
+summary_statistics <- function() c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min', 'max', 'flag')
+
+
+#' Summary Table for Display
+#'
+#' @param samples `samples` element of [assess_samples()].
+#' @param group_vars Grouping columns.
+#' @param stats Statistics to keep (see [summary_statistics()]).
+#' @param round_fun,round_par Rounding of the concentrations.
+#' @param lang Language code of the flags.
+#'
+#' @return A data.frame, or `NULL` without groups.
+#' @keywords internal
+summary_table <- function(samples, group_vars, stats = summary_statistics(), round_fun = signif, round_par = 3,
+                          lang = 'en') {
+    if (is.null(samples) || length(group_vars) == 0) return(NULL)
+    out <- samples
+    for (col in c('mean', 'sd', 'min', 'max')) out[[col]] <- round_fun(out[[col]], round_par)
+    out$cv <- round(out$cv, 1)
+    out$flag <- translate_flags(out$flag, lang)
+    out[, c(group_vars, intersect(summary_statistics(), stats)), drop = FALSE]
+}
 
 
 #' @rdname mod_summary
@@ -59,6 +86,7 @@ mod_summary_ui <- function(id, lang) {
                                       choices = stats::setNames(stats, vapply(paste0('summary.stat_', stats), t, '')),
                                       selected = stats)
         ),
+        mod_criteria_ui('criteria', lang, 'samples'),
         sidebar_group(
             t('results.export'), 'file-excel',
             shiny::downloadButton(ns('download'), t('summary.download'), icon = shiny::icon('download'),
@@ -66,10 +94,21 @@ mod_summary_ui <- function(id, lang) {
         )
     )
 
-    main <- bslib::card(
+    main <- bslib::navset_card_underline(
         full_screen = TRUE,
-        bslib::card_header(t('tab.summary')),
-        bslib::card_body(shiny::div(class = 'step-view', shiny::uiOutput(ns('empty')), DT::DTOutput(ns('table'))))
+        bslib::nav_panel(
+            t('summary.tab_table'), value = 'table',
+            shiny::div(class = 'step-view',
+                       shiny::uiOutput(ns('warnings')),
+                       shiny::uiOutput(ns('empty')),
+                       DT::DTOutput(ns('table')),
+                       shiny::uiOutput(ns('dilution')),
+                       shiny::uiOutput(ns('qc')))
+        ),
+        bslib::nav_panel(
+            t('summary.tab_infographics'), value = 'infographics',
+            shiny::div(class = 'step-view', shiny::uiOutput(ns('infographics')))
+        )
     )
 
     bslib::layout_sidebar(sidebar = sidebar, main)
@@ -78,6 +117,7 @@ mod_summary_ui <- function(id, lang) {
 #' @rdname mod_summary
 mod_summary_server <- function(id, lang, curve, rounding) {
     shiny::moduleServer(id, function(input, output, session) {
+        ns <- session$ns
         t <- function(key, ...) tr(key, lang, ...)
         result <- shiny::reactive(curve$result()$result)
         columns <- shiny::reactive(grouping_columns(result()))
@@ -112,35 +152,111 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             intersect(columns(), vars)
         })
 
-        full <- shiny::reactive({
-            r <- rounding()
-            aggregate_result(result(), group_vars = group_vars(), round_fun = r$fun, round_par = r$par)
+        # The groups of the summary are the replicates of the quality assessment
+        assessment <- shiny::reactive({
+            vars <- group_vars()
+            if (length(vars) == 0) return(NULL)
+            r <- curve$result()
+            assess_samples(r$result, r$calibration_range, r$quality$criteria, vars)
+        })
+        warnings <- shiny::reactive({
+            a <- assessment()
+            if (is.null(a)) character(0) else message_text(a$warnings, lang)
         })
 
         table <- shiny::reactive({
-            out <- full()
-            if (is.null(out)) return(NULL)
+            a <- assessment()
+            if (is.null(a)) return(NULL)
+            r <- rounding()
             # No choice (before the first answer of the browser, or nothing ticked): all statistics
             stats <- if (is.null(input$stats)) summary_statistics() else input$stats
-            out[, c(group_vars(), intersect(summary_statistics(), stats)), drop = FALSE]
+            summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang)
+        })
+        tables <- shiny::reactive({
+            a <- assessment()
+            list(dilution = if (!is.null(a)) quality_tables(list(dilution = a$dilution), lang)$dilution,
+                 qc = quality_tables(list(qc = curve$result()$quality$qc), lang)$qc)
         })
 
         output$preview <- shiny::renderUI({
             shiny::req(result())
-            n_rows <- if (is.null(full())) 0 else nrow(full())
+            n_rows <- if (is.null(table())) 0 else nrow(table())
             shiny::div(class = 'summary-preview', shiny::icon('arrow-right'), ' ',
                        t('summary.preview', wells = nrow(result()), rows = n_rows))
         })
 
-        output$empty <- shiny::renderUI({
-            if (!is.null(table())) return(NULL)
+        empty_state <- function() {
             shiny::div(class = 'empty-state', shiny::icon('layer-group', class = 'fa-2x'),
                        shiny::p(t('summary.choose')))
-        })
+        }
+        output$empty <- shiny::renderUI(if (is.null(table())) empty_state())
+        output$warnings <- shiny::renderUI(notes_ui(warnings(), lang))
 
         output$table <- DT::renderDT({
             shiny::req(table())
             results_datatable(table(), lang)
+        })
+
+        output$dilution <- shiny::renderUI({
+            if (is.null(tables()$dilution)) return(NULL)
+            shiny::tagList(shiny::h5(class = 'mt-4', with_tooltip(t('quality.section_dilution'),
+                                                                  t('summary.dilution_help'))),
+                           shiny::tableOutput(ns('dilution_table')))
+        })
+        output$dilution_table <- shiny::renderTable(tables()$dilution, na = '')
+
+        output$qc <- shiny::renderUI({
+            if (is.null(tables()$qc)) return(NULL)
+            shiny::tagList(shiny::h5(class = 'mt-4', t('quality.section_qc')), shiny::tableOutput(ns('qc_table')))
+        })
+        output$qc_table <- shiny::renderTable(tables()$qc, na = '')
+
+        # Infographics ---------------------------------------------------------
+        figure <- shiny::reactive({
+            a <- assessment()
+            if (is.null(a)) return(NULL)
+            sample_figure_data(result(), a$samples, group_vars())
+        })
+
+        output$infographics <- shiny::renderUI({
+            a <- assessment()
+            if (is.null(a)) return(empty_state())
+            qc <- curve$result()$quality$qc
+            n_groups <- nrow(a$samples)
+            shiny::tagList(
+                samples_tiles_ui(a, qc, lang),
+                shiny::div(class = 'infographic',
+                           shiny::div(class = 'infographic-title', t('samples.figure_title')),
+                           shiny::plotOutput(ns('groups_plot'), height = paste0(groups_plot_height(n_groups), 'px')),
+                           samples_legend_ui(lang)),
+                shiny::fluidRow(
+                    shiny::column(6, shiny::div(
+                        class = 'infographic',
+                        shiny::div(class = 'infographic-title', with_tooltip(t('quality.section_dilution'),
+                                                                             t('summary.dilution_help'))),
+                        if (is.null(a$dilution)) shiny::p(class = 'text-muted small mb-0', t('samples.no_dilution'))
+                        else shiny::plotOutput(ns('dilution_plot'), height = '300px'))),
+                    shiny::column(6, shiny::div(
+                        class = 'infographic',
+                        shiny::div(class = 'infographic-title', t('quality.section_qc')),
+                        if (is.null(qc)) shiny::p(class = 'text-muted small mb-0', t('samples.no_qc'))
+                        else shiny::plotOutput(ns('qc_plot'), height = '300px')))
+                )
+            )
+        })
+        output$groups_plot <- shiny::renderPlot({
+            shiny::req(figure())
+            plot_sample_groups(figure(), lang)
+        })
+        output$dilution_plot <- shiny::renderPlot({
+            a <- assessment()
+            shiny::req(a$dilution)
+            plot_dilution_linearity(a$dilution, curve$result()$quality$criteria, lang)
+        })
+        output$qc_plot <- shiny::renderPlot({
+            qc <- curve$result()$quality$qc
+            shiny::req(qc)
+            plot_qc_accuracy(qc, lang)
         })
 
         output$download <- shiny::downloadHandler(
@@ -148,10 +264,12 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             content = function(file) {
                 sheets <- list(table())
                 names(sheets) <- t('tab.summary')
+                if (!is.null(tables()$dilution)) sheets[[t('quality.section_dilution')]] <- tables()$dilution
+                if (!is.null(tables()$qc)) sheets[[t('quality.section_qc')]] <- tables()$qc
                 openxlsx::write.xlsx(sheets, file, rowNames = FALSE, overwrite = TRUE)
             }
         )
 
-        table
+        list(table = table, assessment = assessment, warnings = warnings)
     })
 }

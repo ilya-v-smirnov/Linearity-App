@@ -29,6 +29,9 @@ test_that('criteria have ICH M10 defaults and are validated', {
     expect_equal(c(cr$std_bias, cr$std_bias_edge, cr$cv, cr$min_levels), c(20, 25, 20, 6))
     expect_error(qc_criteria(cv = -1), 'Invalid acceptance criteria: cv')
     expect_error(qc_criteria(range = 'some'), 'range')
+    expect_equal(c(cr$sample_cv, cr$sample_cv_edge), c(20, 25))
+    expect_equal(qc_criteria(cv = 15)$sample_cv, 15)
+    expect_equal(qc_criteria(cv = 15, sample_cv = 30)$sample_cv, 30)
 })
 
 test_that('standard levels are accepted with tighter limits inside the range', {
@@ -150,27 +153,31 @@ test_that('aggregated results include SD and CV', {
     expect_equal(out$cv, c(round(100 * sqrt(2) / 2, 1), NA))
 })
 
-test_that('quality and criteria modules work', {
+test_that('criteria module reads both parts of the criteria', {
     shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
         session$setInputs(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20, min_fraction = 75,
-                          min_levels = 6, qc_bias = 15, qc_bias_edge = 20, qc_fraction = 67,
-                          qc_level_fraction = 50, dilution_bias = 20, dilution_cv = 20, range = 'all')
+                          min_levels = 6, sample_cv = 10, sample_cv_edge = 12, qc_bias = 15, qc_bias_edge = 20,
+                          qc_fraction = 67, qc_level_fraction = 50, dilution_bias = 20, dilution_cv = 20,
+                          range = 'all')
         cr <- session$returned()
         expect_equal(cr$std_bias, 15)
         expect_equal(cr$min_fraction, 0.75)
+        expect_equal(c(cr$sample_cv, cr$sample_cv_edge), c(10, 12))
         expect_equal(cr$range, 'all')
         session$setInputs(cv = -5)
         expect_error(session$returned(), 'Invalid acceptance criteria')
-        session$setInputs(reset = 1)
+        session$setInputs(reset_standards = 1, reset_samples = 1)
     })
+    expect_setequal(unique(LinearityApp:::criteria_fields()$part), c('standards', 'samples'))
+})
 
+test_that('the verdict of the run is shown with the model parameters', {
     r <- calculate(run_data(bias = c('3' = 1.5, '5' = 0.6)), 'LRM')
-    curve <- list(result = shiny::reactive(r))
-    shiny::testServer(LinearityApp:::mod_quality_server, args = list(lang = 'ru', curve = curve), {
-        expect_match(output$verdict$html, tr('quality.rejected', 'ru'), fixed = TRUE)
-        expect_match(output$standards, tr('quality.fail', 'ru'), fixed = TRUE)
-        expect_null(output$qc)
-    })
+    html <- as.character(LinearityApp:::verdict_ui(r, 'ru'))
+    expect_match(html, tr('quality.rejected', 'ru'), fixed = TRUE)
+    expect_match(html, 'alert-danger', fixed = TRUE)
+    ok <- calculate(run_data(), 'LRM')
+    expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'Run accepted', fixed = TRUE)
 })
 
 test_that('the report contains the quality section', {
@@ -186,15 +193,59 @@ test_that('the report contains the quality section', {
     expect_true('Dilution linearity' %in% text)
 })
 
-test_that('the quality step has grouped criteria in the sidebar and two tabs', {
-    html <- as.character(LinearityApp:::mod_quality_ui('quality', 'en'))
-    expect_match(html, 'bslib-sidebar-layout', fixed = TRUE)
-    expect_match(html, 'id="quality-criteria-std_bias"', fixed = TRUE)
-    expect_match(html, 'id="quality-criteria-dilution_cv"', fixed = TRUE)
-    for (key in c('crit.group_standards', 'crit.group_replicates', 'crit.group_qc', 'crit.group_dilution',
-                  'quality.tab_standards', 'quality.tab_samples')) {
-        expect_match(html, tr(key, 'en'), fixed = TRUE, info = key)
+test_that('criteria of the standards are in the curve step, those of the samples in the summary', {
+    curve <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
+    expect_match(curve, 'id="criteria-std_bias"', fixed = TRUE)
+    expect_match(curve, 'id="criteria-range"', fixed = TRUE)
+    expect_false(grepl('id="criteria-dilution_cv"', curve, fixed = TRUE))
+    expect_match(curve, 'id="curve-standards"', fixed = TRUE)
+    expect_match(curve, 'id="curve-verdict"', fixed = TRUE)
+
+    summary <- as.character(LinearityApp:::mod_summary_ui('summary', 'en'))
+    for (id in c('sample_cv', 'sample_cv_edge', 'qc_bias', 'dilution_cv')) {
+        expect_match(summary, paste0('id="criteria-', id, '"'), fixed = TRUE, info = id)
     }
+    expect_false(grepl('id="criteria-std_bias"', summary, fixed = TRUE))
+    for (key in c('crit.group_replicates', 'crit.group_qc', 'crit.group_dilution', 'summary.tab_table',
+                  'summary.tab_infographics')) {
+        expect_match(summary, tr(key, 'en'), fixed = TRUE, info = key)
+    }
+})
+
+test_that('replicates follow the grouping chosen by the user', {
+    # A: two dilutions that agree; B: two dilutions that do not; one well each
+    samples <- data.frame(name = c('A', 'A', 'B', 'B'), dilution = c(2, 4, 2, 4), od = c(0.4, 0.2, 0.4, 0.3))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+
+    by_sample <- assess_samples(r$result, r$calibration_range, group_vars = 'sample.name')
+    expect_equal(by_sample$samples$sample.name, c('A', 'B'))
+    expect_equal(by_sample$samples$n, c(2, 2))
+    expect_equal(by_sample$samples$min, c(40, 40))
+    # dilutions are compared within the groups even when they are averaged together
+    expect_equal(nrow(by_sample$dilution), 4)
+    expect_match(by_sample$samples$flag[2], 'Dilution non-linear', fixed = TRUE)
+    expect_match(by_sample$samples$flag[2], 'High CV', fixed = TRUE)
+    expect_equal(by_sample$samples$flag[1], 'OK')
+    expect_equal(vapply(by_sample$warnings, function(m) m$key, ''), c('quality.warn_cv', 'quality.warn_dilution'))
+
+    by_dilution <- assess_samples(r$result, r$calibration_range, group_vars = c('sample.name', 'dilution'))
+    expect_equal(nrow(by_dilution$samples), 4)
+    expect_equal(by_dilution$samples$dilution, c(2, 4, 2, 4))
+    expect_equal(nrow(by_dilution$dilution), 4)
+
+    # without the sample name, there are no samples to compare dilutions in
+    only_dilution <- assess_samples(r$result, r$calibration_range, group_vars = 'dilution')
+    expect_null(only_dilution$dilution)
+    expect_equal(only_dilution$samples$n, c(2, 2))
+})
+
+test_that('the CV limit of samples near the ends of the range follows the concentration in the well', {
+    samples <- data.frame(name = c('lo', 'lo', 'mid', 'mid'), dilution = c(10, 10, 1, 1),
+                          od = c(0.022, 0.026, 0.40, 0.42))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    s <- assess_samples(r$result, r$calibration_range, qc_criteria(sample_cv = 10, sample_cv_edge = 30),
+                        group_vars = 'sample.name')$samples
+    expect_equal(s$cv.limit, c(30, 10))
 })
 
 test_that('quality controls without a code are grouped by their nominal concentration', {

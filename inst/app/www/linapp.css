@@ -488,3 +488,26 @@
     font-style: italic;
     color: var(--bs-secondary-color);
 }
+
+.crit-subtitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    margin: 0.25rem 0 0.4rem;
+}
+
+/* Summary step: infographics of the samples ------------------------------ */
+
+.stat-tile.stat-good { border-left: 4px solid #1b5e20; }
+.stat-tile.stat-bad  { border-left: 4px solid #c62828; }
+
+.quant-swatch.cv-pass { background: #2c6e9b; }
+.quant-swatch.cv-fail { background: #c62828; }
+
+.legend-mean {
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 0.8rem;
+    width: 0.8rem;
+    text-align: center;
+}

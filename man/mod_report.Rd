@@ -8,7 +8,7 @@
 \usage{
 mod_report_ui(id, lang)
 
-mod_report_server(id, lang, curve, means)
+mod_report_server(id, lang, curve, summary)
 }
 \arguments{
 \item{id}{Module id.}
@@ -17,7 +17,8 @@ mod_report_server(id, lang, curve, means)
 
 \item{curve}{List of reactives returned by \code{\link[=mod_curve_server]{mod_curve_server()}}.}
 
-\item{means}{Reactive with the aggregated table.}
+\item{summary}{List of reactives returned by \code{\link[=mod_summary_server]{mod_summary_server()}}: the
+aggregated table and the assessment of the samples.}
 }
 \description{
 The sidebar holds the experiment title, the type of the report (short or

@@ -114,7 +114,10 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
 - Click **"Download Results"** to export as Excel or CSV.
 
 ### 6. Check the Quality of the Run
-The **Quality** tab shows whether the run is accepted and why:
+The quality assessment is split between two steps:
+
+- **Standard curve → Model parameters** shows the verdict of the run (accepted or rejected, LLOQ – ULOQ, number of accepted standard levels), the model coefficients, the back-calculated standards and the quality of the curve. The acceptance criteria of the standards are in the sidebar of this step.
+- **Result Summary** assesses the samples. The columns ticked under **Group results by** define the replicates: each row of the summary is a replicate group, its CV is checked against the limit (flag `High CV`), and the dilutions of a sample are compared within the rows without the dilution column (flag `Dilution non-linear`). The **Table** tab shows the summary with flags, the dilution linearity and the quality controls; the **Infographics** tab shows summary tiles, the concentrations of each group with mean ± SD, the CV of the replicates against the limit, the wells by quantification status, the dilution linearity and the accuracy of the QC. The acceptance criteria of the samples, QC and dilutions are in the sidebar of this step.
 
 | Check | How | Default limit (ICH M10, ligand binding assays) |
 |-------|-----|-------------------------------------------------|
@@ -122,11 +125,11 @@ The **Quality** tab shows whether the run is accepted and why:
 | Calibration | number of accepted standard levels | ≥ 75 % and ≥ 6 levels |
 | LLOQ / ULOQ | lowest and highest accepted standard level; samples outside are flagged `< LLOQ` / `> ULOQ` | — |
 | Quality controls | bias of each QC well; rule: ≥ 2/3 of all QC and ≥ 50 % of each level within limits | ±20 % (±25 % near LLOQ/ULOQ) |
-| Samples | mean, SD and CV of replicates (same `id`, or same name, dilution and date); flag `High CV` | CV ≤ 20 % (25 % near LLOQ/ULOQ) |
+| Samples | mean, SD and CV of the replicates of each row of the summary; flag `High CV` | CV ≤ 20 % (25 % near LLOQ/ULOQ) |
 | Dilution linearity | for samples measured at several dilutions: deviation of each dilution from the mean and CV between dilutions; flag `Dilution non-linear` | ±20 %, CV ≤ 20 % |
 | Curve | R², residual standard error, lack-of-fit test | warning if R² < 0.99 or lack of fit p < 0.05 |
 
-The run is rejected if the calibration or the QC rule fails; replicate CV, dilution linearity and curve quality give warnings. All limits can be changed in the **Acceptance criteria** block (for chromatographic assays use 15 % / 20 %); the quantification range can also be set to all standards used in the fit.
+The run is rejected if the calibration or the QC rule fails; replicate CV, dilution linearity and curve quality give warnings. For chromatographic assays use 15 % / 20 %; the quantification range can also be set to all standards used in the fit. From the console, `assess_samples(res$result, res$calibration_range, group_vars = c("sample.name", "dilution"))` assesses the samples with any grouping.
 
 ### 7. Generate a Summary Report
 - Navigate to the **Report** tab, enter an **experiment title** and click **"Download Report"**.

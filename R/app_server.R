@@ -13,11 +13,10 @@ app_server <- function(input, output, session, default_lang = 'en') {
     template <- mod_template_server('template', lang)
     data <- mod_import_server('import', lang, by = template$by)$data
     rounding <- mod_rounding_server('rounding')
-    criteria <- mod_criteria_server('quality-criteria', lang)
+    criteria <- mod_criteria_server('criteria', lang)
     options <- mod_quant_options_server('results-options')
     curve <- mod_curve_server('curve', lang, data, rounding, criteria, options)
     mod_results_server('results', lang, curve, by = template$by)
-    mod_quality_server('quality', lang, curve)
-    means <- mod_summary_server('summary', lang, curve, rounding)
-    mod_report_server('report', lang, curve, means)
+    summary <- mod_summary_server('summary', lang, curve, rounding)
+    mod_report_server('report', lang, curve, summary)
 }

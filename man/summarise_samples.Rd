@@ -4,19 +4,31 @@
 \alias{summarise_samples}
 \title{Summary of Sample Replicates}
 \usage{
-summarise_samples(result, range, criteria = qc_criteria())
+summarise_samples(
+  result,
+  range = NULL,
+  criteria = qc_criteria(),
+  group_vars = NULL
+)
 }
 \arguments{
 \item{result}{Well-level sample results from \code{\link[=calculate]{calculate()}}.}
 
-\item{range}{Quantification range.}
+\item{range}{Quantification range; \code{NULL} uses the limit inside the range
+(\code{sample_cv}) for every group.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
+
+\item{group_vars}{Columns defining a replicate group (see
+\code{\link[=replicate_groups]{replicate_groups()}}); \code{NULL} for the default grouping.}
 }
 \value{
-A data.frame with one row per replicate group: identification
-columns, \code{n}, \code{n.quantified}, \code{mean}, \code{sd}, \code{cv} (\%), \code{cv.limit} and
-\code{flag} (codes from \link{FLAGS} separated by \code{"; "}).
+A data.frame with one row per replicate group (in the order of the
+wells; with \code{group_vars}, ordered by the columns, each in the order of
+its first appearance): identification columns (\code{group_vars}, or \code{id}, \code{sample.name},
+\code{dilution}, \code{sample.date} for the default grouping), \code{n}, \code{n.quantified},
+\code{mean}, \code{sd}, \code{cv} (\%), \code{min}, \code{max}, \code{cv.limit} and \code{flag} (codes from
+\link{FLAGS} separated by \code{"; "}); \code{NULL} without wells.
 }
 \description{
 Summary of Sample Replicates

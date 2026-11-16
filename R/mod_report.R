@@ -7,7 +7,8 @@
 #' @param id Module id.
 #' @param lang Language code.
 #' @param curve List of reactives returned by [mod_curve_server()].
-#' @param means Reactive with the aggregated table.
+#' @param summary List of reactives returned by [mod_summary_server()]: the
+#'   aggregated table and the assessment of the samples.
 #'
 #' @name mod_report
 #' @keywords internal
@@ -50,7 +51,7 @@ mod_report_ui <- function(id, lang) {
 }
 
 #' @rdname mod_report
-mod_report_server <- function(id, lang, curve, means) {
+mod_report_server <- function(id, lang, curve, summary) {
     shiny::moduleServer(id, function(input, output, session) {
         type <- shiny::reactive(if (is.null(input$type)) 'short' else input$type)
 
@@ -62,6 +63,12 @@ mod_report_server <- function(id, lang, curve, means) {
 
         blocks <- shiny::reactive({
             r <- curve$result()
+            # The samples are assessed with the grouping of the result summary
+            assessment <- summary$assessment()
+            sample_warnings <- if (is.null(assessment)) list() else assessment$warnings
+            tables <- quality_tables(r$quality, lang)
+            tables$samples <- NULL
+            tables$dilution <- if (!is.null(assessment)) quality_tables(assessment, lang)$dilution
             report_blocks(type(),
                           date = as.character(Sys.Date()),
                           title = if (is.null(input$title)) '' else input$title,
@@ -70,13 +77,13 @@ mod_report_server <- function(id, lang, curve, means) {
                           weights = weight_labels(curve$weights(), lang),
                           model_table = curve$coef_table(),
                           result_table = localize_result(r$result, lang),
-                          means_table = means(),
+                          means_table = summary$table(),
                           qc_table = localize_result(r$qc, lang),
                           exclusions = exclusions_table(r$exclusions, lang),
                           comparison = comparison_table(curve$comparison(), lang),
-                          quality = list(summary = quality_summary(r, lang),
-                                         tables = quality_tables(r$quality, lang)),
-                          notes = curve$notes(),
+                          quality = list(summary = quality_summary(r, lang, sample_warnings),
+                                         tables = tables),
+                          notes = c(curve$notes(), message_text(sample_warnings, lang)),
                           lang = lang)
         })
 
