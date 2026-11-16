@@ -441,6 +441,24 @@
     line-height: 1.2;
 }
 
+/* Values of a fixed preset of the criteria, in place of the inputs */
+.crit-row > .crit-label {
+    flex: 1;
+    margin-bottom: 0.6rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+.crit-row > .crit-value {
+    width: 5rem;
+    flex: none;
+    margin-bottom: 0.6rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-tertiary-bg);
+    font-size: 0.9rem;
+}
+
 .crit-row > .form-group.shiny-input-container {
     width: 5rem;
     flex: none;

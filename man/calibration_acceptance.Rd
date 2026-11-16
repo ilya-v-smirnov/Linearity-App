@@ -7,15 +7,23 @@
 calibration_acceptance(standards, criteria = qc_criteria())
 }
 \arguments{
-\item{standards}{Output of \code{\link[=assess_standards]{assess_standards()}}.}
+\item{standards}{Output of \code{\link[=assess_standards]{assess_standards()}} with all levels of the run.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
 }
 \value{
-A list with \code{n_levels}, \code{n_pass}, \code{accepted}, \code{lloq} and \code{uloq}
+A list with \code{n_levels}, \code{n_pass}, \code{n_needed}, \code{accepted},
+\code{n_no_cv} (accepted levels whose CV cannot be assessed), \code{n_cv}
+(accepted levels with an assessed CV), \code{n_cv_needed} (\code{min_levels}),
+\code{status}
+(\code{"accepted"}, \code{"accepted_no_cv"} or \code{"rejected"}), \code{lloq} and \code{uloq}
 (lowest and highest accepted level, \code{NA} if none).
 }
 \description{
-Acceptance of the Calibration
+The calibration is accepted if at least \code{min_fraction} of all standard
+levels of the run, and at least \code{min_levels} levels, are accepted. The CV
+of a level without replicates cannot be assessed: when fewer than
+\code{min_levels} accepted levels have an assessed CV, the calibration is
+accepted with this exception (\code{status = "accepted_no_cv"}).
 }
 \keyword{internal}

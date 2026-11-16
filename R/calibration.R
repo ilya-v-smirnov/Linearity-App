@@ -320,7 +320,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     notes <- c(notes, fit$notes)
 
     # Quantification range: accepted standard levels
-    standards <- assess_standards(fit, criteria)
+    # All levels of the run count, also those without points in the fit
+    standards <- assess_standards(fit, criteria, levels = data$conc[data$type == 'standard'])
     calibration <- calibration_acceptance(standards, criteria)
     conc_range <- fit$conc_range
     if (criteria$range == 'accepted') {

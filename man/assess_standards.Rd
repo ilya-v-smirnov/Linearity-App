@@ -4,21 +4,27 @@
 \alias{assess_standards}
 \title{Assess Standard Levels}
 \usage{
-assess_standards(fit, criteria = qc_criteria())
+assess_standards(fit, criteria = qc_criteria(), levels = NULL)
 }
 \arguments{
 \item{fit}{A \code{lin_fit} object.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
+
+\item{levels}{Concentrations of all standard levels of the run; by default
+the levels of the fit.}
 }
 \value{
-A data.frame with one row per level: \code{conc}, \code{n}, \code{od.mean},
-\code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%), \code{bias.limit},
-\code{cv.limit}, \code{pass}.
+A data.frame with one row per level: \code{conc}, \code{n} (points in the
+fit), \code{od.mean}, \code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%),
+\code{bias.limit}, \code{cv.limit}, \code{pass}.
 }
 \description{
 Back-calculates the standards used in the fit and checks, for each level,
 the bias of the mean back-calculated concentration and the CV of the
 back-calculated concentrations of the replicates.
-The lowest and highest levels use the \verb{_edge} limits.
+The lowest and highest levels of the fit (boundary calibrators) use the
+\verb{_edge} limits. The CV of a level with one point cannot be assessed: such a
+level is judged by its bias only. Levels of the run without points in the
+fit (all excluded or without a valid OD) are not accepted.
 }

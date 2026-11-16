@@ -18,9 +18,10 @@ for none.}
 A shiny tag.
 }
 \description{
-A green or red box with the acceptance of the calibration (the standards
-only; the quality controls are assessed in the result summary), the
-accepted calibration range, the number of accepted standard levels and the
-reason of a rejection.
+A green, orange or red box with the acceptance of the calibration (the
+standards only; the quality controls are assessed in the result summary),
+the accepted calibration range, the number of accepted standard levels and
+the reason of a rejection. Orange: accepted, but the CV is assessed for
+fewer accepted levels than required (levels without replicates).
 }
 \keyword{internal}

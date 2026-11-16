@@ -34,14 +34,16 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     st <- quality$standards
     if (!is.null(st)) {
         st <- st[order(st$conc, decreasing = TRUE), , drop = FALSE]
+        # Values that cannot be computed (no points, one point for the CV) as dashes
+        dash <- function(x) ifelse(x == '', '\u2014', x)
         # Values failing the criteria are wrapped in a span for display as HTML
         fail <- function(x, failed) {
             if (highlight) ifelse(failed, paste0('<span class="crit-fail">', x, '</span>'), x) else x
         }
         bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
         cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
-        standards <- name(data.frame(num(st$conc), st$n, num(st$od.mean, 4), num(st$calc.mean),
-                                     fail(pct(st$calc.cv), cv_failed), fail(pct(st$bias), bias_failed),
+        standards <- name(data.frame(num(st$conc), st$n, dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
+                                     fail(dash(pct(st$calc.cv)), cv_failed), fail(dash(pct(st$bias)), bias_failed),
                                      sprintf('%g', st$bias.limit), fail(mark(st$pass), !st$pass)),
                           c('col.conc', 'col.count', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
                             'col.limit', 'col.pass'))
@@ -159,10 +161,11 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
 
 #' Verdict of the Calibration
 #'
-#' A green or red box with the acceptance of the calibration (the standards
-#' only; the quality controls are assessed in the result summary), the
-#' accepted calibration range, the number of accepted standard levels and the
-#' reason of a rejection.
+#' A green, orange or red box with the acceptance of the calibration (the
+#' standards only; the quality controls are assessed in the result summary),
+#' the accepted calibration range, the number of accepted standard levels and
+#' the reason of a rejection. Orange: accepted, but the CV is assessed for
+#' fewer accepted levels than required (levels without replicates).
 #'
 #' @param result Output of [calculate()].
 #' @param lang Language code.
@@ -174,6 +177,7 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
 verdict_ui <- function(result, lang, unit = '') {
     cal <- result$quality$calibration
     accepted <- isTRUE(cal$accepted)
+    no_cv <- accepted && identical(cal$status, 'accepted_no_cv')
     range <- tr('quality.calibration_range', lang, lloq = signif(result$calibration_range[1], 3),
                 uloq = signif(result$calibration_range[2], 3),
                 unit = if (nzchar(unit)) paste0(' ', unit) else '')
@@ -181,10 +185,16 @@ verdict_ui <- function(result, lang, unit = '') {
     reason <- if (!accepted) {
         tr('quality.reason_calibration', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed)
     }
-    title <- tr(if (accepted) 'quality.calibration_accepted' else 'quality.calibration_rejected', lang)
+    if (no_cv) {
+        reason <- tr('quality.reason_no_cv', lang, n_cv = cal$n_cv, needed = cal$n_cv_needed, n = cal$n_no_cv)
+    }
+    key <- if (no_cv) 'calibration_accepted_no_cv' else if (accepted) 'calibration_accepted' else
+        'calibration_rejected'
+    style <- if (no_cv) 'alert-warning' else if (accepted) 'alert-success' else 'alert-danger'
+    icon <- if (no_cv) 'triangle-exclamation' else if (accepted) 'circle-check' else 'circle-xmark'
     shiny::div(class = 'quality-verdict',
-               shiny::div(class = if (accepted) 'alert alert-success' else 'alert alert-danger',
-                          shiny::h4(shiny::icon(if (accepted) 'circle-check' else 'circle-xmark'), ' ', title),
+               shiny::div(class = paste('alert', style),
+                          shiny::h4(shiny::icon(icon), ' ', tr(paste0('quality.', key), lang)),
                           shiny::p(range), shiny::p(levels),
                           if (!is.null(reason)) shiny::tags$ul(shiny::tags$li(reason))))
 }
@@ -216,6 +226,10 @@ criteria_fields <- function() {
 #' in different steps (`part = "standards"` in the standard curve step,
 #' `part = "samples"` in the result summary step) and read by one server.
 #'
+#' The criteria of the standards come from a preset (see
+#' [criteria_presets()]): the fixed presets show their values, the custom one
+#' shows inputs starting from the values of ICH M10.
+#'
 #' @param id Module id.
 #' @param lang Language code.
 #' @param part `"standards"` or `"samples"`.
@@ -243,17 +257,36 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
     }
     reset <- shiny::actionButton(ns(paste0('reset_', part)), t('crit.reset'), icon = shiny::icon('rotate-left'),
                                  class = 'btn-sm btn-outline-secondary w-100')
-    title <- function(key) with_tooltip(t(key), t('crit.note'))
+    title <- function(key, note = 'crit.note') with_tooltip(t(key), t(note))
 
     if (part == 'standards') {
+        presets <- criteria_presets()
+        f <- fields[fields$group == 'standards', ]
+        # Fixed presets: the values as text, in the layout of the inputs
+        fixed <- function(code) {
+            shiny::conditionalPanel(
+                sprintf("input.preset == '%s'", code), ns = ns,
+                lapply(seq_len(nrow(f)), function(i) {
+                    shiny::div(class = 'crit-row',
+                               shiny::tags$span(class = 'crit-label', t(paste0('crit.', f$name[i]))),
+                               shiny::tags$span(class = 'crit-value',
+                                                format(presets[[code]][[f$name[i]]] * f$scale[i])))
+                })
+            )
+        }
         return(sidebar_group(
-            title('crit.title_standards'), 'vial',
-            inputs('standards'),
+            title('crit.title_standards', 'crit.note_standards'), 'vial',
+            shiny::selectInput(ns('preset'), t('crit.preset'), width = '100%',
+                               choices = stats::setNames(names(presets),
+                                                         vapply(paste0('crit.preset_', names(presets)), t, '')),
+                               selected = 'ich_m10'),
+            fixed('ich_m10'),
+            fixed('colorimetric'),
+            shiny::conditionalPanel("input.preset == 'custom'", ns = ns, inputs('standards'), reset),
             shiny::radioButtons(ns('range'), t('crit.range'),
                                 choices = stats::setNames(c('accepted', 'all'),
                                                           c(t('crit.range_accepted'), t('crit.range_all'))),
-                                selected = 'accepted'),
-            reset
+                                selected = 'accepted')
         ))
     }
     sidebar_group(
@@ -288,6 +321,9 @@ mod_criteria_server <- function(id, lang) {
                 if (is.null(v)) fields$default[i] / fields$scale[i] else v / fields$scale[i]
             })
             names(values) <- fields$name
+            # The criteria of the standards of a fixed preset replace the inputs
+            preset <- if (is.null(input$preset)) 'ich_m10' else input$preset
+            if (preset != 'custom') values[names(criteria_presets()[[preset]])] <- criteria_presets()[[preset]]
             values$range <- if (is.null(input$range)) 'accepted' else input$range
             with_validation(do.call(qc_criteria, values), 'common.calc_error', lang)
         })

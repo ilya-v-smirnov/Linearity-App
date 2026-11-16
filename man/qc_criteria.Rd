@@ -25,10 +25,10 @@ qc_criteria(
 }
 \arguments{
 \item{std_bias, std_bias_edge}{Allowed bias of back-calculated standards (\%),
-inside the range and at its ends.}
+inside the range and at the boundary calibrators (lowest and highest level).}
 
-\item{cv, cv_edge}{Allowed CV of the ODs of a standard level (\%), inside the
-range and at its ends.}
+\item{cv, cv_edge}{Allowed CV of the back-calculated concentrations of a
+standard level (\%), inside the range and at the boundary calibrators.}
 
 \item{min_fraction, min_levels}{Minimum fraction and number of accepted standard levels.}
 

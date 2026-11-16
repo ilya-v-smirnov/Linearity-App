@@ -50,6 +50,70 @@ test_that('standard levels are accepted with tighter limits inside the range', {
     expect_equal(r$calibration_range, c(1, 64))   # an interior level does not change the range
 })
 
+test_that('all standard levels of the run count for the acceptance of the calibration', {
+    data <- run_data()
+    keys <- calculate(data, 'LRM')$standard_data
+    keys <- keys[order(keys$conc), ]
+    exclude <- function(k) data.frame(key = k, reason = 'test')
+
+    # 10 of 14 points excluded: 4 levels with one point each remain of 7
+    first <- keys$.key[!duplicated(keys$conc)]
+    kept <- first[c(1, 3, 5, 7)]
+    r <- calculate(data, 'LRM', exclude = exclude(setdiff(keys$.key, kept)))
+    cal <- r$quality$calibration
+    expect_equal(c(cal$n_levels, cal$n_pass, cal$n_needed), c(7, 4, 6))
+    expect_false(cal$accepted)
+    expect_equal(cal$status, 'rejected')
+    st <- r$quality$standards
+    expect_equal(st$n, c(1, 0, 1, 0, 1, 0, 1))
+    expect_false(any(st$pass[st$n == 0]))
+    tab <- quality_tables(r$quality, 'en')$standards
+    expect_equal(tab[['Bias, %']][tab$n == 0], rep('—', 3))
+    html <- as.character(LinearityApp:::verdict_ui(r, 'en'))
+    expect_match(html, 'Calibration not accepted', fixed = TRUE)
+    expect_match(html, '4 of 7 (6 required)', fixed = TRUE)
+
+    # fewer levels than the minimum: not accepted even if all of them pass
+    few <- calculate(data, 'LRM', criteria = qc_criteria(min_levels = 8))
+    expect_true(all(few$quality$standards$pass))
+    expect_false(few$quality$calibration$accepted)
+})
+
+test_that('a calibration without replicates is accepted with the CV not assessed', {
+    data <- run_data()
+    keys <- calculate(data, 'LRM')$standard_data
+    single <- keys$.key[duplicated(keys$conc)]
+    r <- calculate(data, 'LRM', exclude = data.frame(key = single, reason = 'test'))
+    cal <- r$quality$calibration
+    expect_true(cal$accepted)
+    expect_equal(c(cal$n_no_cv, cal$n_cv, cal$status), c('7', '0', 'accepted_no_cv'))
+    expect_true(r$quality$accepted)
+    expect_match(message_text(r$quality$warnings), 'checked for only 0 accepted levels (6 required)',
+                 fixed = TRUE, all = FALSE)
+    for (lang in supported_languages()) {
+        html <- as.character(LinearityApp:::verdict_ui(r, lang))
+        expect_match(html, 'alert-warning', fixed = TRUE)
+        expect_match(html, tr('quality.calibration_accepted_no_cv', lang), fixed = TRUE)
+    }
+    # with replicates the status is a plain acceptance
+    expect_equal(calculate(data, 'LRM')$quality$calibration$status, 'accepted')
+
+    # levels without replicates do not matter while enough levels have a CV:
+    # 2 of 7 levels without replicates, 5 with a CV
+    cr <- qc_criteria(min_levels = 5, min_fraction = 0.8)
+    r5 <- calculate(data, 'LRM', criteria = cr, exclude = data.frame(key = single[1:2], reason = 'test'))
+    cal <- r5$quality$calibration
+    expect_equal(c(cal$n_pass, cal$n_no_cv, cal$n_cv), c(7, 2, 5))
+    expect_equal(cal$status, 'accepted')
+    expect_match(as.character(LinearityApp:::verdict_ui(r5, 'en')), 'alert-success', fixed = TRUE)
+    expect_false(any(grepl('was checked for only', message_text(r5$quality$warnings), fixed = TRUE)))
+    # 3 without replicates, 4 with a CV: accepted with the exception
+    r4 <- calculate(data, 'LRM', criteria = cr, exclude = data.frame(key = single[1:3], reason = 'test'))
+    expect_equal(r4$quality$calibration$status, 'accepted_no_cv')
+    expect_match(as.character(LinearityApp:::verdict_ui(r4, 'en')),
+                 'checked for only 4 accepted standard levels (5 required): 3 accepted levels', fixed = TRUE)
+})
+
 test_that('failing end levels narrow the quantification range', {
     data <- run_data(bias = c('1' = 2), samples = data.frame(name = c('lo', 'mid'), dilution = 1,
                                                              od = c(0.025, 0.4)))
@@ -155,7 +219,8 @@ test_that('aggregated results include SD and CV', {
 
 test_that('criteria module reads both parts of the criteria', {
     shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
-        session$setInputs(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20, min_fraction = 75,
+        session$setInputs(preset = 'custom', std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20,
+                          min_fraction = 75,
                           min_levels = 6, sample_cv = 10, sample_cv_edge = 12, qc_bias = 15, qc_bias_edge = 20,
                           qc_fraction = 67, qc_level_fraction = 50, dilution_bias = 20, dilution_cv = 20,
                           range = 'all')
@@ -169,6 +234,30 @@ test_that('criteria module reads both parts of the criteria', {
         session$setInputs(reset_standards = 1, reset_samples = 1)
     })
     expect_setequal(unique(LinearityApp:::criteria_fields()$part), c('standards', 'samples'))
+})
+
+test_that('fixed presets of the criteria of the standards ignore the inputs', {
+    presets <- criteria_presets()
+    expect_equal(presets$custom, presets$ich_m10)
+    d <- qc_criteria()
+    expect_equal(presets$ich_m10, d[names(presets$ich_m10)])
+    expect_equal(unlist(presets$colorimetric), c(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20,
+                                                 min_fraction = 0.8, min_levels = 5))
+    shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
+        session$setInputs(std_bias = 50, cv = 50, min_levels = 2, sample_cv = 12)
+        expect_equal(session$returned()$std_bias, 20)        # ICH M10 by default
+        session$setInputs(preset = 'colorimetric')
+        cr <- session$returned()
+        expect_equal(c(cr$std_bias, cr$std_bias_edge, cr$cv, cr$cv_edge, cr$min_fraction, cr$min_levels),
+                     c(15, 20, 15, 20, 0.8, 5))
+        expect_equal(cr$sample_cv, 12)                        # the samples keep their own inputs
+        session$setInputs(preset = 'custom')
+        expect_equal(session$returned()$std_bias, 50)
+    })
+    ui <- as.character(LinearityApp:::mod_criteria_ui('criteria', 'en', 'standards'))
+    expect_match(ui, 'Colorimetric assay', fixed = TRUE)
+    expect_match(ui, 'Bias at boundary calibrators', fixed = TRUE)
+    expect_false(grepl('LLOQ', ui, fixed = TRUE))
 })
 
 test_that('the verdict of the calibration is shown with the model parameters', {
