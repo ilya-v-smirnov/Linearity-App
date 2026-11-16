@@ -14,6 +14,8 @@ A data.frame.
 }
 \description{
 Semicolon-separated files are expected to use a comma as decimal separator,
-comma-separated files a dot.
+comma-separated files a dot. Semicolon-separated files with decimal dots
+are recognised as well: the decimal separator that gives more numeric
+columns is used.
 }
 \keyword{internal}

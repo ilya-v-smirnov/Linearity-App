@@ -201,3 +201,13 @@ test_that('sample and QC results show the OD as measured, before the blank is su
     expect_gt(r$nc_value, 0)
     expect_false('.od_raw' %in% c(names(r$result), names(r$standard_data)))
 })
+
+test_that('axis breaks of replicated standards are not repeated', {
+    breaks <- LinearityApp:::design_x_scale(c(1, 1, 2, 2, 4, 4, NA))
+    expect_equal(breaks, c(1, 2, 4))
+    expect_equal(LinearityApp:::design_x_scale(c(5, 5)), 5)
+
+    r <- calculate(load_sample('bca'), '4PL')
+    axis <- LinearityApp:::conc_axis(r)
+    expect_false(anyDuplicated(axis$breaks) > 0)
+})

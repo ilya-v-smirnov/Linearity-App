@@ -195,3 +195,43 @@ test_that('every model works on the example data in both scales', {
         }
     }
 })
+
+test_that('a comparison without any fitted model recommends nothing and does not warn', {
+    few <- data.frame(conc = c(1, 1, 2, 2), OD = c(0.1, 0.1, 0.2, 0.2))
+    expect_no_warning(cmp <- compare_models(few))
+    expect_true(all(is.na(cmp$AIC)))
+    expect_false(any(cmp$recommended))
+})
+
+test_that('a flat calibration line has no inverse', {
+    std <- data.frame(conc = rep(c(1, 2, 4, 8), 2), OD = rep(c(0.1, 0.2, 0.4, 0.8), 2))
+    for (linear in c(TRUE, FALSE)) {
+        fit <- fit_curve(std, 'LRM', linear = linear)
+        expect_equal(LinearityApp:::inverse_fun(fit, 0.3), 3)
+        fit$par[['b']] <- 0
+        expect_true(all(is.na(LinearityApp:::inverse_fun(fit, c(0.2, 0.5, 0.9)))), info = linear)
+        expect_equal(LinearityApp:::assign_flags(0.5, LinearityApp:::inverse_fun(fit, 0.5), c(1, 8)),
+                     FLAGS$no_solution)
+    }
+})
+
+test_that('weights are defined when all standards equal the blank', {
+    x <- rep(c(1, 2, 4), 2)
+    for (w in weighting_schemes()) {
+        expect_no_warning(wf <- LinearityApp:::weight_function(w, x, rep(0, 6)))
+        expect_true(all(is.finite(wf$fun(x, wf$level_mean))), info = w)
+    }
+})
+
+test_that('decreasing (competitive) curves are inverted', {
+    truth <- function(x) 0.2 + 1.8 / (1 + (x / 5)^1.2)
+    conc <- c(0.5, 1, 2, 4, 8, 16, 32)
+    data <- synthetic_data(truth, conc = conc, sample_od = truth(c(3, 10)))
+    for (m in c('4PL', '5PL')) {
+        r <- calculate(data, m, round_fun = function(x, ...) x)
+        expect_equal(r$result$conc, c(3, 10), tolerance = 1e-4, info = m)
+        expect_equal(r$result$flag, rep(FLAGS$ok, 2), info = m)
+    }
+    r <- calculate(data, '4PL', round_fun = function(x, ...) x)
+    expect_equal(r$back_calc$recovery, rep(100, 14), tolerance = 1e-4)
+})

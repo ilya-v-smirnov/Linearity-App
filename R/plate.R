@@ -341,14 +341,22 @@ plate_layout_codes <- function(size, n.levels, n.standard, n.sample, sample_reps
     by <- match.arg(by)
     standards <- match.arg(standards)
     dims <- plate_dims(size)
+    n_wells <- length(dims$rows) * length(dims$cols)
+    # Reject absurd numbers before any vector of that length is built
+    counts <- c(n.levels, n.standard, n.sample, sample_reps)
+    if (!is.numeric(counts) || anyNA(counts) || any(counts < 0)) lin_abort('error.template_counts')
+    if (any(counts > n_wells)) {
+        lin_abort('error.plate_too_small', size = size,
+                  n = format(n.standard * (n.levels + 1) + n.sample * sample_reps, scientific = FALSE))
+    }
     line <- if (by == 'column') length(dims$rows) else length(dims$cols)
     pad <- function(x) c(x, rep(NA_character_, (-length(x)) %% line))
-    series <- pad(c(paste0('S', seq_len(n.levels)), 'B'))
+    # sprintf(), unlike paste0(), gives no code for zero levels or samples
+    series <- pad(c(sprintf('S%d', seq_len(n.levels)), 'B'))
     std <- rep(series, times = n.standard)
-    smp <- rep(paste0('X', seq_len(n.sample)), each = sample_reps)
+    smp <- rep(sprintf('X%d', seq_len(n.sample)), each = sample_reps)
     codes <- if (standards == 'before') c(std, smp) else c(pad(smp), std)
     codes <- codes[seq_len(max(c(0, which(!is.na(codes)))))]
-    n_wells <- length(dims$rows) * length(dims$cols)
     if (length(codes) > n_wells) lin_abort('error.plate_too_small', size = size, n = length(codes))
     grid <- matrix(NA_character_, nrow = length(dims$rows), ncol = length(dims$cols),
                    dimnames = list(dims$rows, dims$cols))

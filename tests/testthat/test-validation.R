@@ -40,3 +40,15 @@ test_that('unknown type values are reported', {
     expect_error(check_input_file(data), 'Not allowed values in the type column: calibrator (row 2)',
                  fixed = TRUE)
 })
+
+test_that('tables without the dilution or conc column are reported, not crashed on', {
+    data <- load_sample('bca')
+    keys <- function(tab) vapply(validate_assay(tab), function(p) p$message$key, '')
+
+    expect_equal(keys(data[setdiff(names(data), 'dilution')]), 'error.dilution_missing')
+    expect_equal(keys(data[setdiff(names(data), 'conc')]), 'error.std_conc_missing')
+    expect_error(check_assay(data[c('type', 'OD')]), class = 'lin_error')
+
+    # normalize_table() fills in the default dilution
+    expect_s3_class(check_input_file(data[setdiff(names(data), 'dilution')]), 'data.frame')
+})

@@ -72,7 +72,7 @@ plate_map <- function(codes, values = NULL, types = NULL, lang = 'en', editable 
 data_plate_grids <- function(data) {
     if (!'well' %in% names(data) || all(is.na(data$well))) return(NULL)
     row <- toupper(sub('^([A-Za-z]+).*$', '\\1', data$well))
-    col <- as.integer(sub('^[A-Za-z]+', '', data$well))
+    col <- suppressWarnings(as.integer(sub('^[A-Za-z]+', '', data$well)))
     size <- if (any(row > 'H' | nchar(row) > 1, na.rm = TRUE) || any(col > 12, na.rm = TRUE)) 384 else 96
     dims <- plate_dims(size)
     empty <- matrix(NA_character_, nrow = length(dims$rows), ncol = length(dims$cols),

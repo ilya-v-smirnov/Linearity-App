@@ -44,7 +44,7 @@ design_x_scale <- function(x, round_par = 3) {
     if (length(unique_x) > 10 || min_dist_perc < 5) {
         return(signif(10^seq(range_x[1], range_x[2], length.out = 8), round_par))
     }
-    signif(10^log_x, round_par)
+    unique(signif(10^unique_x, round_par))
 }
 
 

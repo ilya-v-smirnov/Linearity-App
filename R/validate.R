@@ -67,12 +67,16 @@ validate_assay <- function(data) {
     is_sample <- type %in% 'sample'
     is_std <- type %in% 'standard'
     is_qc <- type %in% 'QC'
-    check_rows(is_sample & is.na(data$dilution), 'error.dilution_missing')
-    check_rows(is_sample & !is.na(data$dilution) & data$dilution <= 0, 'error.dilution_positive')
-    check_rows(is_std & is.na(data$conc), 'error.std_conc_missing')
-    check_rows(is_std & !is.na(data$conc) & data$conc <= 0, 'error.std_conc_positive')
-    check_rows(is_qc & is.na(data$conc), 'error.qc_conc_missing')
-    check_rows(is_qc & !is.na(data$conc) & data$conc <= 0, 'error.qc_conc_positive')
+    # A table that was not normalized may lack these columns: all values are missing
+    column <- function(name) if (name %in% names(data)) data[[name]] else rep(NA_real_, nrow(data))
+    dilution <- column('dilution')
+    conc <- column('conc')
+    check_rows(is_sample & is.na(dilution), 'error.dilution_missing')
+    check_rows(is_sample & !is.na(dilution) & dilution <= 0, 'error.dilution_positive')
+    check_rows(is_std & is.na(conc), 'error.std_conc_missing')
+    check_rows(is_std & !is.na(conc) & conc <= 0, 'error.std_conc_positive')
+    check_rows(is_qc & is.na(conc), 'error.qc_conc_missing')
+    check_rows(is_qc & !is.na(conc) & conc <= 0, 'error.qc_conc_positive')
 
     n_standard <- sum(is_std)
     if (n_standard > 0 && n_standard <= 4) {

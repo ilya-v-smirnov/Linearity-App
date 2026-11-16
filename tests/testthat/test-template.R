@@ -36,3 +36,10 @@ test_that('standard rows can follow the samples', {
     t <- make_template(n.standard = 1, n.sample = 3, n.levels = 3, standards = 'after')
     expect_equal(t$type, c(rep('sample', 3), rep('standard', 3), 'blank'))
 })
+
+test_that('the number of standard levels is limited', {
+    expect_error(make_template(n.levels = 1e9), 'No more than 384', class = 'lin_error')
+    expect_error(make_template(n.levels = Inf), 'No more than 384', class = 'lin_error')
+    expect_error(make_template(n.levels = 'many'), 'At least 3', class = 'lin_error')
+    expect_length(LinearityApp:::standard_series(100, 2, 384), 384)
+})

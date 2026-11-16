@@ -220,7 +220,10 @@ dilution_linearity <- function(samples, criteria = qc_criteria()) {
 #' @keywords internal
 assess_qc <- function(qc, range, criteria = qc_criteria()) {
     if (is.null(qc) || nrow(qc) == 0) return(NULL)
-    if (!'id' %in% names(qc)) qc$id <- paste('QC', qc$nominal)
+    # QC wells without a code are grouped by their nominal concentration
+    by_nominal <- paste('QC', qc$nominal)
+    if (!'id' %in% names(qc)) qc$id <- by_nominal
+    qc$id[is.na(qc$id)] <- by_nominal[is.na(qc$id)]
     qc$bias.limit <- ifelse(near_edge(qc$nominal, range, criteria$edge),
                             criteria$qc_bias_edge, criteria$qc_bias)
     qc$bias <- 100 * (qc$conc - qc$nominal) / qc$nominal

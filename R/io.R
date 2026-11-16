@@ -1,21 +1,48 @@
 #' Read a Semicolon- or Comma-Delimited CSV File
 #'
 #' Semicolon-separated files are expected to use a comma as decimal separator,
-#' comma-separated files a dot.
+#' comma-separated files a dot. Semicolon-separated files with decimal dots
+#' are recognised as well: the decimal separator that gives more numeric
+#' columns is used.
 #'
 #' @param path File path.
 #'
 #' @return A data.frame.
 #' @keywords internal
 read_csv_auto <- function(path) {
-    dialects <- list(c(sep = ';', dec = ','), c(sep = ',', dec = '.'))
-    for (d in dialects) {
-        table <- tryCatch(read.csv(path, sep = d[['sep']], dec = d[['dec']],
-                                   stringsAsFactors = FALSE),
-                          error = function(e) NULL)
-        if (!is.null(table) && ncol(table) > 1) return(table)
+    read <- function(sep, dec) {
+        tryCatch(read.csv(path, sep = sep, dec = dec, stringsAsFactors = FALSE),
+                 error = function(e) NULL)
     }
+    n_numeric <- function(table) sum(vapply(table, is.numeric, logical(1)))
+
+    table <- read(';', ',')
+    if (!is.null(table) && ncol(table) > 1) {
+        dotted <- read(';', '.')
+        if (!is.null(dotted) && n_numeric(dotted) > n_numeric(table)) table <- dotted
+        return(table)
+    }
+    table <- read(',', '.')
+    if (!is.null(table) && ncol(table) > 1) return(table)
     lin_abort('error.csv_format')
+}
+
+
+#' Drop Empty Rows at the End of a Table
+#'
+#' Spreadsheets exported to CSV often end with rows of empty cells. Empty rows
+#' inside the table are kept, so that row numbers in messages match the file.
+#'
+#' @param table A data.frame.
+#'
+#' @return The data.frame without trailing rows of `NA` or blank cells.
+#' @keywords internal
+drop_trailing_empty_rows <- function(table) {
+    if (nrow(table) == 0 || ncol(table) == 0) return(table)
+    blank <- function(x) is.na(x) | !nzchar(trimws(as.character(x)))
+    empty <- Reduce(`&`, lapply(table, blank))
+    if (!any(empty)) return(table)
+    table[seq_len(max(c(0, which(!empty)))), , drop = FALSE]
 }
 
 
@@ -63,7 +90,8 @@ read_assay <- function(path) {
 #' Only `type` and `OD` are required. Missing `dilution` is set to 1 for
 #' samples and QC; missing `conc` to `NA`; missing `sample.name` to `id`.
 #' `type` values are case-insensitive (`standard`, `sample`, `blank`, `QC`;
-#' `NC` is read as `blank`). Empty numeric columns are converted to numbers. The old six-column
+#' `NC` is read as `blank`). Empty numeric columns are converted to numbers;
+#' empty rows at the end of the table are dropped. The old six-column
 #' format (`sample.name`, `sample.date`, `type`, `dilution`, `conc`, `OD`) is a
 #' special case and needs no conversion.
 #'
@@ -74,6 +102,7 @@ read_assay <- function(path) {
 normalize_table <- function(table) {
     table <- as.data.frame(table)
     names(table) <- trimws(names(table))
+    table <- drop_trailing_empty_rows(table)
     for (col in intersect(c('OD', 'conc', 'dilution'), names(table))) {
         if (is.logical(table[[col]]) && all(is.na(table[[col]]))) {
             table[[col]] <- as.numeric(table[[col]])

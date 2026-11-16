@@ -196,3 +196,15 @@ test_that('the quality step has grouped criteria in the sidebar and two tabs', {
         expect_match(html, tr(key, 'en'), fixed = TRUE, info = key)
     }
 })
+
+test_that('quality controls without a code are grouped by their nominal concentration', {
+    qc <- data.frame(id = c('QC-L', NA, NA, NA), nominal = c(4, 4, 40, 40), od = 0.02 * c(4, 4, 40, 40))
+    data <- run_data(qc = qc)
+    data$id[data$type == 'QC'] <- qc$id
+    r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_round)
+    lv <- r$quality$qc$levels
+    expect_equal(lv$id, c('QC-L', 'QC 4', 'QC 40'))
+    expect_equal(lv$n, c(1, 1, 2))
+    expect_true(r$quality$qc$accepted)
+    expect_false(anyNA(quality_tables(r$quality)$qc))
+})

@@ -13,7 +13,11 @@ standard_series <- function(start, step, n.levels) {
     if (!is.numeric(step) || length(step) != 1 || is.na(step) || step <= 1) {
         lin_abort('error.template_step')
     }
-    if (length(n.levels) != 1 || is.na(n.levels) || n.levels < 3) lin_abort('error.template_levels')
+    if (!is.numeric(n.levels) || length(n.levels) != 1 || is.na(n.levels) || n.levels < 3) {
+        lin_abort('error.template_levels')
+    }
+    # More levels than wells of the largest plate
+    if (n.levels > 384) lin_abort('error.template_levels_max', max = 384)
     signif(start / step^(0:(n.levels - 1)), 3)
 }
 

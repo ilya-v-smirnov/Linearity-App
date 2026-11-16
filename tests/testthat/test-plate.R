@@ -316,3 +316,26 @@ test_that('validation collects every problem of a table', {
                             'error.std_conc_positive', 'error.few_standard_wells', 'error.duplicate_well'))
     expect_null(problems_table(list()))
 })
+
+test_that('absurd layout parameters are rejected before anything is allocated', {
+    codes <- LinearityApp:::plate_layout_codes
+    expect_error(codes(96, 7, 2, 1e9), 'does not fit', class = 'lin_error')
+    expect_error(codes(96, 1e9, 2, 10), 'does not fit', class = 'lin_error')
+    expect_error(codes(384, 7, 1e9, 10), 'does not fit', class = 'lin_error')
+    expect_error(codes(96, 7, 2, 10, sample_reps = 1e9), 'does not fit', class = 'lin_error')
+    expect_error(codes(96, 7, 2, -1), 'non-negative', class = 'lin_error')
+    expect_error(codes(96, 7, NA, 10), 'non-negative', class = 'lin_error')
+    # a plate without samples or without standards is still a layout
+    no_samples <- codes(96, 7, 2, 0)
+    expect_equal(sum(!is.na(no_samples)), 16)
+    expect_equal(LinearityApp:::count_samples(no_samples), 0)
+    expect_equal(sort(unique(as.vector(codes(96, 7, 0, 5)))), paste0('X', 1:5))
+    expect_setequal(stats::na.omit(as.vector(codes(96, 0, 1, 2))), c('B', 'X1', 'X2'))
+})
+
+test_that('wells with unusual names do not break the plate map', {
+    data <- data.frame(well = c('A1', 'B2x', 'foo', NA), type = 'sample', OD = c(1, 2, 3, 4))
+    expect_no_warning(grids <- LinearityApp:::data_plate_grids(data))
+    expect_equal(sum(!is.na(grids$values)), 1)
+    expect_equal(grids$values[['A', '1']], 1)
+})

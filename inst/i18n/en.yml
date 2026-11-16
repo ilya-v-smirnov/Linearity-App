@@ -417,6 +417,8 @@ error:
   template_start: "Start concentration must be a positive number"
   template_step: "Dilution step must be greater than 1"
   template_levels: "At least 3 standard levels are required"
+  template_levels_max: "No more than {max} standard levels are supported"
+  template_counts: "The numbers of levels, series, samples and replicates must be non-negative numbers"
   no_nc: "No valid OD values in the blank wells"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
   fit_failed: "The {model} model could not be fitted to the standards"

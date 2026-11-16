@@ -16,7 +16,8 @@ The normalized data.frame.
 Only \code{type} and \code{OD} are required. Missing \code{dilution} is set to 1 for
 samples and QC; missing \code{conc} to \code{NA}; missing \code{sample.name} to \code{id}.
 \code{type} values are case-insensitive (\code{standard}, \code{sample}, \code{blank}, \code{QC};
-\code{NC} is read as \code{blank}). Empty numeric columns are converted to numbers. The old six-column
+\code{NC} is read as \code{blank}). Empty numeric columns are converted to numbers;
+empty rows at the end of the table are dropped. The old six-column
 format (\code{sample.name}, \code{sample.date}, \code{type}, \code{dilution}, \code{conc}, \code{OD}) is a
 special case and needs no conversion.
 }

@@ -48,7 +48,8 @@ weight_function <- function(weights, x, y) {
     if (!weights %in% weighting_schemes()) lin_abort('error.weights_unknown', weights = weights)
     notes <- list()
     level_mean <- stats::ave(y, x)
-    floor_y <- min(abs(level_mean[level_mean != 0]), na.rm = TRUE)
+    nonzero <- abs(level_mean[!is.na(level_mean) & level_mean != 0])
+    floor_y <- if (length(nonzero) > 0) min(nonzero) else 1
     pos <- function(v) pmax(abs(v), floor_y)
     theta <- NA_real_
 
@@ -132,6 +133,8 @@ inverse_fun <- function(fit, od, par = fit$par) {
             u <- ifelse(disc >= 0, vertex + side * sqrt(pmax(disc, 0)) / (2 * abs(a)), NA_real_)
         }
         out[ok] <- if (fit$log_scale) 10^u else u
+        # A flat line (zero slope) has no inverse
+        out[!is.finite(out)] <- NA_real_
         return(out)
     }
 
@@ -535,6 +538,7 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
         empty
     })
     out <- do.call(rbind, rows)
-    out$recommended <- !is.na(out$AIC) & out$AIC == min(out$AIC, na.rm = TRUE)
+    best <- if (all(is.na(out$AIC))) NA_real_ else min(out$AIC, na.rm = TRUE)
+    out$recommended <- !is.na(out$AIC) & out$AIC == best
     out
 }
