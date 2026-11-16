@@ -56,6 +56,42 @@ quantification_ui <- function(flags, lang = 'en') {
 }
 
 
+#' Infographic of a Value on a Scale with Coloured Zones
+#'
+#' The zones are `poor` (red), `fair` (orange) and `good` (green), from left
+#' to right; a marker shows the value on the scale.
+#'
+#' @param title Title (tags or text) before the badge.
+#' @param zone Zone of the value: `"poor"`, `"fair"` or `"good"`.
+#' @param badge Text of the badge.
+#' @param marker Position of the marker, in percent of the width.
+#' @param bounds Positions of the boundaries between the zones (two values,
+#'   in percent).
+#' @param ticks Labels of the ticks.
+#' @param positions Positions of the ticks, in percent.
+#'
+#' @return A shiny tag.
+#' @keywords internal
+zone_scale_ui <- function(title, zone, badge, marker, bounds, ticks, positions) {
+    shiny::div(
+        class = 'infographic',
+        shiny::div(class = 'infographic-title', title, ' ',
+                   shiny::span(class = paste0('zone-badge zone-', zone), badge)),
+        shiny::div(
+            class = 'zone-scale',
+            shiny::div(class = 'zone zone-poor', style = sprintf('width: %.1f%%;', bounds[1])),
+            shiny::div(class = 'zone zone-fair', style = sprintf('width: %.1f%%;', bounds[2] - bounds[1])),
+            shiny::div(class = 'zone zone-good', style = sprintf('width: %.1f%%;', 100 - bounds[2])),
+            shiny::div(class = 'zone-marker', style = sprintf('left: %.1f%%;', marker))
+        ),
+        shiny::div(class = 'zone-ticks',
+                   lapply(seq_along(ticks), function(i) {
+                       shiny::span(style = sprintf('left: %.1f%%;', positions[i]), ticks[i])
+                   }))
+    )
+}
+
+
 #' Infographic of the Coefficient of Determination
 #'
 #' The \eqn{R^2} of the standard curve on a scale from 0.95 to 1 with zones: below
@@ -73,21 +109,41 @@ r2_ui <- function(r2, lang = 'en') {
     position <- function(x) 100 * (min(max(x, from), 1) - from) / (1 - from)
     zone <- if (r2 >= 0.99) 'good' else if (r2 >= 0.98) 'fair' else 'poor'
     ticks <- c(0.95, 0.98, 0.99, 1)
-    shiny::div(
-        class = 'infographic',
-        shiny::div(class = 'infographic-title',
-                   'R\u00b2 = ', shiny::strong(sprintf('%.4f', r2)), ' ',
-                   shiny::span(class = paste0('r2-badge r2-', zone), tr(paste0('infographic.r2_', zone), lang))),
-        shiny::div(
-            class = 'r2-scale',
-            shiny::div(class = 'r2-zone r2-poor', style = sprintf('width: %.1f%%;', position(0.98))),
-            shiny::div(class = 'r2-zone r2-fair', style = sprintf('width: %.1f%%;', position(0.99) - position(0.98))),
-            shiny::div(class = 'r2-zone r2-good', style = sprintf('width: %.1f%%;', 100 - position(0.99))),
-            shiny::div(class = 'r2-marker', style = sprintf('left: %.1f%%;', position(r2)))
-        ),
-        shiny::div(class = 'r2-ticks',
-                   lapply(ticks, function(x) {
-                       shiny::span(style = sprintf('left: %.1f%%;', position(x)), format(x))
-                   }))
-    )
+    zone_scale_ui(shiny::tagList('R\u00b2 = ', shiny::strong(sprintf('%.4f', r2))),
+                  zone, tr(paste0('infographic.r2_', zone), lang),
+                  marker = position(r2), bounds = c(position(0.98), position(0.99)),
+                  ticks = format(ticks), positions = vapply(ticks, position, 0))
+}
+
+
+#' Infographic of the Lack-of-Fit Test
+#'
+#' The p-value of the lack-of-fit F test (see [lack_of_fit()]) on a log scale
+#' from 0.001 to 1 with zones: up to 0.05 (red, the model does not describe
+#' the standards), up to 0.10 (orange, borderline) and above 0.10 (green).
+#' Values below 0.001 are shown at the left end. Without replicates of the
+#' standards the test cannot be done, which the infographic says.
+#'
+#' @param p P-value of the test.
+#' @param lang Language code.
+#'
+#' @return A shiny tag.
+#' @keywords internal
+lof_ui <- function(p, lang = 'en') {
+    title <- tr('infographic.lof_title', lang)
+    if (length(p) != 1 || is.na(p)) {
+        return(shiny::div(class = 'infographic',
+                          shiny::div(class = 'infographic-title', title),
+                          shiny::div(class = 'text-muted small', tr('infographic.lof_na', lang))))
+    }
+    from <- 1e-3
+    position <- function(x) 100 * (log10(min(max(x, from), 1)) - log10(from)) / -log10(from)
+    zone <- if (p <= 0.05) 'poor' else if (p <= 0.10) 'fair' else 'good'
+    value <- if (p < from) '< 0.001' else format(signif(p, 2))
+    ticks <- c(0.001, 0.01, 0.05, 0.1, 1)
+    zone_scale_ui(shiny::tagList(paste0(title, ': p = '), shiny::strong(value)),
+                  zone, tr(paste0('infographic.lof_', zone), lang),
+                  marker = position(p), bounds = c(position(0.05), position(0.10)),
+                  ticks = format(ticks, scientific = FALSE, drop0trailing = TRUE),
+                  positions = vapply(ticks, position, 0))
 }

@@ -245,7 +245,25 @@
     text-align: left;
 }
 
-/* Infographics: quantification of the samples and R2 of the curve ------- */
+/* Standard curve step: a plot with its infographic, nearly square */
+.curve-panels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2rem;
+}
+
+/* Larger plots in higher windows */
+.curve-panel {
+    flex: 0 1 clamp(320px, calc(100vh - 540px), 440px);
+    min-width: 280px;
+}
+
+.curve-panel .infographic {
+    padding: 0.45rem 0.8rem 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+/* Infographics: quantification of the samples, R2 and lack of fit ------- */
 
 .infographic {
     border: 1px solid var(--bs-border-color);
@@ -303,7 +321,7 @@
     border-radius: 0.2rem;
 }
 
-.r2-scale {
+.zone-scale {
     position: relative;
     display: flex;
     height: 0.9rem;
@@ -311,15 +329,15 @@
     margin-top: 0.9rem;
 }
 
-.r2-zone:first-child { border-radius: 0.4rem 0 0 0.4rem; }
-.r2-zone:nth-child(3) { border-radius: 0 0.4rem 0.4rem 0; }
+.zone:first-child { border-radius: 0.4rem 0 0 0.4rem; }
+.zone:nth-child(3) { border-radius: 0 0.4rem 0.4rem 0; }
 
 /* The same colours as the quantification bar */
-.r2-zone.r2-poor { background: #c62828; }
-.r2-zone.r2-fair { background: #ef8f00; }
-.r2-zone.r2-good { background: #1b5e20; }
+.zone.zone-poor { background: #c62828; }
+.zone.zone-fair { background: #ef8f00; }
+.zone.zone-good { background: #1b5e20; }
 
-.r2-marker {
+.zone-marker {
     position: absolute;
     top: -0.55rem;
     width: 0;
@@ -330,23 +348,23 @@
     border-top: 0.6rem solid var(--bs-body-color);
 }
 
-.r2-ticks {
+.zone-ticks {
     position: relative;
     height: 1.2rem;
     font-size: 0.75rem;
     color: var(--bs-secondary-color);
 }
 
-.r2-ticks span {
+.zone-ticks span {
     position: absolute;
     top: 0.15rem;
     transform: translateX(-50%);
 }
 
-.r2-ticks span:first-child { transform: none; }
-.r2-ticks span:last-child { transform: translateX(-100%); }
+.zone-ticks span:first-child { transform: none; }
+.zone-ticks span:last-child { transform: translateX(-100%); }
 
-.r2-badge {
+.zone-badge {
     display: inline-block;
     white-space: nowrap;
     font-size: 0.75rem;
@@ -356,9 +374,9 @@
     color: #fff;
 }
 
-.r2-badge.r2-good { background: #1b5e20; }
-.r2-badge.r2-fair { background: #ef8f00; }
-.r2-badge.r2-poor { background: #c62828; }
+.zone-badge.zone-good { background: #1b5e20; }
+.zone-badge.zone-fair { background: #ef8f00; }
+.zone-badge.zone-poor { background: #c62828; }
 
 /* Acceptance criteria: one per row, label on the left, value on the right */
 .sidebar-heading {

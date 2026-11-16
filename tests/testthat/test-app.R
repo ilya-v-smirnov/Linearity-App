@@ -491,12 +491,21 @@ test_that('infographics count the sample wells and place R2 on its scale', {
     expect_match(html, '6 of 18 sample wells quantified', fixed = TRUE)
     expect_null(LinearityApp:::quantification_ui(character(0)))
 
-    expect_match(as.character(LinearityApp:::r2_ui(0.995)), 'r2-badge r2-good', fixed = TRUE)
-    expect_match(as.character(LinearityApp:::r2_ui(0.985)), 'r2-badge r2-fair', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::r2_ui(0.995)), 'zone-badge zone-good', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::r2_ui(0.985)), 'zone-badge zone-fair', fixed = TRUE)
     poor <- as.character(LinearityApp:::r2_ui(0.5))
-    expect_match(poor, 'r2-badge r2-poor', fixed = TRUE)
+    expect_match(poor, 'zone-badge zone-poor', fixed = TRUE)
     expect_match(poor, 'left: 0.0%', fixed = TRUE)
     expect_null(LinearityApp:::r2_ui(NA))
+
+    lof <- function(p) as.character(LinearityApp:::lof_ui(p, 'en'))
+    expect_match(lof(0.5), 'zone-badge zone-good', fixed = TRUE)
+    expect_match(lof(0.08), 'zone-badge zone-fair', fixed = TRUE)
+    expect_match(lof(0.10), 'zone-badge zone-fair', fixed = TRUE)
+    expect_match(lof(0.05), 'zone-badge zone-poor', fixed = TRUE)
+    expect_match(lof(1e-6), '<strong>&lt; 0.001</strong>', fixed = TRUE)
+    expect_match(lof(1e-6), 'left: 0.0%', fixed = TRUE)
+    expect_match(lof(NA), 'needs replicates', fixed = TRUE)
 })
 
 test_that('the comparison tab is inserted after the model parameters and removed', {

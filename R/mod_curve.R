@@ -141,6 +141,15 @@ mod_curve_ui <- function(id, lang) {
     sidebar <- bslib::sidebar(
         width = 330,
         sidebar_group(
+            t('curve.group_axes'), 'pen',
+            shiny::textInput(ns('xtitle'), t('curve.xtitle'), value = t('curve.xdefault'), width = '100%'),
+            shiny::selectInput(ns('xunits'), t('curve.xunits'), choices = unit_choices(lang), selected = '',
+                               width = '100%'),
+            shiny::textInput(ns('ytitle'), t('curve.ytitle'), value = t('curve.ydefault'), width = '100%'),
+            shiny::downloadButton(ns('save_plot'), t('curve.save_plot'), icon = shiny::icon('image'),
+                                  class = 'btn-primary w-100')
+        ),
+        sidebar_group(
             t('curve.group_model'), 'chart-line',
             shiny::radioButtons(ns('model'), t('curve.model'),
                                 choices = stats::setNames(models, vapply(paste0('model.', models), t, '')),
@@ -149,16 +158,7 @@ mod_curve_ui <- function(id, lang) {
                                choices = stats::setNames(weights, weight_labels(weights, lang)),
                                selected = 'none')
         ),
-        mod_criteria_ui('criteria', lang, 'standards'),
-        sidebar_group(
-            t('curve.group_axes'), 'pen',
-            shiny::textInput(ns('xtitle'), t('curve.xtitle'), value = t('curve.xdefault'), width = '100%'),
-            shiny::selectInput(ns('xunits'), t('curve.xunits'), choices = unit_choices(lang), selected = '',
-                               width = '100%'),
-            shiny::textInput(ns('ytitle'), t('curve.ytitle'), value = t('curve.ydefault'), width = '100%'),
-            shiny::downloadButton(ns('save_plot'), t('curve.save_plot'), icon = shiny::icon('image'),
-                                  class = 'btn-primary w-100')
-        )
+        mod_criteria_ui('criteria', lang, 'standards')
     )
 
     main <- bslib::navset_card_underline(
@@ -168,14 +168,20 @@ mod_curve_ui <- function(id, lang) {
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
             shiny::div(
                 class = 'step-view',
-                shiny::fluidRow(
-                    shiny::column(6, shiny::plotOutput(ns('curve'), height = 'auto', click = ns('curve_click'))),
-                    shiny::column(6, shiny::plotOutput(ns('resid'), height = 'auto'))
+                # Each plot with its infographic below, in a panel of limited width; the
+                # panels stay next to each other on the left, the comparison of models below
+                shiny::div(
+                    class = 'curve-panels',
+                    shiny::div(class = 'curve-panel',
+                               shiny::plotOutput(ns('curve'), height = 'auto', click = ns('curve_click')),
+                               shiny::uiOutput(ns('r2'))),
+                    shiny::div(class = 'curve-panel',
+                               shiny::plotOutput(ns('resid'), height = 'auto'),
+                               shiny::uiOutput(ns('lof')))
                 ),
-                shiny::fluidRow(shiny::column(6, shiny::uiOutput(ns('r2')))),
-                shiny::uiOutput(ns('notes')),
                 shiny::h5(with_tooltip(t('curve.compare'), t('compare.note'))),
                 shiny::tableOutput(ns('compare')),
+                shiny::uiOutput(ns('notes')),
                 shiny::uiOutput(ns('exclusions'))
             )
         ),
@@ -260,11 +266,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             exclusion_effect_tables(result()$exclusion_effect, lang, r$fun, r$par)
         })
 
-        # The plots keep their proportions instead of stretching with the width
+        # The plots are nearly square; the width of their panels follows the height of the
+        # window (see the CSS), so that the infographics and the comparison of models fit
         plot_height <- function(name) {
             function() {
                 width <- session$clientData[[paste0('output_', ns(name), '_width')]]
-                if (is.null(width) || width <= 0) 400 else max(250, round(0.8 * width))
+                if (is.null(width) || width <= 0) 290 else min(370, max(200, round(0.83 * width)))
             }
         }
         output$curve <- shiny::renderPlot({
@@ -276,11 +283,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         }, height = plot_height('resid'))
         # Warnings shown as infographics are left out of the warnings box
         output$notes <- shiny::renderUI({
-            hidden <- c('note.not_quantified', 'quality.warn_r2', sample_warning_keys())
+            hidden <- c('note.not_quantified', 'quality.warn_r2', 'note.lack_of_fit', sample_warning_keys())
             shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
         })
         output$r2 <- shiny::renderUI(r2_ui(result()$quality$curve$r2, lang))
+        output$lof <- shiny::renderUI(lof_ui(result()$lack_of_fit$p, lang))
         output$coefs <- shiny::renderTable({
             tab <- coef_table()
             tab[-1] <- lapply(tab[-1], as.character)
