@@ -63,6 +63,30 @@ test_that('short and detailed reports have different sections', {
     expect_true(any(grepl('Plate 1', text, fixed = TRUE) & grepl('Operator', text, fixed = TRUE)))
 })
 
+test_that('the report states that the model was refitted and compares it with the original', {
+    data <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    r <- calculate(data, 'QRM', exclude = data.frame(key = 'B1', reason = 'bubble'))
+    args <- report_args()
+    args$model_table <- get_coef_ci(r$fit)
+    args$exclusions <- exclusions_table(r$exclusions, 'en')
+    args$exclusion_effect <- LinearityApp:::exclusion_effect_tables(r$exclusion_effect, 'en')
+    texts <- function(blocks) unlist(lapply(blocks, function(b) b$text))
+    short <- do.call(LinearityApp:::report_blocks, c(list('short'), args))
+    expect_true(any(grepl('refitted without 1 standard point', texts(short), fixed = TRUE)))
+    expect_false('Effect of the excluded points' %in% texts(short))
+
+    detailed <- do.call(LinearityApp:::report_blocks, c(list('detailed'), args))
+    expect_true(all(c('Excluded standard points', 'Effect of the excluded points', 'Back-calculated standards',
+                      'Back-calculation errors') %in% texts(detailed)))
+    tables <- Filter(function(b) b$type == 'table', detailed)
+    expect_true(any(vapply(tables, function(b) identical(names(b$data), c('Coef', 'Original', 'Refitted')), TRUE)))
+
+    path <- tempfile(fileext = '.docx')
+    LinearityApp:::write_report(detailed, path, get_plots(r, show_original = FALSE))
+    text <- officer::docx_summary(officer::read_docx(path))$text
+    expect_true('Effect of the excluded points' %in% text)
+})
+
 test_that('the preview shows the blocks and cuts long tables', {
     args <- report_args()
     blocks <- do.call(LinearityApp:::report_blocks, c(list('short'), args))

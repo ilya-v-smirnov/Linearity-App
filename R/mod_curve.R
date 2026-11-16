@@ -19,7 +19,9 @@
 #'   without those of the samples, see [sample_warning_keys()]),
 #'   `plot_args` (axis titles), `model`, `weights` (settings),
 #'   `exclusions` (user exclusions: `key`, `reason`) and `comparison`
-#'   (see [compare_models()]).
+#'   (see [compare_models()]) and `effect_tables` (original and refitted
+#'   calibration after exclusions, see [exclusion_effect_tables()]; `NULL`
+#'   without exclusions).
 #' @name mod_curve
 #' @keywords internal
 NULL
@@ -90,16 +92,42 @@ exclusion_reasons <- function(lang = NULL) {
 
 #' Exclusions for Display
 #'
-#' @param ex A data.frame with `key`, `reason` and optionally `conc`, `OD`.
+#' @param ex A data.frame with `key`, `reason` and optionally `standard`,
+#'   `conc`, `OD` (see the `exclusions` element of [calculate()]).
 #' @param lang Language code.
 #'
 #' @return A data.frame with translated column names.
 #' @keywords internal
 exclusions_table <- function(ex, lang) {
-    cols <- intersect(c('key', 'conc', 'OD', 'reason'), names(ex))
+    cols <- intersect(c('standard', 'key', 'conc', 'OD', 'reason'), names(ex))
     out <- ex[, cols, drop = FALSE]
+    # Numbers as text: the tables would otherwise show two decimals
+    if ('conc' %in% cols) out$conc <- ifelse(is.na(out$conc), '', as.character(signif(out$conc, 4)))
+    if ('OD' %in% cols) out$OD <- ifelse(is.na(out$OD), '', sprintf('%.4f', out$OD))
     names(out) <- vapply(paste0('exclusion.', tolower(cols)), tr, '', lang = lang)
     out
+}
+
+
+#' Tab Comparing the Original and the Refitted Model
+#'
+#' Inserted after the model parameters when standard points are excluded and
+#' removed when all of them are restored.
+#'
+#' @param session Session of the curve module.
+#' @param show Insert (`TRUE`) or remove (`FALSE`) the tab.
+#' @param lang Language code.
+#'
+#' @return Called for its side effect.
+#' @keywords internal
+toggle_refit_tab <- function(session, show, lang) {
+    if (!show) return(bslib::nav_remove('tabs', 'refit', session = session))
+    panel <- bslib::nav_panel(
+        tr('effect.tab', lang), value = 'refit', icon = shiny::icon('code-compare'),
+        # Panels inserted later are not wrapped in the body of the card like the others
+        bslib::card_body(shiny::div(class = 'step-view', shiny::uiOutput(session$ns('effect'))))
+    )
+    bslib::nav_insert('tabs', panel, target = 'coefs', position = 'after', select = FALSE, session = session)
 }
 
 
@@ -134,6 +162,7 @@ mod_curve_ui <- function(id, lang) {
     )
 
     main <- bslib::navset_card_underline(
+        id = ns('tabs'),
         full_screen = TRUE,
         bslib::nav_panel(
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
@@ -143,10 +172,7 @@ mod_curve_ui <- function(id, lang) {
                     shiny::column(6, shiny::plotOutput(ns('curve'), height = 'auto', click = ns('curve_click'))),
                     shiny::column(6, shiny::plotOutput(ns('resid'), height = 'auto'))
                 ),
-                shiny::fluidRow(
-                    shiny::column(7, shiny::uiOutput(ns('quantification'))),
-                    shiny::column(5, shiny::uiOutput(ns('r2')))
-                ),
+                shiny::fluidRow(shiny::column(6, shiny::uiOutput(ns('r2')))),
                 shiny::uiOutput(ns('notes')),
                 shiny::h5(with_tooltip(t('curve.compare'), t('compare.note'))),
                 shiny::tableOutput(ns('compare')),
@@ -157,6 +183,7 @@ mod_curve_ui <- function(id, lang) {
             t('curve.coefs'), value = 'coefs',
             shiny::div(class = 'step-view',
                        shiny::uiOutput(ns('verdict')),
+                       shiny::uiOutput(ns('refit_note')),
                        shiny::h5(t('curve.section_coefs')),
                        shiny::tableOutput(ns('coefs')),
                        shiny::h5(t('quality.section_standards')),
@@ -227,6 +254,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             compare_models(result()$standard_data, weights = s$weights)
         })
 
+        # Original (all standards) and refitted (without the excluded points) calibrations
+        effect_tables <- shiny::reactive({
+            r <- rounding()
+            exclusion_effect_tables(result()$exclusion_effect, lang, r$fun, r$par)
+        })
+
         # The plots keep their proportions instead of stretching with the width
         plot_height <- function(name) {
             function() {
@@ -236,7 +269,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         }
         output$curve <- shiny::renderPlot({
             args <- plot_args()
-            plot_standard_curve(result(), xtitle = args$xtitle, ytitle = args$ytitle)
+            plot_standard_curve(result(), xtitle = args$xtitle, ytitle = args$ytitle, lang = lang)
         }, height = plot_height('curve'))
         output$resid <- shiny::renderPlot({
             plot_fitted_resid(result(), xtitle = plot_args()$xtitle, lang = lang)
@@ -247,7 +280,6 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
         })
-        output$quantification <- shiny::renderUI(quantification_ui(result()$result$flag, lang))
         output$r2 <- shiny::renderUI(r2_ui(result()$quality$curve$r2, lang))
         output$coefs <- shiny::renderTable({
             tab <- coef_table()
@@ -334,11 +366,36 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shiny::tagList(
                 shiny::h4(t('curve.exclusions')),
                 shiny::tableOutput(ns('exclusions_table')),
+                shiny::p(class = 'text-muted small mt-2', shiny::icon('code-compare'), ' ', t('effect.hint')),
                 shiny::actionButton(ns('restore_all'), t('curve.restore_all'), icon = shiny::icon('undo')),
                 shiny::br(), shiny::br()
             )
         })
-        output$exclusions_table <- shiny::renderTable(exclusions_table(exclusions(), lang))
+
+        # The comparison of the original and the refitted model has its own tab while points are excluded
+        has_effect <- shiny::reactive({
+            !is.null(tryCatch(result()$exclusion_effect, error = function(e) NULL))
+        })
+        refit_tab <- shiny::reactiveVal(FALSE)
+        shiny::observeEvent(has_effect(), {
+            if (has_effect() == refit_tab()) return()
+            refit_tab(has_effect())
+            toggle_refit_tab(session, has_effect(), lang)
+        })
+        # The exclusions of the calculation have the level names and the concentrations
+        output$exclusions_table <- shiny::renderTable(exclusions_table(result()$exclusions, lang))
+        output$effect <- shiny::renderUI({
+            exclusion_effect_ui(effect_tables(), ns, result()$quality$criteria, lang)
+        })
+        output$effect_coefs <- shiny::renderTable(effect_tables()$coefs, na = '')
+        output$effect_summary <- shiny::renderTable(effect_tables()$summary, na = '')
+        output$effect_back_calc <- shiny::renderTable(effect_tables()$back_calc, na = '')
+        output$refit_note <- shiny::renderUI({
+            n <- nrow(result()$exclusions)
+            if (n == 0) return(NULL)
+            shiny::div(class = 'alert alert-info refit-note', shiny::icon('circle-info'), ' ',
+                       t('curve.refit_note', n = n))
+        })
 
         output$save_plot <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_plot.jpeg'),
@@ -354,6 +411,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
              model = shiny::reactive(settings()$model),
              weights = shiny::reactive(settings()$weights),
              exclusions = exclusions,
-             comparison = comparison)
+             comparison = comparison,
+             effect_tables = effect_tables)
     })
 }

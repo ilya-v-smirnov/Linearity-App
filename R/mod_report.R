@@ -57,8 +57,9 @@ mod_report_server <- function(id, lang, curve, summary) {
 
         plot <- shiny::reactive({
             args <- curve$plot_args()
+            # The report shows the calibration accepted by the user (refitted without excluded points)
             get_plots(curve$result(), xtitle = args$xtitle, ytitle = args$ytitle,
-                      plot.theme = report_theme(), lang = lang)
+                      plot.theme = report_theme(), lang = lang, show_original = FALSE)
         })
 
         blocks <- shiny::reactive({
@@ -84,7 +85,8 @@ mod_report_server <- function(id, lang, curve, summary) {
                           quality = list(summary = quality_summary(r, lang, sample_warnings),
                                          tables = tables),
                           notes = c(curve$notes(), message_text(sample_warnings, lang)),
-                          lang = lang)
+                          lang = lang,
+                          exclusion_effect = curve$effect_tables())
         })
 
         output$preview <- shiny::renderUI({

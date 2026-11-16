@@ -66,7 +66,8 @@ fake_curve <- function(lang = 'en') {
          model = shiny::reactive('LRM'),
          weights = shiny::reactive('none'),
          exclusions = shiny::reactive(data.frame(key = character(0), reason = character(0))),
-         comparison = shiny::reactive(compare_models(r$standard_data)))
+         comparison = shiny::reactive(compare_models(r$standard_data)),
+         effect_tables = shiny::reactive(NULL))
 }
 
 test_that('results module translates flags and downloads tables', {
@@ -94,6 +95,7 @@ test_that('summary module groups by sample by default, offers quick choices and 
         expect_match(output$infographics$html, 'stat-tile', fixed = TRUE)
         expect_match(output$infographics$html, 'groups_plot', fixed = TRUE)
         expect_match(output$groups_plot$src, '^data:image/png')
+        expect_match(output$infographics$html, '4 of 12 sample wells quantified', fixed = TRUE)
 
         session$setInputs(group_vars = c('sample.name', 'sample.date', 'dilution'), stats = c('n', 'mean'))
         out <- session$returned$table()
@@ -411,6 +413,8 @@ test_that('standard points are excluded and restored by clicking on the curve', 
     data <- shiny::reactive(check_assay(read_assay(sample_path('bca_plate.xlsx'))))
     clicked_point <- NULL
     local_mocked_bindings(nearPoints = function(df, ...) df[df$key == clicked_point, ], .package = 'shiny')
+    tab_calls <- logical(0)
+    local_mocked_bindings(toggle_refit_tab = function(session, show, lang) tab_calls <<- c(tab_calls, show))
     shiny::testServer(LinearityApp:::mod_curve_server,
                       args = list(lang = 'en', data = data, rounding = rounding_3()), {
         session$setInputs(model = 'QRM', weights = 'none',
@@ -427,12 +431,27 @@ test_that('standard points are excluded and restored by clicking on the curve', 
         expect_equal(nrow(session$returned$result()$standard_data), n_used - 1)
         expect_equal(session$returned$result()$exclusions$reason, 'bubble in the well')
         expect_match(output$exclusions_table, 'bubble in the well', fixed = TRUE)
+        # the original and the refitted calibration are compared on a tab of their own
+        expect_equal(tab_calls, TRUE)
+        expect_match(output$exclusions$html, 'Original vs refitted', fixed = TRUE)
+        expect_false(is.null(session$returned$result()$original_fit))
+        expect_match(output$effect$html, 'Effect of the excluded points', fixed = TRUE)
+        expect_match(output$effect_coefs, 'Refitted', fixed = TRUE)
+        expect_match(output$effect_back_calc, 'Refitted calculated', fixed = TRUE)
+        expect_match(output$effect_back_calc, '<td> Yes </td>', fixed = TRUE)
+        expect_match(output$exclusions_table, '<td> S2 </td>', fixed = TRUE)
+        expect_match(output$effect_summary, 'Mean absolute relative error', fixed = TRUE)
+        expect_match(output$refit_note$html, 'refitted without 1 excluded', fixed = TRUE)
+        expect_equal(nrow(session$returned$effect_tables()$back_calc), n_used)
         # the exclusion is listed in the table, not repeated as a warning
         expect_false(any(grepl('excluded from the fit', message_text(session$returned$result()$notes))))
 
         session$setInputs(curve_click = list(x = 2, y = 2))
         session$setInputs(confirm_restore = 1)
         expect_equal(nrow(session$returned$exclusions()), 0)
+        expect_null(session$returned$effect_tables())
+        expect_null(output$refit_note)
+        expect_equal(tab_calls, c(TRUE, FALSE))
 
         # a standard reason is stored with its label
         clicked_point <<- 'C2'
@@ -449,12 +468,12 @@ test_that('standard points are excluded and restored by clicking on the curve', 
     })
 })
 
-test_that('quantification and R2 are shown as infographics, not as warnings', {
+test_that('R2 is shown as an infographic and quantification moved to the result summary', {
     data <- shiny::reactive(load_sample('griess'))
     shiny::testServer(LinearityApp:::mod_curve_server,
                       args = list(lang = 'en', data = data, rounding = rounding_3()), {
         session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
-        expect_match(output$quantification$html, '4 of 12 sample wells quantified', fixed = TRUE)
+        expect_error(output$quantification)
         expect_match(output$r2$html, '<strong>0.9847</strong>', fixed = TRUE)
         # both warnings of this run are shown as infographics: no warnings box
         expect_null(output$notes)
@@ -478,4 +497,22 @@ test_that('infographics count the sample wells and place R2 on its scale', {
     expect_match(poor, 'r2-badge r2-poor', fixed = TRUE)
     expect_match(poor, 'left: 0.0%', fixed = TRUE)
     expect_null(LinearityApp:::r2_ui(NA))
+})
+
+test_that('the comparison tab is inserted after the model parameters and removed', {
+    calls <- list()
+    local_mocked_bindings(
+        nav_insert = function(id, nav, target, position, select, session) {
+            calls[[length(calls) + 1]] <<- list('insert', id, target, position, select, as.character(nav))
+        },
+        nav_remove = function(id, target, session) calls[[length(calls) + 1]] <<- list('remove', id, target),
+        .package = 'bslib')
+    session <- list(ns = shiny::NS('curve'))
+    LinearityApp:::toggle_refit_tab(session, TRUE, 'ru')
+    LinearityApp:::toggle_refit_tab(session, FALSE, 'ru')
+    expect_equal(calls[[1]][2:5], list('tabs', 'coefs', 'after', FALSE))
+    expect_match(calls[[1]][[6]], tr('effect.tab', 'ru'), fixed = TRUE)
+    expect_match(calls[[1]][[6]], 'curve-effect', fixed = TRUE)
+    expect_equal(calls[[2]], list('remove', 'tabs', 'refit'))
+    expect_match(as.character(LinearityApp:::mod_curve_ui('curve', 'en')), 'id="curve-tabs"', fixed = TRUE)
 })

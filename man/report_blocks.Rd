@@ -19,7 +19,8 @@ report_blocks(
   comparison = NULL,
   quality = NULL,
   notes = character(0),
-  lang = "en"
+  lang = "en",
+  exclusion_effect = NULL
 )
 }
 \arguments{
@@ -53,6 +54,9 @@ report_blocks(
 \item{notes}{Character vector of warnings.}
 
 \item{lang}{Language of the report headings.}
+
+\item{exclusion_effect}{Optional tables comparing the calibration on all
+standards with the refitted one (see \code{\link[=exclusion_effect_tables]{exclusion_effect_tables()}}).}
 }
 \value{
 A list of blocks, each a list with \code{type} (\code{date}, \code{title},
@@ -68,9 +72,12 @@ The report is a list of blocks; the same blocks are written to Word
 \item \code{short}: the standard curve (plots, model and its parameters), the
 sample results and the means;
 \item \code{detailed}: the analysis parameters, the standard curve with the
-comparison of models and the excluded points, the full quality
-assessment, the results with the quality controls and the means, and the
-warnings.
+comparison of models, the excluded points and their effect on the
+calibration, the full quality assessment, the results with the quality
+controls and the means, and the warnings.
 }
+
+With excluded points, the model and its parameters are those of the
+calibration refitted without them, as accepted by the user; a line says so.
 }
 \keyword{internal}

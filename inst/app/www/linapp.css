@@ -245,7 +245,7 @@
     text-align: left;
 }
 
-/* Infographics of the standard curve step -------------------------------- */
+/* Infographics: quantification of the samples and R2 of the curve ------- */
 
 .infographic {
     border: 1px solid var(--bs-border-color);
@@ -510,4 +510,15 @@
     line-height: 0.8rem;
     width: 0.8rem;
     text-align: center;
+}
+
+/* Standard curve step: effect of the excluded points --------------------- */
+
+.exclusion-effect h5 {
+    font-size: 1.05rem;
+}
+
+.refit-note {
+    padding: 0.5rem 0.75rem;
+    margin: 0.75rem 0 0.5rem;
 }

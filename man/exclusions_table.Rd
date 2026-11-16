@@ -7,7 +7,8 @@
 exclusions_table(ex, lang)
 }
 \arguments{
-\item{ex}{A data.frame with \code{key}, \code{reason} and optionally \code{conc}, \code{OD}.}
+\item{ex}{A data.frame with \code{key}, \code{reason} and optionally \code{standard},
+\code{conc}, \code{OD} (see the \code{exclusions} element of \code{\link[=calculate]{calculate()}}).}
 
 \item{lang}{Language code.}
 }

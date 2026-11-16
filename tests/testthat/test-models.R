@@ -174,6 +174,79 @@ test_that('standard points can be excluded with a reason', {
     expect_s3_class(get_plots(r), 'ggplot')
 })
 
+test_that('excluded points are compared with the fit on all standards', {
+    data <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    full <- calculate(data, 'QRM')
+    expect_null(full$original_fit)
+    expect_null(full$exclusion_effect)
+    expect_null(LinearityApp:::exclusion_effect_tables(full$exclusion_effect))
+
+    r <- calculate(data, 'QRM', exclude = data.frame(key = 'B1', reason = 'bubble'))
+    # the original fit is the fit on all standards; the results use the refitted one
+    expect_equal(r$original_fit$par, full$fit$par)
+    expect_false(isTRUE(all.equal(r$fit$par, full$fit$par)))
+    e <- r$exclusion_effect
+    expect_equal(e$coefs$coef, c('a', 'b', 'c'))
+    expect_equal(e$coefs$original, coef_table_fit(full$fit)$est)
+    expect_equal(e$coefs$refitted, coef_table_fit(r$fit)$est)
+
+    bc <- e$back_calc
+    expect_equal(nrow(bc), nrow(full$standard_data))
+    expect_equal(bc$key[bc$excluded], 'B1')
+    # levels are named from the highest concentration; the position is the well
+    expect_equal(bc$standard[bc$key %in% c('A1', 'B1', 'G1')], c('S1', 'S2', 'S7'))
+    expect_equal(r$exclusions$standard, 'S2')
+    expect_equal(bc$error.original, 100 * (bc$calc.original - bc$conc) / bc$conc)
+    expect_equal(bc$calc.original, back_calculate(full$fit)$calc)
+
+    s <- e$summary
+    expect_equal(s$statistic, c('mean_error', 'max_error', 'n_pass'))
+    expect_equal(s$original[1], mean(abs(bc$error.original)))
+    expect_equal(s$refitted[2], max(abs(bc$error.refitted[!bc$excluded])))
+    expect_equal(s$n_total.original[3], nrow(bc))
+    expect_equal(s$n_total.refitted[3], nrow(bc) - 1)
+
+    tabs <- LinearityApp:::exclusion_effect_tables(e, 'en')
+    expect_equal(names(tabs$coefs), c('Coef', 'Original', 'Refitted'))
+    expect_equal(names(tabs$back_calc), c('Standard', 'Position', 'Nominal', 'Original calculated',
+                                          'Refitted calculated', 'Original error, %', 'Refitted error, %',
+                                          'Excluded'))
+    expect_equal(tabs$summary[[1]], c('Mean absolute relative error, %', 'Maximum absolute relative error, %',
+                                      'Number of standards meeting acceptance criteria'))
+    expect_match(tabs$summary$Refitted[3], paste0(' / ', nrow(bc) - 1), fixed = TRUE)
+    expect_equal(tabs$back_calc$Position[tabs$back_calc$Excluded == 'Yes'], 'B1')
+    expect_equal(sum(tabs$back_calc$Excluded == ''), nrow(bc) - 1)
+    ex <- exclusions_table(r$exclusions, 'ru')
+    expect_equal(names(ex)[1:2], c(tr('exclusion.standard', 'ru'), tr('exclusion.key', 'ru')))
+    expect_equal(unname(unlist(ex[1, 1:2])), c('S2', 'B1'))
+})
+
+test_that('a standard meets the criteria when its error is within the limit of its level', {
+    std <- data.frame(.key = paste0('w', 1:4), conc = c(1, 2, 4, 8), OD = c(1, 2, 4, 8))
+    fit <- fit_curve(std, 'LRM', linear = TRUE)
+    # an exact line: every error is zero
+    e <- exclusion_effect(fit, fit, std, character(0), qc_criteria())
+    expect_equal(e$summary$original, c(0, 0, 4), tolerance = 1e-8)
+    expect_equal(e$back_calc$key, std$.key)
+    expect_equal(e$back_calc$standard, c('S4', 'S3', 'S2', 'S1'))
+    expect_equal(LinearityApp:::standard_names(c(1, 8), levels = c(1, 2, 4, 8, 16)), c('S5', 'S2'))
+})
+
+test_that('the original curve is dashed on the plot after exclusions, not in the report', {
+    data <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    r <- calculate(data, 'QRM', exclude = data.frame(key = 'B1', reason = 'bubble'))
+    linetypes <- function(p) {
+        built <- ggplot2::ggplot_build(p)
+        unlist(lapply(built$data, function(d) if ('linetype' %in% names(d)) unique(d$linetype)))
+    }
+    curve <- LinearityApp:::plot_standard_curve(r, lang = 'ru')
+    expect_setequal(linetypes(curve), c('dashed', 'solid'))
+    expect_true(tr('plot.curve_original', 'ru') %in% ggplot2::ggplot_build(curve)$plot$scales$get_scales('linetype')$get_labels())
+    report <- LinearityApp:::plot_standard_curve(r, show_original = FALSE)
+    expect_false('dashed' %in% linetypes(report))
+    expect_false('dashed' %in% linetypes(LinearityApp:::plot_standard_curve(calculate(data, 'QRM'))))
+})
+
 test_that('logistic curves have no solution beyond the asymptotes', {
     f <- function(x) logistic(x, 0, 1.2, 10, 2)
     data <- synthetic_data(f, conc = levels_7, sample_od = c(f(5), 2.5, 0.5))

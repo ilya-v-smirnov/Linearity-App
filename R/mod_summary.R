@@ -225,6 +225,7 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             n_groups <- nrow(a$samples)
             shiny::tagList(
                 samples_tiles_ui(a, qc, lang),
+                quantification_ui(result()$flag, lang),
                 shiny::div(class = 'infographic',
                            shiny::div(class = 'infographic-title', t('samples.figure_title')),
                            shiny::plotOutput(ns('groups_plot'), height = paste0(groups_plot_height(n_groups), 'px')),

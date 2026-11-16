@@ -120,6 +120,22 @@ well_keys <- function(data) {
 }
 
 
+#' Names of Standard Levels
+#'
+#' Standard levels are named `S1`, `S2`, ... from the highest to the lowest
+#' concentration.
+#'
+#' @param conc Concentrations of the standards to name.
+#' @param levels Concentrations of all standards of the run.
+#'
+#' @return Character vector.
+#' @keywords internal
+standard_names <- function(conc, levels = conc) {
+    if (length(conc) == 0) return(character(0))
+    paste0('S', match(conc, sort(unique(levels), decreasing = TRUE)))
+}
+
+
 #' Select Standard Wells Usable for Fitting
 #'
 #' Standards with a missing OD, (on log scales) a non-positive OD after
@@ -240,7 +256,12 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `nc_value`: background value subtracted from all ODs;
 #'   * `standard_data`: standards used in the fit (with `.key`);
 #'   * `excluded_standards`: standards not used in the fit with a `reason`;
-#'   * `exclusions`: standards excluded by the user (`key`, `conc`, `OD`, `reason`);
+#'   * `exclusions`: standards excluded by the user (`standard`: level name,
+#'     see [standard_names()]; `key`: position; `conc`, `OD`, `reason`);
+#'   * `original_fit`: with exclusions, the calibration fitted on all standards
+#'     (`NULL` without exclusions or if it cannot be fitted);
+#'   * `exclusion_effect`: comparison of the original and the refitted
+#'     calibration (see [exclusion_effect()]; `NULL` without `original_fit`);
 #'   * `calibration_range`: quantification range (LLOQ, ULOQ) used for the flags;
 #'   * `standard_range`: range of all standard concentrations used in the fit;
 #'   * `quality`: quality assessment of the run (see [assess_run()]);
@@ -361,8 +382,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     }
 
     manual <- std$excluded[std$excluded$reason == FLAGS$excluded, , drop = FALSE]
-    exclusions <- data.frame(key = manual$.key, conc = manual$conc,
-                             OD = round(manual$OD, 4), reason = manual$comment)
+    all_levels <- data$conc[data$type == 'standard']
+    exclusions <- data.frame(standard = standard_names(manual$conc, all_levels), key = manual$.key,
+                             conc = manual$conc, OD = round(manual$OD, 4), reason = manual$comment)
+
+    # With points excluded by the user, the fit on all standards is kept for comparison
+    original_fit <- NULL
+    effect <- NULL
+    if (nrow(manual) > 0) {
+        all_std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale)$used
+        original_fit <- tryCatch(fit_curve(all_std, model, linear, weights), error = function(e) NULL)
+        if (!is.null(original_fit)) {
+            effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels)
+        }
+    }
 
     rownames(standard_data) <- NULL
     standard_data$.od_raw <- NULL
@@ -382,6 +415,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          standard_data = standard_data,
          excluded_standards = std$excluded,
          exclusions = exclusions,
+         original_fit = original_fit,
+         exclusion_effect = effect,
          calibration_range = conc_range,
          standard_range = fit$conc_range,
          quality = quality,

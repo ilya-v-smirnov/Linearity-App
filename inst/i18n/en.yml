@@ -141,6 +141,7 @@ curve:
   restore: "Restore"
   cancel: "Cancel"
   restore_all: "Restore all points"
+  refit_note: "The model is refitted without {n} excluded standard point(s); its parameters are used for the results and the report."
 
 infographic:
   samples: "{n} of {total} sample wells quantified"
@@ -222,7 +223,8 @@ crit:
   reset: "Default values"
 
 exclusion:
-  key: "Well / row"
+  standard: "Standard"
+  key: "Position"
   conc: "Concentration"
   od: "OD"
   reason: "Reason"
@@ -230,6 +232,8 @@ exclusion:
 plot:
   residuals: "Residuals"
   weighted_residuals: "Weighted residuals"
+  curve_original: "Original (all standards)"
+  curve_refitted: "Refitted"
 
 results:
   download: "Download results (xlsx)"
@@ -296,6 +300,7 @@ report:
   section_exclusions: "Excluded standard points"
   section_models: "Comparison of models"
   section_quality: "Quality of the run"
+  refit_note: "The model was refitted without {n} standard point(s) excluded by the user; the parameters below are those of the refitted model."
   weights: "Weighting: "
   method: "Calibration method: "
   scale: "Scale: "
@@ -454,3 +459,28 @@ samples:
   tile_qc: "QC levels within limits"
   no_dilution: "No sample is measured at two or more dilutions within the chosen groups."
   no_qc: "No quality controls on the plate."
+
+effect:
+  tab: "Original vs refitted"
+  hint: "The original and the refitted model are compared on the \"Original vs refitted\" tab."
+  title: "Effect of the excluded points"
+  note: "The original model is fitted on all standards, the refitted model without the excluded points. Errors are relative to the nominal concentration. A standard meets the acceptance criteria if its error is within ±{bias} % (±{edge} % at the lowest and highest level of the fit); the refitted statistics use only the points kept in the fit."
+  section_coefs: "Coefficients"
+  section_summary: "Back-calculation errors"
+  section_back_calc: "Back-calculated standards"
+  coef: "Coef"
+  original: "Original"
+  refitted: "Refitted"
+  parameter: "Parameter"
+  standard: "Standard"
+  nominal: "Nominal"
+  calc_original: "Original calculated"
+  calc_refitted: "Refitted calculated"
+  error_original: "Original error, %"
+  error_refitted: "Refitted error, %"
+  position: "Position"
+  excluded: "Excluded"
+  excluded_yes: "Yes"
+  mean_error: "Mean absolute relative error, %"
+  max_error: "Maximum absolute relative error, %"
+  n_pass: "Number of standards meeting acceptance criteria"

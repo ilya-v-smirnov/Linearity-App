@@ -18,6 +18,8 @@ quantification_counts <- function(flags) {
 
 #' Infographic of Quantified Samples
 #'
+#' Shown on the infographics tab of the result summary step.
+#'
 #' A horizontal bar of the sample wells: below the background (red) and below
 #' the LLOQ (orange) on the left, quantified (green) in the middle, above the
 #' ULOQ (orange) and other problems (grey) on the right.

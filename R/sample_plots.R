@@ -1,7 +1,7 @@
 #' Colours of the Sample Infographics
 #'
-#' The quantification status uses the colours of the infographic of the
-#' standard curve step (see [quantification_ui()]); the precision of the
+#' The quantification status uses the colours of the quantification
+#' infographic (see [quantification_ui()]); the precision of the
 #' replicates and the acceptance of dilutions and QC use a neutral blue for
 #' "within limits" and red for "outside".
 #'
@@ -39,15 +39,15 @@ quantification_status <- function(flags) {
 #' @keywords internal
 group_labels <- function(groups, group_vars) {
     cols <- group_vars[vapply(group_vars, function(v) !all(is.na(groups[[v]])), logical(1))]
-    if (length(cols) == 0) return(rep('—', nrow(groups)))
+    if (length(cols) == 0) return(rep('\u2014', nrow(groups)))
     parts <- lapply(cols, function(v) {
         x <- groups[[v]]
-        out <- if (v == 'dilution') paste0('×', format(x, trim = TRUE, drop0trailing = TRUE)) else
+        out <- if (v == 'dilution') paste0('\u00d7', format(x, trim = TRUE, drop0trailing = TRUE)) else
             as.character(x)
-        out[is.na(x)] <- '—'
+        out[is.na(x)] <- '\u2014'
         out
     })
-    do.call(paste, c(parts, sep = ' · '))
+    do.call(paste, c(parts, sep = ' \u00b7 '))
 }
 
 
@@ -153,7 +153,7 @@ plot_sample_groups <- function(figure, lang = 'en') {
         ggplot2::geom_col(data = cv_data[!is.na(cv_data$cv), , drop = FALSE],
                           ggplot2::aes(x = .data$cv, fill = .data$fill), width = 0.6) +
         ggplot2::geom_text(data = cv_data[is.na(cv_data$cv), , drop = FALSE], ggplot2::aes(x = 0),
-                           label = '–', hjust = 0, colour = 'grey50', size = 3.5) +
+                           label = '\u2013', hjust = 0, colour = 'grey50', size = 3.5) +
         ggplot2::geom_vline(xintercept = limit, linetype = 'dashed', colour = 'grey30', linewidth = 0.5) +
         ggplot2::scale_fill_manual(values = colours) +
         ggplot2::scale_x_continuous(limits = c(0, max(c(cv_data$cv, limit), na.rm = TRUE) * 1.08),
@@ -227,7 +227,7 @@ samples_tiles_ui <- function(assessment, qc, lang) {
     tiles <- list(
         tile(nrow(s), t('samples.tile_groups')),
         tile(of(n_full, nrow(s)), t('samples.tile_quantified'), good_if(n_full == nrow(s))),
-        tile(if (with_cv > 0) sprintf('%.1f %%', stats::median(s$cv, na.rm = TRUE)) else '–',
+        tile(if (with_cv > 0) sprintf('%.1f %%', stats::median(s$cv, na.rm = TRUE)) else '\u2013',
              t('samples.tile_median_cv')),
         tile(of(n_cv, with_cv), t('samples.tile_high_cv'), if (with_cv > 0) good_if(n_cv == 0))
     )
@@ -263,7 +263,7 @@ plot_dilution_linearity <- function(dilution, criteria = qc_criteria(), lang = '
     d <- dilution
     d$sample <- group_labels(d, cols)
     dil <- sort(unique(d$dilution))
-    d$x <- factor(d$dilution, levels = dil, labels = paste0('×', format(dil, trim = TRUE, drop0trailing = TRUE)))
+    d$x <- factor(d$dilution, levels = dil, labels = paste0('\u00d7', format(dil, trim = TRUE, drop0trailing = TRUE)))
     d$status <- ifelse(d$pass, 'pass', 'fail')
     limit <- criteria$dilution_bias
     span <- max(limit * 1.3, abs(d$deviation) * 1.1, na.rm = TRUE)

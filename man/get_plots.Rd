@@ -4,7 +4,14 @@
 \alias{get_plots}
 \title{Standard Curve and Residual Plots}
 \usage{
-get_plots(result, xtitle = "", ytitle = "", plot.theme = NULL, lang = "en")
+get_plots(
+  result,
+  xtitle = "",
+  ytitle = "",
+  plot.theme = NULL,
+  lang = "en",
+  show_original = TRUE
+)
 }
 \arguments{
 \item{result}{Output of \code{\link[=calculate]{calculate()}}.}
@@ -13,7 +20,10 @@ get_plots(result, xtitle = "", ytitle = "", plot.theme = NULL, lang = "en")
 
 \item{plot.theme}{Optional ggplot2 theme added to both plots.}
 
-\item{lang}{Language of the residual plot titles.}
+\item{lang}{Language of the residual plot titles and the legend.}
+
+\item{show_original}{Show the curve fitted on all standards as a dashed
+line (see \code{\link[=plot_standard_curve]{plot_standard_curve()}}).}
 }
 \value{
 A cowplot grid.

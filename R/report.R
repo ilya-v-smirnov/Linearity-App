@@ -6,9 +6,12 @@
 #' * `short`: the standard curve (plots, model and its parameters), the
 #'   sample results and the means;
 #' * `detailed`: the analysis parameters, the standard curve with the
-#'   comparison of models and the excluded points, the full quality
-#'   assessment, the results with the quality controls and the means, and the
-#'   warnings.
+#'   comparison of models, the excluded points and their effect on the
+#'   calibration, the full quality assessment, the results with the quality
+#'   controls and the means, and the warnings.
+#'
+#' With excluded points, the model and its parameters are those of the
+#' calibration refitted without them, as accepted by the user; a line says so.
 #'
 #' @inheritParams save_report
 #' @param type `"short"` or `"detailed"`.
@@ -20,7 +23,7 @@
 report_blocks <- function(type = c('short', 'detailed'), date, title, method, scale = NULL, weights = NULL,
                           model_table, result_table, means_table = NULL, qc_table = NULL,
                           exclusions = NULL, comparison = NULL, quality = NULL,
-                          notes = character(0), lang = 'en') {
+                          notes = character(0), lang = 'en', exclusion_effect = NULL) {
     type <- match.arg(type)
     t <- function(key) tr(key, lang)
     b <- function(type, ...) list(type = type, ...)
@@ -31,7 +34,10 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                  b('title', text = if (is.null(title)) '' else title))
     method_lines <- c(list(b('line', label = t('report.method'), value = method)),
                       if (!is.null(scale)) list(b('line', label = t('report.scale'), value = scale)),
-                      if (!is.null(weights)) list(b('line', label = t('report.weights'), value = weights)))
+                      if (!is.null(weights)) list(b('line', label = t('report.weights'), value = weights)),
+                      if (has_rows(exclusions)) {
+                          list(b('text', text = tr('report.refit_note', lang, n = nrow(exclusions))))
+                      })
 
     if (type == 'short') {
         return(c(head,
@@ -64,6 +70,12 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
       table(model_table),
       if (has_rows(comparison)) c(list(b('subheading', text = t('report.section_models'))), table(comparison)),
       if (has_rows(exclusions)) c(list(b('subheading', text = t('report.section_exclusions'))), table(exclusions)),
+      if (!is.null(exclusion_effect)) {
+          c(list(b('subheading', text = t('effect.title'))),
+            list(b('strong', text = t('effect.section_coefs'))), table(exclusion_effect$coefs),
+            list(b('strong', text = t('effect.section_summary'))), table(exclusion_effect$summary),
+            list(b('strong', text = t('effect.section_back_calc'))), table(exclusion_effect$back_calc))
+      },
       quality_part,
       list(b('heading', text = t('report.section_result'))), table(result_table),
       if (has_rows(qc_table)) c(list(b('subheading', text = t('report.section_qc'))), table(qc_table)),
@@ -184,6 +196,8 @@ report_preview <- function(blocks, plot_output, lang = 'en', max_rows = 8) {
 #' @param scale Scale of the fit (text shown in the report).
 #' @param weights Weighting (text shown in the report).
 #' @param exclusions Optional table of standard points excluded by the user.
+#' @param exclusion_effect Optional tables comparing the calibration on all
+#'   standards with the refitted one (see [exclusion_effect_tables()]).
 #' @param comparison Optional table comparing the calibration models.
 #' @param quality Optional quality assessment: a list with `summary` (from
 #'   `quality_summary()`) and `tables` (from [quality_tables()]).
@@ -213,10 +227,11 @@ save_report <- function(file,
                         quality = NULL,
                         notes = character(0),
                         lang = 'en',
-                        type = 'detailed') {
+                        type = 'detailed',
+                        exclusion_effect = NULL) {
     blocks <- report_blocks(type, date = date, title = title, method = method, scale = scale, weights = weights,
                             model_table = model_table, result_table = result_table, means_table = means_table,
                             qc_table = qc_table, exclusions = exclusions, comparison = comparison,
-                            quality = quality, notes = notes, lang = lang)
+                            quality = quality, notes = notes, lang = lang, exclusion_effect = exclusion_effect)
     write_report(blocks, file, plot)
 }

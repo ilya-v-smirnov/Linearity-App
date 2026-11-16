@@ -15,6 +15,9 @@ quantification_ui(flags, lang = "en")
 A shiny tag, or \code{NULL} when there are no sample wells.
 }
 \description{
+Shown on the infographics tab of the result summary step.
+}
+\details{
 A horizontal bar of the sample wells: below the background (red) and below
 the LLOQ (orange) on the left, quantified (green) in the middle, above the
 ULOQ (orange) and other problems (grey) on the right.

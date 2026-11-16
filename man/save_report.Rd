@@ -21,7 +21,8 @@ save_report(
   quality = NULL,
   notes = character(0),
   lang = "en",
-  type = "detailed"
+  type = "detailed",
+  exclusion_effect = NULL
 )
 }
 \arguments{
@@ -59,6 +60,9 @@ save_report(
 \item{lang}{Language of the report headings.}
 
 \item{type}{\code{"detailed"} (default) or \code{"short"} (see \code{\link[=report_blocks]{report_blocks()}}).}
+
+\item{exclusion_effect}{Optional tables comparing the calibration on all
+standards with the refitted one (see \code{\link[=exclusion_effect_tables]{exclusion_effect_tables()}}).}
 }
 \value{
 Called for its side effect.

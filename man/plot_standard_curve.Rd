@@ -4,12 +4,23 @@
 \alias{plot_standard_curve}
 \title{Plot Standard Curve with Fitted Model}
 \usage{
-plot_standard_curve(result, xtitle = "", ytitle = "")
+plot_standard_curve(
+  result,
+  xtitle = "",
+  ytitle = "",
+  show_original = TRUE,
+  lang = "en"
+)
 }
 \arguments{
 \item{result}{Output of \code{\link[=calculate]{calculate()}}.}
 
 \item{xtitle, ytitle}{Axis titles.}
+
+\item{show_original}{Show the curve fitted on all standards (if there are
+exclusions).}
+
+\item{lang}{Language of the legend.}
 }
 \value{
 A ggplot2 object.
@@ -18,6 +29,7 @@ A ggplot2 object.
 Standards used in the fit are shown as points, standards excluded by the
 user as red crosses. The concentration axis is logarithmic except for the
 LRM and QRM fitted on linear scales; the OD axis is logarithmic for models
-fitted on log10 scales.
+fitted on log10 scales. With excluded points, the curve fitted on all
+standards can be shown as a dashed line next to the refitted curve.
 }
 \keyword{internal}

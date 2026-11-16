@@ -51,7 +51,12 @@ A list with components:
 \item \code{nc_value}: background value subtracted from all ODs;
 \item \code{standard_data}: standards used in the fit (with \code{.key});
 \item \code{excluded_standards}: standards not used in the fit with a \code{reason};
-\item \code{exclusions}: standards excluded by the user (\code{key}, \code{conc}, \code{OD}, \code{reason});
+\item \code{exclusions}: standards excluded by the user (\code{standard}: level name,
+see \code{\link[=standard_names]{standard_names()}}; \code{key}: position; \code{conc}, \code{OD}, \code{reason});
+\item \code{original_fit}: with exclusions, the calibration fitted on all standards
+(\code{NULL} without exclusions or if it cannot be fitted);
+\item \code{exclusion_effect}: comparison of the original and the refitted
+calibration (see \code{\link[=exclusion_effect]{exclusion_effect()}}; \code{NULL} without \code{original_fit});
 \item \code{calibration_range}: quantification range (LLOQ, ULOQ) used for the flags;
 \item \code{standard_range}: range of all standard concentrations used in the fit;
 \item \code{quality}: quality assessment of the run (see \code{\link[=assess_run]{assess_run()}});
