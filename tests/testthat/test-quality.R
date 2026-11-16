@@ -171,13 +171,86 @@ test_that('criteria module reads both parts of the criteria', {
     expect_setequal(unique(LinearityApp:::criteria_fields()$part), c('standards', 'samples'))
 })
 
-test_that('the verdict of the run is shown with the model parameters', {
+test_that('the verdict of the calibration is shown with the model parameters', {
     r <- calculate(run_data(bias = c('3' = 1.5, '5' = 0.6)), 'LRM')
     html <- as.character(LinearityApp:::verdict_ui(r, 'ru'))
-    expect_match(html, tr('quality.rejected', 'ru'), fixed = TRUE)
+    expect_match(html, tr('quality.calibration_rejected', 'ru'), fixed = TRUE)
     expect_match(html, 'alert-danger', fixed = TRUE)
     ok <- calculate(run_data(), 'LRM')
-    expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'Run accepted', fixed = TRUE)
+    html <- as.character(LinearityApp:::verdict_ui(ok, 'en', unit = '\u00b5M'))
+    expect_match(html, 'Calibration accepted', fixed = TRUE)
+    expect_match(html, 'Accepted calibration range: 1\u201364 \u00b5M', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'range: 1\u201364</p>', fixed = TRUE)
+
+    # failing quality controls reject the run, not the calibration
+    qc <- calculate(run_data(qc = data.frame(id = 'QC-M', nominal = 10, od = 0.9)), 'LRM')
+    expect_false(qc$quality$accepted)
+    expect_match(as.character(LinearityApp:::verdict_ui(qc, 'en')), 'Calibration accepted', fixed = TRUE)
+})
+
+test_that('the CV criterion of the standards uses back-calculated concentrations', {
+    fit <- calculate(run_data(), 'LRM')$fit
+    st <- assess_standards(fit)
+    bc <- back_calculate(fit)
+    expect_equal(st$calc.cv[1], LinearityApp:::cv_percent(bc$calc[bc$conc == st$conc[1]]))
+    strict <- assess_standards(fit, qc_criteria(cv = 0.001, cv_edge = 0.001))
+    expect_equal(strict$pass, is.na(st$calc.cv) | st$calc.cv <= 0.001)
+    tab <- quality_tables(list(standards = st), 'en')$standards
+    expect_true('CV of back-calculated, %' %in% names(tab))
+    expect_false(any(grepl('OD, %', names(tab), fixed = TRUE)))
+})
+
+test_that('standards are sorted by decreasing concentration and failures are highlighted', {
+    r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    plain <- quality_tables(r$quality, 'en')$standards
+    expect_equal(plain[[1]], as.character(rev(linear_7)))
+    expect_false(any(grepl('crit-fail', unlist(plain), fixed = TRUE)))
+    marked <- quality_tables(r$quality, 'en', highlight = TRUE)$standards
+    failed <- grepl('crit-fail', marked[['Bias, %']], fixed = TRUE)
+    expect_equal(marked[[1]][failed], '8')
+    expect_match(marked[['Accepted']][failed], '<span class="crit-fail">', fixed = TRUE)
+    expect_false(any(grepl('crit-fail', marked[['CV of back-calculated, %']], fixed = TRUE)))
+})
+
+test_that('individual standard points are listed from the highest concentration', {
+    r <- calculate(run_data(), 'LRM')
+    for (lang in supported_languages()) {
+        tab <- LinearityApp:::standard_points_table(r, lang)
+        expect_equal(nrow(tab), 14)
+        expect_equal(names(tab)[c(3, 7)], c(tr('col.nominal', lang), tr('col.error', lang)))
+    }
+    tab <- LinearityApp:::standard_points_table(r, 'en')
+    expect_equal(tab$Standard[1:2], c('S1', 'S1'))
+    expect_equal(tab$Nominal[1], '64')
+    bc <- back_calculate(r$fit)
+    top <- bc[bc$conc == 64, ][1, ]
+    expect_equal(tab[['Bias, %']][1], sprintf('%.1f', 100 * (top$calc - 64) / 64))
+    expect_false(any(grepl('e-', tab[['Abs. error']], fixed = TRUE)))
+    expect_false(any(grepl('crit-fail', unlist(tab), fixed = TRUE)))
+
+    # level 4 (conc 8) reads 40 % high: both of its points deviate, the others do not
+    r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    marked <- LinearityApp:::standard_points_table(r, 'en', highlight = TRUE)
+    failed <- grepl('crit-fail', marked[['Bias, %']], fixed = TRUE)
+    expect_equal(marked$Nominal[failed], c('8', '8'))
+})
+
+test_that('the equation of each model uses the names of its coefficients', {
+    d <- run_data()
+    eq <- function(model, linear = FALSE) {
+        as.character(LinearityApp:::model_equation_ui(calculate(d, model, linear = linear)$fit))
+    }
+    expect_match(eq('LRM'), 'log<sub>10</sub>(<i>OD</i>) = <i>c</i> + <i>b</i>', fixed = TRUE)
+    expect_false(grepl('<i>a</i>', eq('LRM'), fixed = TRUE))
+    expect_match(eq('QRM'), '<i>a</i>', fixed = TRUE)
+    expect_match(eq('LRM', linear = TRUE), '<i>OD</i> = <i>c</i>', fixed = TRUE)
+    expect_match(eq('4PL'), 'eq-frac', fixed = TRUE)
+    expect_match(eq('5PL'), ']<sup><i>g</i></sup>', fixed = TRUE)
+    for (m in calibration_models()) {
+        coefs <- get_coef_ci(calculate(d, m)$fit)$coef
+        html <- eq(m)
+        for (k in coefs) expect_match(html, paste0('<i>', k, '</i>'), fixed = TRUE)
+    }
 })
 
 test_that('the report contains the quality section', {

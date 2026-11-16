@@ -121,7 +121,7 @@ The quality assessment is split between two steps:
 
 | Check | How | Default limit (ICH M10, ligand binding assays) |
 |-------|-----|-------------------------------------------------|
-| Standards | bias of the mean back-calculated concentration of each level; CV of OD replicates | ±20 % (±25 % at the lowest and highest level); CV ≤ 20 % (25 %) |
+| Standards | bias of the mean back-calculated concentration of each level; CV of the back-calculated concentrations of the replicates | ±20 % (±25 % at the lowest and highest level); CV ≤ 20 % (25 %) |
 | Calibration | number of accepted standard levels | ≥ 75 % and ≥ 6 levels |
 | LLOQ / ULOQ | lowest and highest accepted standard level; samples outside are flagged `< LLOQ` / `> ULOQ` | — |
 | Quality controls | bias of each QC well; rule: ≥ 2/3 of all QC and ≥ 50 % of each level within limits | ±20 % (±25 % near LLOQ/ULOQ) |

@@ -6,11 +6,15 @@
 #' @param quality The `quality` element of [calculate()], or a list with the
 #'   same elements (e.g. `samples` and `dilution` from [assess_samples()]).
 #' @param lang Language code.
+#' @param highlight If `TRUE`, the values of the standards failing the
+#'   acceptance criteria (bias, CV, verdict) are wrapped in
+#'   `<span class="crit-fail">`, for tables rendered as HTML.
 #'
 #' @return A named list of data.frames (`standards`, `qc`, `samples`,
-#'   `dilution`, `curve`); absent parts are `NULL`.
+#'   `dilution`, `curve`); absent parts are `NULL`. The standards are sorted
+#'   by decreasing concentration.
 #' @export
-quality_tables <- function(quality, lang = 'en') {
+quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     t <- function(key) tr(key, lang)
     num <- function(x, digits = 3) ifelse(is.na(x), '', as.character(signif(x, digits)))
     pct <- function(x) ifelse(is.na(x), '', sprintf('%.1f', x))
@@ -29,9 +33,17 @@ quality_tables <- function(quality, lang = 'en') {
     standards <- NULL
     st <- quality$standards
     if (!is.null(st)) {
-        standards <- name(data.frame(num(st$conc), st$n, num(st$od.mean, 4), pct(st$od.cv), num(st$calc.mean),
-                                     pct(st$bias), sprintf('%g', st$bias.limit), mark(st$pass)),
-                          c('col.conc', 'col.count', 'col.od_mean', 'col.od_cv', 'col.calc', 'col.bias',
+        st <- st[order(st$conc, decreasing = TRUE), , drop = FALSE]
+        # Values failing the criteria are wrapped in a span for display as HTML
+        fail <- function(x, failed) {
+            if (highlight) ifelse(failed, paste0('<span class="crit-fail">', x, '</span>'), x) else x
+        }
+        bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
+        cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
+        standards <- name(data.frame(num(st$conc), st$n, num(st$od.mean, 4), num(st$calc.mean),
+                                     fail(pct(st$calc.cv), cv_failed), fail(pct(st$bias), bias_failed),
+                                     sprintf('%g', st$bias.limit), fail(mark(st$pass), !st$pass)),
+                          c('col.conc', 'col.count', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
                             'col.limit', 'col.pass'))
     }
 
@@ -104,24 +116,77 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 }
 
 
-#' Verdict of the Run
+#' Individual Standard Points for Display
 #'
-#' A green or red box with the verdict, the quantification range, the number
-#' of accepted standard levels and the reasons of a rejection.
+#' The standards used in the fit with their back-calculated concentrations,
+#' sorted by decreasing concentration. A point deviates from the acceptance
+#' criteria if its bias exceeds `std_bias` (`std_bias_edge` at the lowest and
+#' highest level of the fit, see [qc_criteria()]).
 #'
 #' @param result Output of [calculate()].
 #' @param lang Language code.
+#' @param highlight If `TRUE`, the biases of deviating points are wrapped in
+#'   `<span class="crit-fail">`, for tables rendered as HTML.
+#'
+#' @return A data.frame with translated column names: level name, position,
+#'   nominal concentration, OD, back-calculated concentration, bias (%) and
+#'   absolute error (back-calculated minus nominal).
+#' @keywords internal
+standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
+    std <- result$standard_data
+    # Three significant digits without scientific notation (small errors near 0)
+    num <- function(x) ifelse(is.na(x), '', trimws(formatC(x, digits = 3, format = 'fg')))
+    calc <- inverse_fun(result$fit, std$OD)
+    levels <- c(std$conc, result$exclusions$conc)
+    bias <- 100 * (calc - std$conc) / std$conc
+    criteria <- if (is.null(result$quality$criteria)) qc_criteria() else result$quality$criteria
+    limit <- ifelse(std$conc %in% range(std$conc), criteria$std_bias_edge, criteria$std_bias)
+    bias_text <- ifelse(is.na(bias), '', sprintf('%.1f', bias))
+    if (highlight) {
+        failed <- is.na(bias) | abs(bias) > limit
+        bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)
+    }
+    out <- data.frame(standard = standard_names(std$conc, levels), key = std$.key, conc = num(std$conc),
+                      OD = sprintf('%.4f', std$OD), calc = num(calc), bias = bias_text,
+                      error = num(calc - std$conc))
+    out <- out[order(std$conc, decreasing = TRUE), , drop = FALSE]
+    rownames(out) <- NULL
+    names(out) <- vapply(c('exclusion.standard', 'exclusion.key', 'col.nominal', 'exclusion.od', 'col.calc',
+                           'col.bias', 'col.error'), tr, '', lang = lang)
+    out
+}
+
+
+#' Verdict of the Calibration
+#'
+#' A green or red box with the acceptance of the calibration (the standards
+#' only; the quality controls are assessed in the result summary), the
+#' accepted calibration range, the number of accepted standard levels and the
+#' reason of a rejection.
+#'
+#' @param result Output of [calculate()].
+#' @param lang Language code.
+#' @param unit Concentration unit appended to the range (e.g. `"nM"`); empty
+#'   for none.
 #'
 #' @return A shiny tag.
 #' @keywords internal
-verdict_ui <- function(result, lang) {
-    s <- quality_summary(result, lang)
-    accepted <- result$quality$accepted
+verdict_ui <- function(result, lang, unit = '') {
+    cal <- result$quality$calibration
+    accepted <- isTRUE(cal$accepted)
+    range <- tr('quality.calibration_range', lang, lloq = signif(result$calibration_range[1], 3),
+                uloq = signif(result$calibration_range[2], 3),
+                unit = if (nzchar(unit)) paste0(' ', unit) else '')
+    levels <- tr('quality.levels', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed)
+    reason <- if (!accepted) {
+        tr('quality.reason_calibration', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed)
+    }
+    title <- tr(if (accepted) 'quality.calibration_accepted' else 'quality.calibration_rejected', lang)
     shiny::div(class = 'quality-verdict',
                shiny::div(class = if (accepted) 'alert alert-success' else 'alert alert-danger',
-                          shiny::h4(shiny::icon(if (accepted) 'circle-check' else 'circle-xmark'), ' ', s$title),
-                          shiny::p(s$range), shiny::p(s$levels),
-                          if (length(s$reasons) > 0) shiny::tags$ul(lapply(s$reasons, shiny::tags$li))))
+                          shiny::h4(shiny::icon(if (accepted) 'circle-check' else 'circle-xmark'), ' ', title),
+                          shiny::p(range), shiny::p(levels),
+                          if (!is.null(reason)) shiny::tags$ul(shiny::tags$li(reason))))
 }
 
 

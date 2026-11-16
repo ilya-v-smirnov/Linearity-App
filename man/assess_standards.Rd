@@ -13,10 +13,12 @@ assess_standards(fit, criteria = qc_criteria())
 }
 \value{
 A data.frame with one row per level: \code{conc}, \code{n}, \code{od.mean},
-\code{od.cv}, \code{calc.mean}, \code{bias} (\%), \code{bias.limit}, \code{cv.limit}, \code{pass}.
+\code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%), \code{bias.limit},
+\code{cv.limit}, \code{pass}.
 }
 \description{
 Back-calculates the standards used in the fit and checks, for each level,
-the bias of the mean back-calculated concentration and the CV of the ODs.
+the bias of the mean back-calculated concentration and the CV of the
+back-calculated concentrations of the replicates.
 The lowest and highest levels use the \verb{_edge} limits.
 }

@@ -49,7 +49,7 @@ test_that('short and detailed reports have different sections', {
     }
     expect_equal(headings(short), c('Standard curve', 'Result', 'Means'))
     expect_true(all(c('Analysis parameters', 'Standard curve', 'Comparison of models', 'Quality of the run',
-                      'Standards', 'Dilution linearity', 'Result', 'Means', 'Warnings') %in% headings(detailed)))
+                      'Standards (level means)', 'Dilution linearity', 'Result', 'Means', 'Warnings') %in% headings(detailed)))
     # the empty exclusions table is left out
     expect_false('Excluded standard points' %in% headings(detailed))
     expect_equal(sum(vapply(short, function(b) b$type == 'plot', TRUE)), 1)

@@ -2,20 +2,25 @@
 % Please edit documentation in R/mod_quality.R
 \name{verdict_ui}
 \alias{verdict_ui}
-\title{Verdict of the Run}
+\title{Verdict of the Calibration}
 \usage{
-verdict_ui(result, lang)
+verdict_ui(result, lang, unit = "")
 }
 \arguments{
 \item{result}{Output of \code{\link[=calculate]{calculate()}}.}
 
 \item{lang}{Language code.}
+
+\item{unit}{Concentration unit appended to the range (e.g. \code{"nM"}); empty
+for none.}
 }
 \value{
 A shiny tag.
 }
 \description{
-A green or red box with the verdict, the quantification range, the number
-of accepted standard levels and the reasons of a rejection.
+A green or red box with the acceptance of the calibration (the standards
+only; the quality controls are assessed in the result summary), the
+accepted calibration range, the number of accepted standard levels and the
+reason of a rejection.
 }
 \keyword{internal}

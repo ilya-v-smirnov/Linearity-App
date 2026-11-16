@@ -68,14 +68,16 @@ near_edge <- function(conc, range, edge) {
 #' Assess Standard Levels
 #'
 #' Back-calculates the standards used in the fit and checks, for each level,
-#' the bias of the mean back-calculated concentration and the CV of the ODs.
+#' the bias of the mean back-calculated concentration and the CV of the
+#' back-calculated concentrations of the replicates.
 #' The lowest and highest levels use the `_edge` limits.
 #'
 #' @param fit A `lin_fit` object.
 #' @param criteria See [qc_criteria()].
 #'
 #' @return A data.frame with one row per level: `conc`, `n`, `od.mean`,
-#'   `od.cv`, `calc.mean`, `bias` (%), `bias.limit`, `cv.limit`, `pass`.
+#'   `od.cv`, `calc.mean`, `calc.cv` (%), `bias` (%), `bias.limit`,
+#'   `cv.limit`, `pass`.
 #' @export
 assess_standards <- function(fit, criteria = qc_criteria()) {
     bc <- back_calculate(fit)
@@ -88,10 +90,10 @@ assess_standards <- function(fit, criteria = qc_criteria()) {
         bias <- 100 * (calc_mean - lv) / lv
         bias_limit <- if (edge) criteria$std_bias_edge else criteria$std_bias
         cv_limit <- if (edge) criteria$cv_edge else criteria$cv
-        od_cv <- cv_percent(b$OD)
-        pass <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(od_cv) || od_cv <= cv_limit)
-        data.frame(conc = lv, n = nrow(b), od.mean = mean(b$OD), od.cv = od_cv,
-                   calc.mean = calc_mean, bias = bias, bias.limit = bias_limit,
+        calc_cv <- cv_percent(b$calc)
+        pass <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(calc_cv) || calc_cv <= cv_limit)
+        data.frame(conc = lv, n = nrow(b), od.mean = mean(b$OD), od.cv = cv_percent(b$OD),
+                   calc.mean = calc_mean, calc.cv = calc_cv, bias = bias, bias.limit = bias_limit,
                    cv.limit = cv_limit, pass = pass)
     })
     do.call(rbind, rows)

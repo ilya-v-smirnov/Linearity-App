@@ -109,6 +109,46 @@ exclusions_table <- function(ex, lang) {
 }
 
 
+#' Equation of a Calibration Model
+#'
+#' The equation of the fitted model with the names of the coefficients of
+#' [get_coef_ci()] (`C` is the concentration, `OD` the background-subtracted
+#' optical density). LRM and QRM are on log10 scales unless fitted on
+#' untransformed values.
+#'
+#' @param fit A `lin_fit` object.
+#'
+#' @return A shiny tag.
+#' @keywords internal
+model_equation_ui <- function(fit) {
+    # One HTML string: line breaks between tags would show as spaces in the equation
+    v <- function(x) paste0('<i>', x, '</i>')
+    log10 <- function(x) paste0('log<sub>10</sub>(', x, ')')
+    frac <- function(num, den) {
+        paste0('<span class="eq-frac"><span class="eq-num">', num, '</span><span class="eq-den">', den,
+               '</span></span>')
+    }
+    dot <- ' \u00b7 '
+    minus <- ' \u2212 '
+    conc <- v('C')
+    ratio <- paste0('(', conc, ' / ', v('c'), ')<sup>', v('b'), '</sup>')
+    rhs <- switch(
+        fit$model,
+        'LRM' = ,
+        'QRM' = {
+            u <- if (fit$log_scale) log10(conc) else conc
+            u2 <- if (fit$log_scale) paste0('[', u, ']<sup>2</sup>') else paste0(u, '<sup>2</sup>')
+            paste0(v('c'), ' + ', v('b'), dot, u, if (fit$model == 'QRM') paste0(' + ', v('a'), dot, u2))
+        },
+        '4PL' = paste0(v('d'), ' + ', frac(paste0(v('a'), minus, v('d')), paste0('1 + ', ratio))),
+        '5PL' = paste0(v('d'), ' + ', frac(paste0(v('a'), minus, v('d')),
+                                           paste0('[1 + ', ratio, ']<sup>', v('g'), '</sup>')))
+    )
+    lhs <- if (fit$model %in% c('LRM', 'QRM') && fit$log_scale) log10(v('OD')) else v('OD')
+    shiny::div(class = 'model-equation', shiny::HTML(paste0(lhs, ' = ', rhs)))
+}
+
+
 #' Tab Comparing the Original and the Refitted Model
 #'
 #' Inserted after the model parameters when standard points are excluded and
@@ -190,10 +230,16 @@ mod_curve_ui <- function(id, lang) {
             shiny::div(class = 'step-view',
                        shiny::uiOutput(ns('verdict')),
                        shiny::uiOutput(ns('refit_note')),
+                       shiny::h5(t('curve.section_equation')),
+                       shiny::uiOutput(ns('equation')),
                        shiny::h5(t('curve.section_coefs')),
                        shiny::tableOutput(ns('coefs')),
                        shiny::h5(t('quality.section_standards')),
                        shiny::tableOutput(ns('standards')),
+                       # Collapsed by default
+                       shiny::tags$details(class = 'std-points',
+                                           shiny::tags$summary(t('quality.section_points')),
+                                           shiny::tableOutput(ns('points'))),
                        shiny::h5(t('quality.section_curve')),
                        shiny::tableOutput(ns('curve_quality')))
         )
@@ -249,6 +295,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             message_text(Filter(function(m) !m$key %in% sample_warning_keys(), result()$notes), lang)
         })
         quality <- shiny::reactive(quality_tables(result()$quality, lang))
+        # Values failing the acceptance criteria are highlighted in the app
+        quality_marked <- shiny::reactive(quality_tables(result()$quality, lang, highlight = TRUE))
 
         coef_table <- shiny::reactive({
             r <- rounding()
@@ -294,8 +342,14 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             tab[-1] <- lapply(tab[-1], as.character)
             tab
         })
-        output$verdict <- shiny::renderUI(verdict_ui(result(), lang))
-        output$standards <- shiny::renderTable(quality()$standards, na = '')
+        output$verdict <- shiny::renderUI(verdict_ui(result(), lang, unit = sub('^, ', '', input$xunits)))
+        output$equation <- shiny::renderUI(model_equation_ui(result()$fit))
+        output$standards <- shiny::renderTable(quality_marked()$standards, na = '',
+                                               sanitize.text.function = function(x) x)
+        output$points <- shiny::renderTable(standard_points_table(result(), lang, highlight = TRUE), na = '',
+                                            sanitize.text.function = function(x) x)
+        # Rendered while the details are collapsed, so that they open at once
+        shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
 

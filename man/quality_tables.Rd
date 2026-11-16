@@ -4,17 +4,22 @@
 \alias{quality_tables}
 \title{Quality Tables for Display}
 \usage{
-quality_tables(quality, lang = "en")
+quality_tables(quality, lang = "en", highlight = FALSE)
 }
 \arguments{
 \item{quality}{The \code{quality} element of \code{\link[=calculate]{calculate()}}, or a list with the
 same elements (e.g. \code{samples} and \code{dilution} from \code{\link[=assess_samples]{assess_samples()}}).}
 
 \item{lang}{Language code.}
+
+\item{highlight}{If \code{TRUE}, the values of the standards failing the
+acceptance criteria (bias, CV, verdict) are wrapped in
+\verb{<span class="crit-fail">}, for tables rendered as HTML.}
 }
 \value{
 A named list of data.frames (\code{standards}, \code{qc}, \code{samples},
-\code{dilution}, \code{curve}); absent parts are \code{NULL}.
+\code{dilution}, \code{curve}); absent parts are \code{NULL}. The standards are sorted
+by decreasing concentration.
 }
 \description{
 Formats the parts of a quality assessment (see \code{\link[=assess_run]{assess_run()}}) as tables
