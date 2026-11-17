@@ -361,6 +361,38 @@
 .quant-ok       { background: #1b5e20; }
 .quant-other    { background: #9e9e9e; }
 
+/* Results step: counts of the flags above the table, coloured like the bar */
+.flag-tiles {
+    margin: 0.7rem 0 0;
+}
+
+.flag-tile {
+    flex: 1 1 9rem;
+    max-width: 14rem;
+    border-left: 4px solid #9e9e9e;
+}
+
+.flag-tile.flag-od_le_nc { border-left-color: #c62828; }
+.flag-tile.flag-below    { border-left-color: #ef8f00; }
+.flag-tile.flag-ok       { border-left-color: #1b5e20; }
+.flag-tile.flag-above    { border-left-color: #1976d2; }
+
+/* Segments of the bar: above the highest calibrator blue, apart from the green */
+.flag-bar .flag-od_le_nc { background: #c62828; }
+.flag-bar .flag-below    { background: #ef8f00; }
+.flag-bar .flag-ok       { background: #1b5e20; }
+.flag-bar .flag-above    { background: #1976d2; }
+.flag-bar .flag-no_solution,
+.flag-bar .flag-missing,
+.flag-bar .flag-other    { background: #9e9e9e; }
+
+.stat-share {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--bs-secondary-color);
+    margin-left: 0.4rem;
+}
+
 .quant-legend {
     display: flex;
     flex-wrap: wrap;

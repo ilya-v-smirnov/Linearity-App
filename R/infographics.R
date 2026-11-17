@@ -56,6 +56,62 @@ quantification_ui <- function(flags, lang = 'en') {
 }
 
 
+#' Infographic of the Flags of the Sample Wells
+#'
+#' Shown above the result table: a bar of the sample wells split by flag, in
+#' the order of the concentration (OD at or below the blank, below the lowest
+#' calibrator, quantified, above the highest calibrator, then the wells
+#' without a solution or OD), and a tile with the number and share of the
+#' wells of each flag. Above the highest calibrator is blue, below the
+#' lowest one orange, as in the result table. The tiles of the four main flags are always shown, the
+#' others only when they occur.
+#'
+#' The flags of the wells depend on the OD and the calibration range only, not
+#' on the extrapolation or the zero concentration of the out-of-range samples
+#' (see [calculate()]), so the infographic does not change with these options.
+#'
+#' @param flags Flag codes of the sample wells (see [FLAGS]).
+#' @param lang Language code.
+#'
+#' @return A shiny tag, or `NULL` when there are no sample wells.
+#' @keywords internal
+flags_ui <- function(flags, lang = 'en') {
+    flags <- flags[!is.na(flags)]
+    total <- length(flags)
+    if (total == 0) return(NULL)
+    known <- c('od_le_nc', 'below', 'ok', 'above', 'no_solution', 'missing')
+    codes <- c(unlist(FLAGS[known]), setdiff(unique(flags), unlist(FLAGS[known])))
+    keys <- c(known, setdiff(codes, unlist(FLAGS[known])))
+    counts <- stats::setNames(vapply(codes, function(f) sum(flags == f), 0L), keys)
+    # The short flags of the table are spelled out on the tiles
+    label <- function(k) {
+        if (k %in% c('below', 'above')) tr(paste0('results.flag_', k), lang)
+        else if (k %in% known) tr(paste0('flag.', k), lang) else k
+    }
+    colour <- function(k) if (k %in% known) k else 'other'
+
+    shown <- keys[counts > 0]
+    segments <- lapply(shown, function(k) {
+        shiny::div(class = paste0('quant-segment flag-', colour(k)), style = sprintf('flex-grow: %d;', counts[[k]]),
+                   title = paste0(label(k), ': ', counts[[k]]), counts[[k]])
+    })
+    tiled <- keys[counts > 0 | keys %in% c('od_le_nc', 'below', 'ok', 'above')]
+    tiles <- lapply(tiled, function(k) {
+        shiny::div(class = paste0('stat-tile flag-tile flag-', colour(k)),
+                   shiny::div(class = 'stat-value', counts[[k]],
+                              shiny::span(class = 'stat-share', sprintf('%.0f%%', 100 * counts[[k]] / total))),
+                   shiny::div(class = 'stat-label', label(k)))
+    })
+    shiny::div(
+        class = 'infographic flag-infographic',
+        shiny::div(class = 'infographic-title',
+                   with_tooltip(tr('results.flags_title', lang, total = total), tr('results.flags_help', lang))),
+        shiny::div(class = 'quant-bar flag-bar', segments),
+        shiny::div(class = 'stat-tiles flag-tiles', tiles)
+    )
+}
+
+
 #' Statistic of the Standard Curve as Large Text
 #'
 #' A line such as `R2 = 0.9942`, the value coloured by its zone: `poor`

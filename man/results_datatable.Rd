@@ -18,6 +18,6 @@ A DT widget.
 }
 \description{
 Wells are sorted in the order of the plate rather than alphabetically, and
-flags are coloured like the infographic of the standard curve step.
+flags are coloured like the infographic of the flags above the table.
 }
 \keyword{internal}

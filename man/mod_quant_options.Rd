@@ -20,7 +20,8 @@ mod_quant_options_server(id)
 \code{extrapolate} and \code{blank_zero}.
 }
 \description{
-Extrapolation below the LLOQ and above the ULOQ and concentration 0 for
+Extrapolation below the lowest and above the highest calibrator (LLOQ and
+ULOQ) and concentration 0 for
 samples with OD at or below the blank (see \code{\link[=calculate]{calculate()}}).
 }
 \keyword{internal}

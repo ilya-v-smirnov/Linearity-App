@@ -2,8 +2,9 @@
 #'
 #' The sidebar holds the handling of samples outside the quantification range
 #' (see [mod_quant_options]), the rounding, the columns of the table and the
-#' download; the main area shows the sample results with flags and the
-#' quality controls as interactive tables.
+#' download; the main area shows the counts of the flags of the sample wells
+#' (see [flags_ui()]), the sample results with flags and the quality controls
+#' as interactive tables.
 #'
 #' @param id Module id.
 #' @param lang Language code.
@@ -50,7 +51,7 @@ order_result <- function(result, by = 'column') {
 #' Interactive Result Table
 #'
 #' Wells are sorted in the order of the plate rather than alphabetically, and
-#' flags are coloured like the infographic of the standard curve step.
+#' flags are coloured like the infographic of the flags above the table.
 #'
 #' @param table Result table (see [order_result()]) with translated flags.
 #' @param lang Language code.
@@ -77,8 +78,8 @@ results_datatable <- function(table, lang, page_length = 25) {
     if ('flag' %in% names(table)) {
         flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
                    FLAGS$high_cv, FLAGS$nonlinear)
-        colours <- c('#1b5e20', '#ef8f00', '#ef8f00', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
-        widget <- DT::formatStyle(widget, 'flag', fontWeight = 'bold',
+        colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
+        widget <- DT::formatStyle(widget, 'flag', fontWeight = 'bold', whiteSpace = 'nowrap',
                                   color = DT::styleEqual(translate_flags(flags, lang), colours))
     }
     widget
@@ -101,7 +102,8 @@ dt_language <- function(lang) {
 
 #' Options for Samples Outside the Quantification Range
 #'
-#' Extrapolation below the LLOQ and above the ULOQ and concentration 0 for
+#' Extrapolation below the lowest and above the highest calibrator (LLOQ and
+#' ULOQ) and concentration 0 for
 #' samples with OD at or below the blank (see [calculate()]).
 #'
 #' @param id Module id.
@@ -166,6 +168,8 @@ mod_results_ui <- function(id, lang) {
             shiny::div(
                 class = 'step-view',
                 shiny::uiOutput(ns('notes')),
+                # Counts of the flags: the same whatever the options for out-of-range samples
+                shiny::uiOutput(ns('flags')),
                 DT::DTOutput(ns('table')),
                 shiny::uiOutput(ns('qc'))
             )
@@ -202,6 +206,7 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column')) 
         })
 
         output$notes <- shiny::renderUI(notes_ui(curve$notes(), lang))
+        output$flags <- shiny::renderUI(flags_ui(curve$result()$result$flag, lang))
         output$table <- DT::renderDT(results_datatable(table(), lang))
         output$qc <- shiny::renderUI({
             if (is.null(qc())) return(NULL)

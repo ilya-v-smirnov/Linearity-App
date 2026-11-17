@@ -26,7 +26,8 @@ mod_results_server(id, lang, curve, by = shiny::reactive("column"))
 \description{
 The sidebar holds the handling of samples outside the quantification range
 (see \link{mod_quant_options}), the rounding, the columns of the table and the
-download; the main area shows the sample results with flags and the
-quality controls as interactive tables.
+download; the main area shows the counts of the flags of the sample wells
+(see \code{\link[=flags_ui]{flags_ui()}}), the sample results with flags and the quality controls
+as interactive tables.
 }
 \keyword{internal}

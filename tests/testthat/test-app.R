@@ -520,6 +520,36 @@ test_that('the mean error of the back-calculated standards matches the compariso
     expect_null(LinearityApp:::mean_error_ui(NULL, 20))
 })
 
+test_that('the flags of the sample wells are counted above the result table', {
+    flags <- c('OD <= blank', rep('< LLOQ', 3), rep('OK', 5), '> ULOQ', 'Missing OD')
+    html <- as.character(LinearityApp:::flags_ui(flags, 'en'))
+    expect_match(html, 'Flags of the sample wells: 11 wells', fixed = TRUE)
+    # one segment per flag, in the order of the concentration
+    expect_match(html, 'quant-segment flag-od_le_nc.*flex-grow: 1;.*flag-below.*flex-grow: 3;.*flag-ok.*flex-grow: 5;.*flag-above.*flag-missing')
+    expect_match(html, '>\\s*5\\s*<span class="stat-share">45%</span>')
+    # the short flags of the table are spelled out on the tiles
+    expect_match(html, 'Below the lowest calibrator', fixed = TRUE)
+    expect_match(html, 'Above the highest calibrator', fixed = TRUE)
+    # the rare flags get a tile only when they occur
+    expect_match(html, 'flag-missing', fixed = TRUE)
+    expect_false(grepl('flag-no_solution', html, fixed = TRUE))
+    expect_null(LinearityApp:::flags_ui(character(0)))
+
+    # the same counts whatever the options for out-of-range samples
+    data <- load_sample('griess')
+    counts <- function(...) {
+        curve <- fake_curve()
+        curve$result <- shiny::reactive(calculate(data, 'LRM', ...))
+        html <- NULL
+        shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve),
+                          html <<- output$flags$html)
+        html
+    }
+    plain <- counts()
+    expect_match(plain, 'flag-tile', fixed = TRUE)
+    expect_identical(counts(extrapolate = c('below', 'above'), blank_zero = TRUE), plain)
+})
+
 test_that('the comparison tab is inserted after the model parameters and removed', {
     calls <- list()
     local_mocked_bindings(

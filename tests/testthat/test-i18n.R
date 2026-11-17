@@ -36,7 +36,9 @@ test_that('unknown languages and keys fall back gracefully', {
 })
 
 test_that('flags are translated and unknown values are kept', {
-    expect_equal(translate_flags(c('OK', '< LLOQ', 'odd'), 'en'), c('OK', '< LLOQ', 'odd'))
+    expect_equal(translate_flags(c('OK', '< LLOQ', 'odd'), 'en'), c('OK', 'Below', 'odd'))
+    # the range is named by the calibrators, not by LLOQ / ULOQ
+    expect_false(any(grepl('LLOQ|ULOQ|НПКО|ВПКО', c(translate_flags(unlist(FLAGS), 'en'), translate_flags(unlist(FLAGS), 'ru')))))
     ru <- translate_flags(unlist(FLAGS), 'ru')
     expect_length(unique(ru), length(FLAGS))
     expect_equal(ru[['below']], tr('flag.below', 'ru'))
