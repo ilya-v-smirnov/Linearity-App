@@ -47,8 +47,9 @@ the mean of all dilutions of a sample, and CV (\%) across dilutions.}
 \item{range}{Quantification range: \code{"accepted"} (from the lowest to the
 highest accepted standard level) or \code{"all"} (all standards used in the fit).}
 
-\item{edge}{Concentrations within this factor of LLOQ or ULOQ use the
-\verb{_edge} limits.}
+\item{edge}{Concentrations within this factor of the boundary calibrators
+(the lowest and highest level of the quantification range, LLOQ and ULOQ)
+use the \verb{_edge} limits.}
 }
 \value{
 A list of class \code{lin_criteria}.

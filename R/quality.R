@@ -22,8 +22,9 @@
 #'   the mean of all dilutions of a sample, and CV (%) across dilutions.
 #' @param range Quantification range: `"accepted"` (from the lowest to the
 #'   highest accepted standard level) or `"all"` (all standards used in the fit).
-#' @param edge Concentrations within this factor of LLOQ or ULOQ use the
-#'   `_edge` limits.
+#' @param edge Concentrations within this factor of the boundary calibrators
+#'   (the lowest and highest level of the quantification range, LLOQ and ULOQ)
+#'   use the `_edge` limits.
 #'
 #' @return A list of class `lin_criteria`.
 #' @export
@@ -49,22 +50,37 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
 }
 
 
-#' Presets of the Acceptance Criteria of the Standards
+#' Presets of the Acceptance Criteria
 #'
 #' * `ich_m10`: ICH M10 (2022) for ligand binding assays, the defaults of
 #'   [qc_criteria()];
 #' * `colorimetric`: tighter limits for colorimetric assays (BCA, Griess);
 #' * `custom`: editable values, starting from those of ICH M10.
 #'
-#' @return A named list (by preset code) of lists with `std_bias`,
-#'   `std_bias_edge`, `cv`, `cv_edge`, `min_fraction` and `min_levels`.
+#' @param part `"standards"` (the criteria of the standard curve step) or
+#'   `"samples"` (the replicates, quality controls and dilutions of the result
+#'   summary step).
+#'
+#' @return A named list (by preset code) of lists: `std_bias`,
+#'   `std_bias_edge`, `cv`, `cv_edge`, `min_fraction` and `min_levels` for
+#'   the standards; `sample_cv`, `sample_cv_edge`, `qc_bias`, `qc_bias_edge`,
+#'   `qc_fraction`, `qc_level_fraction`, `dilution_bias` and `dilution_cv` for
+#'   the samples.
 #' @export
-criteria_presets <- function() {
-    ich_m10 <- list(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25, min_fraction = 0.75, min_levels = 6)
-    list(ich_m10 = ich_m10,
-         colorimetric = list(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20, min_fraction = 0.80,
-                             min_levels = 5),
-         custom = ich_m10)
+criteria_presets <- function(part = c('standards', 'samples')) {
+    part <- match.arg(part)
+    if (part == 'samples') {
+        ich_m10 <- list(sample_cv = 20, sample_cv_edge = 25, qc_bias = 20, qc_bias_edge = 25,
+                        qc_fraction = 2 / 3, qc_level_fraction = 0.5, dilution_bias = 20, dilution_cv = 20)
+        colorimetric <- list(sample_cv = 15, sample_cv_edge = 20, qc_bias = 15, qc_bias_edge = 20,
+                             qc_fraction = 2 / 3, qc_level_fraction = 0.5, dilution_bias = 15, dilution_cv = 15)
+    } else {
+        ich_m10 <- list(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25, min_fraction = 0.75,
+                        min_levels = 6)
+        colorimetric <- list(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20, min_fraction = 0.80,
+                             min_levels = 5)
+    }
+    list(ich_m10 = ich_m10, colorimetric = colorimetric, custom = ich_m10)
 }
 
 

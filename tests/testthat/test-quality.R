@@ -167,6 +167,25 @@ test_that('dilution linearity is checked across dilutions of a sample', {
     expect_match(message_text(r$notes), 'Non-linear dilutions in 1', all = FALSE)
 
     expect_null(dilution_linearity(s[s$sample.name == 'A' & s$dilution == 2, ]))
+
+    # values outside the limits are highlighted in the app, not in the exports
+    plain <- quality_tables(r$quality, 'en')$dilution
+    expect_false(any(grepl('crit-fail', unlist(plain), fixed = TRUE)))
+    marked <- quality_tables(r$quality, 'en', highlight = TRUE)$dilution
+    b <- marked$Sample == 'B'
+    expect_true(all(grepl('crit-fail', marked[['CV between dilutions, %']][b], fixed = TRUE)))
+    # sample B fails by its CV; with a strict limit its deviations are highlighted too
+    strict <- quality_tables(list(dilution = d, criteria = qc_criteria(dilution_bias = 1)), 'en',
+                             highlight = TRUE)$dilution
+    expect_equal(grepl('crit-fail', strict[['Deviation from mean, %']], fixed = TRUE), abs(d$deviation) > 1)
+    expect_true(any(abs(d$deviation) > 1))
+    expect_true(all(grepl('crit-fail', marked[['Accepted']][b], fixed = TRUE)))
+    expect_false(any(grepl('crit-fail', unlist(marked[!b, ]), fixed = TRUE)))
+    # the texts from the data are escaped in the marked table
+    odd <- d
+    odd$sample.name <- '<b>A</b>'
+    expect_equal(quality_tables(list(dilution = odd), 'en', highlight = TRUE)$dilution$Sample[1],
+                 '&lt;b&gt;A&lt;/b&gt;')
 })
 
 test_that('quality controls follow the 4-6-X rule', {
@@ -219,7 +238,8 @@ test_that('aggregated results include SD and CV', {
 
 test_that('criteria module reads both parts of the criteria', {
     shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
-        session$setInputs(preset = 'custom', std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20,
+        session$setInputs(preset = 'custom', preset_samples = 'custom', std_bias = 15, std_bias_edge = 20,
+                          cv = 15, cv_edge = 20,
                           min_fraction = 75,
                           min_levels = 6, sample_cv = 10, sample_cv_edge = 12, qc_bias = 15, qc_bias_edge = 20,
                           qc_fraction = 67, qc_level_fraction = 50, dilution_bias = 20, dilution_cv = 20,
@@ -244,7 +264,7 @@ test_that('fixed presets of the criteria of the standards ignore the inputs', {
     expect_equal(unlist(presets$colorimetric), c(std_bias = 15, std_bias_edge = 20, cv = 15, cv_edge = 20,
                                                  min_fraction = 0.8, min_levels = 5))
     shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
-        session$setInputs(std_bias = 50, cv = 50, min_levels = 2, sample_cv = 12)
+        session$setInputs(std_bias = 50, cv = 50, min_levels = 2, sample_cv = 12, preset_samples = 'custom')
         expect_equal(session$returned()$std_bias, 20)        # ICH M10 by default
         session$setInputs(preset = 'colorimetric')
         cr <- session$returned()
@@ -258,6 +278,35 @@ test_that('fixed presets of the criteria of the standards ignore the inputs', {
     expect_match(ui, 'Colorimetric assay', fixed = TRUE)
     expect_match(ui, 'Bias at boundary calibrators', fixed = TRUE)
     expect_false(grepl('LLOQ', ui, fixed = TRUE))
+})
+
+test_that('the criteria of the samples have their own presets that follow the standards', {
+    presets <- criteria_presets('samples')
+    expect_equal(presets$custom, presets$ich_m10)
+    d <- qc_criteria()
+    expect_equal(presets$ich_m10, d[names(presets$ich_m10)])
+    expect_setequal(names(presets$ich_m10),
+                    LinearityApp:::criteria_fields()$name[LinearityApp:::criteria_fields()$part == 'samples'])
+    expect_equal(unlist(presets$colorimetric[c('sample_cv', 'qc_bias', 'dilution_bias', 'dilution_cv')]),
+                 c(sample_cv = 15, qc_bias = 15, dilution_bias = 15, dilution_cv = 15))
+    shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
+        session$setInputs(sample_cv = 50, dilution_bias = 50, std_bias = 50)
+        cr <- session$returned()
+        expect_equal(c(cr$sample_cv, cr$dilution_bias, cr$qc_fraction), c(20, 20, 2 / 3))   # ICH M10
+        session$setInputs(preset_samples = 'colorimetric')
+        cr <- session$returned()
+        expect_equal(c(cr$sample_cv, cr$sample_cv_edge, cr$qc_bias, cr$dilution_cv), c(15, 20, 15, 15))
+        expect_equal(cr$std_bias, 20)                          # the standards keep their preset
+        session$setInputs(preset_samples = 'custom')
+        expect_equal(c(session$returned()$sample_cv, session$returned()$dilution_bias), c(50, 50))
+    })
+    ui <- as.character(LinearityApp:::mod_criteria_ui('criteria', 'en', 'samples'))
+    expect_match(ui, 'Colorimetric assay', fixed = TRUE)
+    expect_match(ui, 'CV near boundary calibrators', fixed = TRUE)
+    expect_match(ui, '66.7', fixed = TRUE)                     # fractions shown rounded
+    expect_false(grepl('LLOQ|ULOQ', ui))
+    expect_false(grepl('LLOQ|ULOQ|НПКО|ВПКО',
+                       as.character(LinearityApp:::mod_criteria_ui('criteria', 'ru', 'samples'))))
 })
 
 test_that('the verdict of the calibration is shown with the model parameters', {

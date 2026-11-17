@@ -207,7 +207,6 @@ col:
   error: "Abs. error"
 
 crit:
-  note: "Default values follow ICH M10 for ligand binding assays (ELISA). For chromatographic assays use 15 % (20 % at LLOQ)."
   title_standards: "Acceptance criteria"
   note_standards: "ICH M10 – LBA: ICH M10 (2022) requirements for ligand binding assays. Colorimetric assay: tighter limits for BCA, Griess and similar assays. Custom: editable values, starting from those of ICH M10. Boundary calibrators are the lowest and the highest standard level."
   preset: "Criteria set"
@@ -215,6 +214,7 @@ crit:
   preset_colorimetric: "Colorimetric assay"
   preset_custom: "Custom"
   title_samples: "Acceptance criteria"
+  note_samples: "ICH M10 – LBA: ICH M10 (2022) requirements for ligand binding assays. Colorimetric assay: tighter limits for BCA, Griess and similar assays. Custom: editable values, starting from those of ICH M10. The set follows the one chosen in the standard curve step and can be changed here. Near the boundary calibrators: within a factor of 1.25 of the lowest or the highest standard level of the quantification range."
   group_replicates: "Replicates"
   group_qc: "Quality controls (QC)"
   group_dilution: "Dilution linearity"
@@ -223,11 +223,11 @@ crit:
   cv: "CV, %"
   cv_edge: "CV at boundary calibrators, %"
   sample_cv: "CV, %"
-  sample_cv_edge: "CV near LLOQ/ULOQ, %"
+  sample_cv_edge: "CV near boundary calibrators, %"
   min_fraction: "Accepted levels, at least %"
   min_levels: "Accepted levels, at least"
   qc_bias: "Bias, ±%"
-  qc_bias_edge: "Bias near LLOQ/ULOQ, ±%"
+  qc_bias_edge: "Bias near boundary calibrators, ±%"
   qc_fraction: "Wells within limits, at least %"
   qc_level_fraction: "Wells of each level, at least %"
   dilution_bias: "Deviation from the mean, ±%"
@@ -297,6 +297,8 @@ summary:
   tab_table: "Table"
   tab_infographics: "Infographics"
   dilution_help: "Mean concentrations of a sample at each dilution compared with the mean over all its dilutions. Samples are the rows of the summary without the dilution column."
+  dilution_table: "Agreement between sample dilutions"
+  dilution_table_help: "Mean concentration of a sample at each dilution (corrected for the dilution) and its deviation from the mean over all dilutions of the sample. The dilutions agree if every deviation is within ±{bias} % and the CV between dilutions is at most {cv} %; values outside the limits are highlighted. Samples are the rows of the summary without the dilution column."
   download: "Download summary (xlsx)"
 
 report:

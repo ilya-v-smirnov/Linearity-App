@@ -172,11 +172,18 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             stats <- if (is.null(input$stats)) summary_statistics() else input$stats
             summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang)
         })
-        tables <- shiny::reactive({
+        dilution_tables <- function(highlight) {
             a <- assessment()
-            list(dilution = if (!is.null(a)) quality_tables(list(dilution = a$dilution), lang)$dilution,
+            if (is.null(a)) return(NULL)
+            quality_tables(list(dilution = a$dilution, criteria = curve$result()$quality$criteria), lang,
+                           highlight = highlight)$dilution
+        }
+        tables <- shiny::reactive({
+            list(dilution = dilution_tables(FALSE),
                  qc = quality_tables(list(qc = curve$result()$quality$qc), lang)$qc)
         })
+        # Values failing the acceptance criteria are highlighted in the app
+        dilution_marked <- shiny::reactive(dilution_tables(TRUE))
 
         output$preview <- shiny::renderUI({
             shiny::req(result())
@@ -199,11 +206,15 @@ mod_summary_server <- function(id, lang, curve, rounding) {
 
         output$dilution <- shiny::renderUI({
             if (is.null(tables()$dilution)) return(NULL)
-            shiny::tagList(shiny::h5(class = 'mt-4', with_tooltip(t('quality.section_dilution'),
-                                                                  t('summary.dilution_help'))),
+            criteria <- curve$result()$quality$criteria
+            shiny::tagList(shiny::h5(class = 'mt-4', with_tooltip(t('summary.dilution_table'),
+                                                                  t('summary.dilution_table_help',
+                                                                    bias = criteria$dilution_bias,
+                                                                    cv = criteria$dilution_cv))),
                            shiny::tableOutput(ns('dilution_table')))
         })
-        output$dilution_table <- shiny::renderTable(tables()$dilution, na = '')
+        output$dilution_table <- shiny::renderTable(dilution_marked(), na = '',
+                                                    sanitize.text.function = function(x) x)
 
         output$qc <- shiny::renderUI({
             if (is.null(tables()$qc)) return(NULL)

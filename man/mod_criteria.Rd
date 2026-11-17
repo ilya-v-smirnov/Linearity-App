@@ -26,8 +26,9 @@ in different steps (\code{part = "standards"} in the standard curve step,
 \code{part = "samples"} in the result summary step) and read by one server.
 }
 \details{
-The criteria of the standards come from a preset (see
-\code{\link[=criteria_presets]{criteria_presets()}}): the fixed presets show their values, the custom one
-shows inputs starting from the values of ICH M10.
+The criteria of each part come from a preset (see \code{\link[=criteria_presets]{criteria_presets()}}):
+the fixed presets show their values, the custom one shows inputs starting
+from the values of ICH M10. The preset of the samples follows the one
+chosen for the standards and can then be changed on its own.
 }
 \keyword{internal}

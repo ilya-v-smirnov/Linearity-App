@@ -2,13 +2,21 @@
 % Please edit documentation in R/quality.R
 \name{criteria_presets}
 \alias{criteria_presets}
-\title{Presets of the Acceptance Criteria of the Standards}
+\title{Presets of the Acceptance Criteria}
 \usage{
-criteria_presets()
+criteria_presets(part = c("standards", "samples"))
+}
+\arguments{
+\item{part}{\code{"standards"} (the criteria of the standard curve step) or
+\code{"samples"} (the replicates, quality controls and dilutions of the result
+summary step).}
 }
 \value{
-A named list (by preset code) of lists with \code{std_bias},
-\code{std_bias_edge}, \code{cv}, \code{cv_edge}, \code{min_fraction} and \code{min_levels}.
+A named list (by preset code) of lists: \code{std_bias},
+\code{std_bias_edge}, \code{cv}, \code{cv_edge}, \code{min_fraction} and \code{min_levels} for
+the standards; \code{sample_cv}, \code{sample_cv_edge}, \code{qc_bias}, \code{qc_bias_edge},
+\code{qc_fraction}, \code{qc_level_fraction}, \code{dilution_bias} and \code{dilution_cv} for
+the samples.
 }
 \description{
 \itemize{

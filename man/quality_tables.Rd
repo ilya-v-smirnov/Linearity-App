@@ -12,9 +12,12 @@ same elements (e.g. \code{samples} and \code{dilution} from \code{\link[=assess_
 
 \item{lang}{Language code.}
 
-\item{highlight}{If \code{TRUE}, the values of the standards failing the
-acceptance criteria (bias, CV, verdict) are wrapped in
-\verb{<span class="crit-fail">}, for tables rendered as HTML.}
+\item{highlight}{If \code{TRUE}, the values failing the acceptance criteria are
+wrapped in \verb{<span class="crit-fail">} and the texts from the data are
+escaped, for tables rendered as HTML: the bias, CV and verdict of the
+standards, the deviation from the mean, the CV between dilutions and the
+verdict of the dilutions (limits from \code{quality$criteria}, by default
+those of \code{\link[=qc_criteria]{qc_criteria()}}).}
 }
 \value{
 A named list of data.frames (\code{standards}, \code{qc}, \code{samples},

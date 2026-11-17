@@ -1,3 +1,18 @@
+#' Escape Text for HTML
+#'
+#' @param x Character vector.
+#'
+#' @return `x` with `&`, `<`, `>` and quotes replaced by HTML entities.
+#' @keywords internal
+html_escape <- function(x) {
+    x <- gsub('&', '&amp;', x, fixed = TRUE)
+    x <- gsub('<', '&lt;', x, fixed = TRUE)
+    x <- gsub('>', '&gt;', x, fixed = TRUE)
+    x <- gsub('"', '&quot;', x, fixed = TRUE)
+    gsub("'", '&#39;', x, fixed = TRUE)
+}
+
+
 #' Quality Tables for Display
 #'
 #' Formats the parts of a quality assessment (see [assess_run()]) as tables
@@ -6,9 +21,12 @@
 #' @param quality The `quality` element of [calculate()], or a list with the
 #'   same elements (e.g. `samples` and `dilution` from [assess_samples()]).
 #' @param lang Language code.
-#' @param highlight If `TRUE`, the values of the standards failing the
-#'   acceptance criteria (bias, CV, verdict) are wrapped in
-#'   `<span class="crit-fail">`, for tables rendered as HTML.
+#' @param highlight If `TRUE`, the values failing the acceptance criteria are
+#'   wrapped in `<span class="crit-fail">` and the texts from the data are
+#'   escaped, for tables rendered as HTML: the bias, CV and verdict of the
+#'   standards, the deviation from the mean, the CV between dilutions and the
+#'   verdict of the dilutions (limits from `quality$criteria`, by default
+#'   those of [qc_criteria()]).
 #'
 #' @return A named list of data.frames (`standards`, `qc`, `samples`,
 #'   `dilution`, `curve`); absent parts are `NULL`. The standards are sorted
@@ -25,10 +43,19 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         known <- c(id = 'col.id', sample.name = 'col.sample', dilution = 'col.dilution', sample.date = 'col.date')
         ifelse(cols %in% names(known), known[cols], cols)
     }
+    # Tables rendered as HTML: the texts from the data are escaped
     as_text <- function(df) {
-        df[] <- lapply(df, function(x) ifelse(is.na(x), '', as.character(x)))
+        df[] <- lapply(df, function(x) {
+            x <- ifelse(is.na(x), '', as.character(x))
+            if (highlight) html_escape(x) else x
+        })
         df
     }
+    # Values failing the criteria are wrapped in a span for display as HTML
+    fail <- function(x, failed) {
+        if (highlight) ifelse(!is.na(failed) & failed, paste0('<span class="crit-fail">', x, '</span>'), x) else x
+    }
+    criteria <- if (is.null(quality$criteria)) qc_criteria() else quality$criteria
 
     standards <- NULL
     st <- quality$standards
@@ -36,10 +63,6 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         st <- st[order(st$conc, decreasing = TRUE), , drop = FALSE]
         # Values that cannot be computed (no points, one point for the CV) as dashes
         dash <- function(x) ifelse(x == '', '\u2014', x)
-        # Values failing the criteria are wrapped in a span for display as HTML
-        fail <- function(x, failed) {
-            if (highlight) ifelse(failed, paste0('<span class="crit-fail">', x, '</span>'), x) else x
-        }
         bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
         cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
         standards <- name(data.frame(num(st$conc), st$n, dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
@@ -73,8 +96,9 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     if (!is.null(quality$dilution)) {
         d <- quality$dilution
         id_cols <- setdiff(names(d), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
-        dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution), num(d$mean), pct(d$deviation),
-                                    pct(d$cv), mark(d$pass)),
+        dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution), num(d$mean),
+                                    fail(pct(d$deviation), abs(d$deviation) > criteria$dilution_bias),
+                                    fail(pct(d$cv), d$cv > criteria$dilution_cv), fail(mark(d$pass), !d$pass)),
                          c(id_keys(id_cols), 'col.dilution', 'col.mean', 'col.deviation', 'col.cv_dil', 'col.pass'))
     }
 
@@ -226,9 +250,10 @@ criteria_fields <- function() {
 #' in different steps (`part = "standards"` in the standard curve step,
 #' `part = "samples"` in the result summary step) and read by one server.
 #'
-#' The criteria of the standards come from a preset (see
-#' [criteria_presets()]): the fixed presets show their values, the custom one
-#' shows inputs starting from the values of ICH M10.
+#' The criteria of each part come from a preset (see [criteria_presets()]):
+#' the fixed presets show their values, the custom one shows inputs starting
+#' from the values of ICH M10. The preset of the samples follows the one
+#' chosen for the standards and can then be changed on its own.
 #'
 #' @param id Module id.
 #' @param lang Language code.
@@ -257,32 +282,37 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
     }
     reset <- shiny::actionButton(ns(paste0('reset_', part)), t('crit.reset'), icon = shiny::icon('rotate-left'),
                                  class = 'btn-sm btn-outline-secondary w-100')
-    title <- function(key, note = 'crit.note') with_tooltip(t(key), t(note))
+    title <- function(key, note) with_tooltip(t(key), t(note))
 
-    if (part == 'standards') {
-        presets <- criteria_presets()
-        f <- fields[fields$group == 'standards', ]
-        # Fixed presets: the values as text, in the layout of the inputs
-        fixed <- function(code) {
-            shiny::conditionalPanel(
-                sprintf("input.preset == '%s'", code), ns = ns,
-                lapply(seq_len(nrow(f)), function(i) {
-                    shiny::div(class = 'crit-row',
-                               shiny::tags$span(class = 'crit-label', t(paste0('crit.', f$name[i]))),
-                               shiny::tags$span(class = 'crit-value',
-                                                format(presets[[code]][[f$name[i]]] * f$scale[i])))
-                })
-            )
-        }
-        return(sidebar_group(
-            title('crit.title_standards', 'crit.note_standards'), 'vial',
-            shiny::selectInput(ns('preset'), t('crit.preset'), width = '100%',
+    presets <- criteria_presets(part)
+    # Fixed presets: the values as text, in the layout of the inputs
+    values <- function(code, group) {
+        f <- fields[fields$group == group, ]
+        lapply(seq_len(nrow(f)), function(i) {
+            shiny::div(class = 'crit-row',
+                       shiny::tags$span(class = 'crit-label', t(paste0('crit.', f$name[i]))),
+                       shiny::tags$span(class = 'crit-value',
+                                        format(round(presets[[code]][[f$name[i]]] * f$scale[i], 1))))
+        })
+    }
+    # The selector of the preset and a panel for each preset; the custom one holds the inputs
+    preset_panels <- function(input_id, content) {
+        shown <- function(code, ...) shiny::conditionalPanel(sprintf("input.%s == '%s'", input_id, code), ns = ns, ...)
+        shiny::tagList(
+            shiny::selectInput(ns(input_id), t('crit.preset'), width = '100%',
                                choices = stats::setNames(names(presets),
                                                          vapply(paste0('crit.preset_', names(presets)), t, '')),
                                selected = 'ich_m10'),
-            fixed('ich_m10'),
-            fixed('colorimetric'),
-            shiny::conditionalPanel("input.preset == 'custom'", ns = ns, inputs('standards'), reset),
+            shown('ich_m10', content(function(group) values('ich_m10', group))),
+            shown('colorimetric', content(function(group) values('colorimetric', group))),
+            shown('custom', content(inputs), reset)
+        )
+    }
+
+    if (part == 'standards') {
+        return(sidebar_group(
+            title('crit.title_standards', 'crit.note_standards'), 'vial',
+            preset_panels('preset', function(rows) rows('standards')),
             shiny::radioButtons(ns('range'), t('crit.range'),
                                 choices = stats::setNames(c('accepted', 'all'),
                                                           c(t('crit.range_accepted'), t('crit.range_all'))),
@@ -290,11 +320,14 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
         ))
     }
     sidebar_group(
-        title('crit.title_samples'), 'clipboard-check',
-        shiny::div(class = 'crit-subtitle', t('crit.group_replicates')), inputs('replicates'),
-        shiny::div(class = 'crit-subtitle', t('crit.group_qc')), inputs('qc'),
-        shiny::div(class = 'crit-subtitle', t('crit.group_dilution')), inputs('dilution'),
-        reset
+        title('crit.title_samples', 'crit.note_samples'), 'clipboard-check',
+        preset_panels('preset_samples', function(rows) {
+            shiny::tagList(
+                shiny::div(class = 'crit-subtitle', t('crit.group_replicates')), rows('replicates'),
+                shiny::div(class = 'crit-subtitle', t('crit.group_qc')), rows('qc'),
+                shiny::div(class = 'crit-subtitle', t('crit.group_dilution')), rows('dilution')
+            )
+        })
     )
 }
 
@@ -314,6 +347,10 @@ mod_criteria_server <- function(id, lang) {
             shiny::updateRadioButtons(session, 'range', selected = 'accepted')
         })
         shiny::observeEvent(input$reset_samples, reset('samples'))
+        # The criteria of the samples follow the choice of the standards; they can be changed after it
+        shiny::observeEvent(input$preset, {
+            shiny::updateSelectInput(session, 'preset_samples', selected = input$preset)
+        }, ignoreInit = TRUE)
 
         shiny::reactive({
             values <- lapply(seq_len(nrow(fields)), function(i) {
@@ -321,9 +358,13 @@ mod_criteria_server <- function(id, lang) {
                 if (is.null(v)) fields$default[i] / fields$scale[i] else v / fields$scale[i]
             })
             names(values) <- fields$name
-            # The criteria of the standards of a fixed preset replace the inputs
-            preset <- if (is.null(input$preset)) 'ich_m10' else input$preset
-            if (preset != 'custom') values[names(criteria_presets()[[preset]])] <- criteria_presets()[[preset]]
+            # The criteria of a fixed preset replace the inputs
+            for (part in c('standards', 'samples')) {
+                preset <- input[[if (part == 'standards') 'preset' else 'preset_samples']]
+                if (is.null(preset)) preset <- 'ich_m10'
+                fixed <- criteria_presets(part)[[preset]]
+                if (preset != 'custom') values[names(fixed)] <- fixed
+            }
             values$range <- if (is.null(input$range)) 'accepted' else input$range
             with_validation(do.call(qc_criteria, values), 'common.calc_error', lang)
         })
