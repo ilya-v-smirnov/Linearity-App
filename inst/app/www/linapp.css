@@ -245,7 +245,7 @@
     text-align: left;
 }
 
-/* Standard curve step: a plot with its infographic, nearly square */
+/* Standard curve step: two nearly square plots, the statistics below */
 .curve-panels {
     display: flex;
     flex-wrap: wrap;
@@ -258,10 +258,25 @@
     min-width: 280px;
 }
 
-.curve-panel .infographic {
-    padding: 0.45rem 0.8rem 0.4rem;
-    margin-bottom: 0.6rem;
+/* Statistics of the curve in one row below the plots, coloured by zone; they
+   wrap onto the next line only in narrow windows */
+.curve-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 2.5rem;
+    margin: 0.3rem 0 1rem 0.4rem;
 }
+
+.curve-stat {
+    font-size: 1.35rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.curve-stat strong.zone-good { color: #1b5e20; }
+.curve-stat strong.zone-fair { color: #ef8f00; }
+.curve-stat strong.zone-poor { color: #c62828; }
 
 /* Model parameters: equation of the model */
 .model-equation {
@@ -308,7 +323,7 @@
     margin-bottom: 0.5rem;
 }
 
-/* Infographics: quantification of the samples, R2 and lack of fit ------- */
+/* Infographics: quantification of the samples ---------------------------- */
 
 .infographic {
     border: 1px solid var(--bs-border-color);
@@ -365,63 +380,6 @@
     height: 0.8rem;
     border-radius: 0.2rem;
 }
-
-.zone-scale {
-    position: relative;
-    display: flex;
-    height: 0.9rem;
-    border-radius: 0.4rem;
-    margin-top: 0.9rem;
-}
-
-.zone:first-child { border-radius: 0.4rem 0 0 0.4rem; }
-.zone:nth-child(3) { border-radius: 0 0.4rem 0.4rem 0; }
-
-/* The same colours as the quantification bar */
-.zone.zone-poor { background: #c62828; }
-.zone.zone-fair { background: #ef8f00; }
-.zone.zone-good { background: #1b5e20; }
-
-.zone-marker {
-    position: absolute;
-    top: -0.55rem;
-    width: 0;
-    height: 0;
-    transform: translateX(-50%);
-    border-left: 0.45rem solid transparent;
-    border-right: 0.45rem solid transparent;
-    border-top: 0.6rem solid var(--bs-body-color);
-}
-
-.zone-ticks {
-    position: relative;
-    height: 1.2rem;
-    font-size: 0.75rem;
-    color: var(--bs-secondary-color);
-}
-
-.zone-ticks span {
-    position: absolute;
-    top: 0.15rem;
-    transform: translateX(-50%);
-}
-
-.zone-ticks span:first-child { transform: none; }
-.zone-ticks span:last-child { transform: translateX(-100%); }
-
-.zone-badge {
-    display: inline-block;
-    white-space: nowrap;
-    font-size: 0.75rem;
-    padding: 0.1rem 0.45rem;
-    border-radius: 0.6rem;
-    margin-left: 0.3rem;
-    color: #fff;
-}
-
-.zone-badge.zone-good { background: #1b5e20; }
-.zone-badge.zone-fair { background: #ef8f00; }
-.zone-badge.zone-poor { background: #c62828; }
 
 /* Acceptance criteria: one per row, label on the left, value on the right */
 .sidebar-heading {

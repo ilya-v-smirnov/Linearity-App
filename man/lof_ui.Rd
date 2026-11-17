@@ -2,7 +2,7 @@
 % Please edit documentation in R/infographics.R
 \name{lof_ui}
 \alias{lof_ui}
-\title{Infographic of the Lack-of-Fit Test}
+\title{Lack-of-Fit Test of the Standard Curve}
 \usage{
 lof_ui(p, lang = "en")
 }
@@ -15,10 +15,9 @@ lof_ui(p, lang = "en")
 A shiny tag.
 }
 \description{
-The p-value of the lack-of-fit F test (see \code{\link[=lack_of_fit]{lack_of_fit()}}) on a log scale
-from 0.001 to 1 with zones: up to 0.05 (red, the model does not describe
-the standards), up to 0.10 (orange, borderline) and above 0.10 (green).
-Values below 0.001 are shown at the left end. Without replicates of the
-standards the test cannot be done, which the infographic says.
+The p-value of the lack-of-fit F test (see \code{\link[=lack_of_fit]{lack_of_fit()}}) with zones: up
+to 0.05 (red, the model does not describe the standards), up to 0.10
+(orange, borderline) and above 0.10 (green). Without replicates of the
+standards the test cannot be done, which the line says.
 }
 \keyword{internal}

@@ -208,17 +208,17 @@ mod_curve_ui <- function(id, lang) {
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
             shiny::div(
                 class = 'step-view',
-                # Each plot with its infographic below, in a panel of limited width; the
-                # panels stay next to each other on the left, the comparison of models below
+                # Each plot in a panel of limited width; the panels stay next to each other
+                # on the left, the statistics of the curve in one row below them, then the
+                # comparison of models
                 shiny::div(
                     class = 'curve-panels',
                     shiny::div(class = 'curve-panel',
-                               shiny::plotOutput(ns('curve'), height = 'auto', click = ns('curve_click')),
-                               shiny::uiOutput(ns('r2'))),
+                               shiny::plotOutput(ns('curve'), height = 'auto', click = ns('curve_click'))),
                     shiny::div(class = 'curve-panel',
-                               shiny::plotOutput(ns('resid'), height = 'auto'),
-                               shiny::uiOutput(ns('lof')))
+                               shiny::plotOutput(ns('resid'), height = 'auto'))
                 ),
+                shiny::uiOutput(ns('curve_stats')),
                 shiny::h5(with_tooltip(t('curve.compare'), t('compare.note'))),
                 shiny::tableOutput(ns('compare')),
                 shiny::uiOutput(ns('notes')),
@@ -315,7 +315,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         })
 
         # The plots are nearly square; the width of their panels follows the height of the
-        # window (see the CSS), so that the infographics and the comparison of models fit
+        # window (see the CSS), so that the statistics and the comparison of models fit
         plot_height <- function(name) {
             function() {
                 width <- session$clientData[[paste0('output_', ns(name), '_width')]]
@@ -329,14 +329,19 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         output$resid <- shiny::renderPlot({
             plot_fitted_resid(result(), xtitle = plot_args()$xtitle, lang = lang)
         }, height = plot_height('resid'))
-        # Warnings shown as infographics are left out of the warnings box
+        # Warnings shown by the statistics below the plots are left out of the warnings box
         output$notes <- shiny::renderUI({
             hidden <- c('note.not_quantified', 'quality.warn_r2', 'note.lack_of_fit', sample_warning_keys())
             shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
         })
-        output$r2 <- shiny::renderUI(r2_ui(result()$quality$curve$r2, lang))
-        output$lof <- shiny::renderUI(lof_ui(result()$lack_of_fit$p, lang))
+        output$curve_stats <- shiny::renderUI({
+            r <- result()
+            shiny::div(class = 'curve-stats',
+                       r2_ui(r$quality$curve$r2, lang),
+                       mean_error_ui(r$fit, criteria()$std_bias, lang),
+                       lof_ui(r$lack_of_fit$p, lang))
+        })
         output$coefs <- shiny::renderTable({
             tab <- coef_table()
             tab[-1] <- lapply(tab[-1], as.character)

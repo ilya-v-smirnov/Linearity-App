@@ -474,8 +474,10 @@ test_that('R2 is shown as an infographic and quantification moved to the result 
                       args = list(lang = 'en', data = data, rounding = rounding_3()), {
         session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
         expect_error(output$quantification)
-        expect_match(output$r2$html, '<strong>0.9847</strong>', fixed = TRUE)
-        # both warnings of this run are shown as infographics: no warnings box
+        # R2, mean error and lack of fit in one row
+        expect_match(output$curve_stats$html,
+                     'curve-stats.*R² = .*>0.9847</strong>.*Mean \\|error\\| = .*Lack-of-fit: ')
+        # both warnings of this run are shown by the statistics: no warnings box
         expect_null(output$notes)
         expect_match(output$coefs, 'ci.lower', fixed = TRUE)
     })
@@ -491,21 +493,31 @@ test_that('infographics count the sample wells and place R2 on its scale', {
     expect_match(html, '6 of 18 sample wells quantified', fixed = TRUE)
     expect_null(LinearityApp:::quantification_ui(character(0)))
 
-    expect_match(as.character(LinearityApp:::r2_ui(0.995)), 'zone-badge zone-good', fixed = TRUE)
-    expect_match(as.character(LinearityApp:::r2_ui(0.985)), 'zone-badge zone-fair', fixed = TRUE)
-    poor <- as.character(LinearityApp:::r2_ui(0.5))
-    expect_match(poor, 'zone-badge zone-poor', fixed = TRUE)
-    expect_match(poor, 'left: 0.0%', fixed = TRUE)
+    r2 <- function(x) as.character(LinearityApp:::r2_ui(x))
+    expect_match(r2(0.99421), 'R² = <strong class="zone-good">0.9942</strong>', fixed = TRUE)
+    expect_match(r2(0.985), 'zone-fair', fixed = TRUE)
+    expect_match(r2(0.5), 'zone-poor', fixed = TRUE)
+    expect_match(r2(0.5), 'title="low', fixed = TRUE)
     expect_null(LinearityApp:::r2_ui(NA))
 
     lof <- function(p) as.character(LinearityApp:::lof_ui(p, 'en'))
-    expect_match(lof(0.5), 'zone-badge zone-good', fixed = TRUE)
-    expect_match(lof(0.08), 'zone-badge zone-fair', fixed = TRUE)
-    expect_match(lof(0.10), 'zone-badge zone-fair', fixed = TRUE)
-    expect_match(lof(0.05), 'zone-badge zone-poor', fixed = TRUE)
-    expect_match(lof(1e-6), '<strong>&lt; 0.001</strong>', fixed = TRUE)
-    expect_match(lof(1e-6), 'left: 0.0%', fixed = TRUE)
+    expect_match(lof(0.47), 'Lack-of-fit: p = <strong class="zone-good">0.47</strong>', fixed = TRUE)
+    expect_match(lof(0.08), 'zone-fair', fixed = TRUE)
+    expect_match(lof(0.10), 'zone-fair', fixed = TRUE)
+    expect_match(lof(0.05), 'zone-poor', fixed = TRUE)
+    expect_match(lof(1e-6), '>&lt; 0.001</strong>', fixed = TRUE)
     expect_match(lof(NA), 'needs replicates', fixed = TRUE)
+})
+
+test_that('the mean error of the back-calculated standards matches the comparison of models', {
+    d <- load_sample('griess')
+    r <- calculate(d, model = 'LRM')
+    expected <- compare_models(r$standard_data)
+    expected <- expected$mean.abs.error[expected$model == 'LRM']
+    html <- as.character(LinearityApp:::mean_error_ui(r$fit, 20, 'en'))
+    expect_match(html, sprintf('Mean |error| = <strong class="zone-good">%.1f%%</strong>', expected), fixed = TRUE)
+    expect_match(as.character(LinearityApp:::mean_error_ui(r$fit, expected / 2, 'en')), 'zone-poor', fixed = TRUE)
+    expect_null(LinearityApp:::mean_error_ui(NULL, 20))
 })
 
 test_that('the comparison tab is inserted after the model parameters and removed', {

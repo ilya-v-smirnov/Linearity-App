@@ -2,7 +2,7 @@
 % Please edit documentation in R/infographics.R
 \name{r2_ui}
 \alias{r2_ui}
-\title{Infographic of the Coefficient of Determination}
+\title{Coefficient of Determination of the Standard Curve}
 \usage{
 r2_ui(r2, lang = "en")
 }
@@ -15,8 +15,7 @@ r2_ui(r2, lang = "en")
 A shiny tag, or \code{NULL} when \code{r2} is missing.
 }
 \description{
-The \eqn{R^2} of the standard curve on a scale from 0.95 to 1 with zones: below
-0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the criterion of the
-quality assessment). Values below 0.95 are shown at the left end.
+Zones: below 0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the
+criterion of the quality assessment).
 }
 \keyword{internal}
