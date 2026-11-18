@@ -141,6 +141,12 @@ test_that('download modules write files', {
         expect_match(output$preview$html, 'Quality of the run', fixed = TRUE)
         session$setInputs(type = 'short')
         expect_false(grepl('Quality of the run', output$preview$html, fixed = TRUE))
+        # the date from the calendar, the operator and the plate go to the report and its file name
+        session$setInputs(date = as.Date('2026-03-05'), operator = 'Operator A', plate = 'Plate 3')
+        expect_match(output$preview$html, '05.03.2026', fixed = TRUE)
+        expect_match(output$preview$html, 'Operator: [[:space:]]*<strong>Operator A</strong>')
+        expect_match(output$preview$html, 'Plate: [[:space:]]*<strong>Plate 3</strong>')
+        expect_match(basename(output$download), '^2026-03-05_report_short')
     })
 })
 

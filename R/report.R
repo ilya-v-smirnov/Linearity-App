@@ -13,6 +13,9 @@
 #' With excluded points, the model and its parameters are those of the
 #' calibration refitted without them, as accepted by the user; a line says so.
 #'
+#' The head of the report has the date, the title and, when given, the
+#' operator and the plate.
+#'
 #' @inheritParams save_report
 #' @param type `"short"` or `"detailed"`.
 #'
@@ -23,15 +26,19 @@
 report_blocks <- function(type = c('short', 'detailed'), date, title, method, scale = NULL, weights = NULL,
                           model_table, result_table, means_table = NULL, qc_table = NULL,
                           exclusions = NULL, comparison = NULL, quality = NULL,
-                          notes = character(0), lang = 'en', exclusion_effect = NULL) {
+                          notes = character(0), lang = 'en', exclusion_effect = NULL,
+                          operator = NULL, plate = NULL) {
     type <- match.arg(type)
     t <- function(key) tr(key, lang)
     b <- function(type, ...) list(type = type, ...)
     has_rows <- function(x) !is.null(x) && nrow(x) > 0
     table <- function(x, caption = NULL) if (has_rows(x)) list(b('table', data = x, caption = caption))
 
-    head <- list(b('date', text = format(as.Date(date), '%d.%m.%Y')),
-                 b('title', text = if (is.null(title)) '' else title))
+    given <- function(x) length(x) == 1 && !is.na(x) && nzchar(trimws(x))
+    head <- c(list(b('date', text = format(as.Date(date), '%d.%m.%Y')),
+                   b('title', text = if (is.null(title)) '' else title)),
+              if (given(operator)) list(b('line', label = t('report.operator_label'), value = trimws(operator))),
+              if (given(plate)) list(b('line', label = t('report.plate_label'), value = trimws(plate))))
     method_lines <- c(list(b('line', label = t('report.method'), value = method)),
                       if (!is.null(scale)) list(b('line', label = t('report.scale'), value = scale)),
                       if (!is.null(weights)) list(b('line', label = t('report.weights'), value = weights)),
@@ -191,6 +198,7 @@ report_preview <- function(blocks, plot_output, lang = 'en', max_rows = 8) {
 #' @param file Output `.docx` path.
 #' @param date Analysis date (`"YYYY-MM-DD"`).
 #' @param title Experiment title; it may have several lines.
+#' @param operator,plate Optional operator and plate, shown under the title.
 #' @param plot Plot from [get_plots()].
 #' @param method Calibration method (text shown in the report).
 #' @param scale Scale of the fit (text shown in the report).
@@ -228,10 +236,13 @@ save_report <- function(file,
                         notes = character(0),
                         lang = 'en',
                         type = 'detailed',
-                        exclusion_effect = NULL) {
+                        exclusion_effect = NULL,
+                        operator = NULL,
+                        plate = NULL) {
     blocks <- report_blocks(type, date = date, title = title, method = method, scale = scale, weights = weights,
                             model_table = model_table, result_table = result_table, means_table = means_table,
                             qc_table = qc_table, exclusions = exclusions, comparison = comparison,
-                            quality = quality, notes = notes, lang = lang, exclusion_effect = exclusion_effect)
+                            quality = quality, notes = notes, lang = lang, exclusion_effect = exclusion_effect,
+                            operator = operator, plate = plate)
     write_report(blocks, file, plot)
 }

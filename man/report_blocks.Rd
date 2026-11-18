@@ -20,7 +20,9 @@ report_blocks(
   quality = NULL,
   notes = character(0),
   lang = "en",
-  exclusion_effect = NULL
+  exclusion_effect = NULL,
+  operator = NULL,
+  plate = NULL
 )
 }
 \arguments{
@@ -57,6 +59,8 @@ report_blocks(
 
 \item{exclusion_effect}{Optional tables comparing the calibration on all
 standards with the refitted one (see \code{\link[=exclusion_effect_tables]{exclusion_effect_tables()}}).}
+
+\item{operator, plate}{Optional operator and plate, shown under the title.}
 }
 \value{
 A list of blocks, each a list with \code{type} (\code{date}, \code{title},
@@ -79,5 +83,8 @@ controls and the means, and the warnings.
 
 With excluded points, the model and its parameters are those of the
 calibration refitted without them, as accepted by the user; a line says so.
+
+The head of the report has the date, the title and, when given, the
+operator and the plate.
 }
 \keyword{internal}

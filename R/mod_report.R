@@ -1,7 +1,8 @@
 #' Report Step Module
 #'
-#' The sidebar holds the experiment title, the type of the report (short or
-#' detailed) and the download; the main area shows a preview of the report
+#' The sidebar holds the experiment (date chosen with a calendar, title,
+#' operator and plate), the type of the report (short or detailed) and the
+#' download; the main area shows a preview of the report
 #' built from the same blocks as the Word file (see [report_blocks()]).
 #'
 #' @param id Module id.
@@ -23,8 +24,14 @@ mod_report_ui <- function(id, lang) {
         width = 330,
         sidebar_group(
             t('report.group_title'), 'heading',
-            shiny::textAreaInput(ns('title'), NULL, placeholder = t('report.title_placeholder'),
-                                 rows = 4, width = '100%', resize = 'vertical')
+            shiny::dateInput(ns('date'), t('report.date'), value = Sys.Date(), format = 'dd.mm.yyyy',
+                             language = lang, weekstart = 1, width = '100%'),
+            shiny::textAreaInput(ns('title'), t('report.title'), placeholder = t('report.title_placeholder'),
+                                 rows = 2, width = '100%', resize = 'vertical'),
+            shiny::textInput(ns('operator'), t('report.operator'), placeholder = t('report.operator_placeholder'),
+                             width = '100%'),
+            shiny::textInput(ns('plate'), t('report.plate'), placeholder = t('report.plate_placeholder'),
+                             width = '100%')
         ),
         sidebar_group(
             t('report.type'), 'file-lines',
@@ -53,6 +60,12 @@ mod_report_ui <- function(id, lang) {
 mod_report_server <- function(id, lang, curve, summary) {
     shiny::moduleServer(id, function(input, output, session) {
         type <- shiny::reactive(if (is.null(input$type)) 'short' else input$type)
+        # The date of the experiment; today until the calendar answers or when it is cleared
+        date <- shiny::reactive({
+            d <- input$date
+            if (length(d) != 1 || is.na(d)) Sys.Date() else as.Date(d)
+        })
+        text_input <- function(x) if (is.null(x)) '' else x
 
         plot <- shiny::reactive({
             args <- curve$plot_args()
@@ -70,8 +83,10 @@ mod_report_server <- function(id, lang, curve, summary) {
             tables$samples <- NULL
             tables$dilution <- if (!is.null(assessment)) quality_tables(assessment, lang)$dilution
             report_blocks(type(),
-                          date = as.character(Sys.Date()),
-                          title = if (is.null(input$title)) '' else input$title,
+                          date = as.character(date()),
+                          title = text_input(input$title),
+                          operator = text_input(input$operator),
+                          plate = text_input(input$plate),
                           method = tr(paste0('model.', curve$model()), lang),
                           scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic' else 'scale.log', lang),
                           weights = weight_labels(curve$weights(), lang),
@@ -97,7 +112,7 @@ mod_report_server <- function(id, lang, curve, summary) {
             export_button_ui(session$ns('download'), tr('report.download', lang), 'download', curve$units_ok()))
         observe_locked_export(input, 'download', lang)
         output$download <- shiny::downloadHandler(
-            filename = function() paste0(Sys.Date(), '_report_', type(), '.docx'),
+            filename = function() paste0(date(), '_report_', type(), '.docx'),
             content = function(file) {
                 shiny::req(curve$units_ok())
                 write_report(blocks(), file, plot())

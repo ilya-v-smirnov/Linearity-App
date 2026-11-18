@@ -309,8 +309,16 @@ summary:
   download: "Download summary (xlsx)"
 
 report:
-  group_title: "Experiment title"
-  title_placeholder: "Experiment name, plate, operator..."
+  group_title: "Experiment"
+  date: "Date"
+  title: "Experiment title"
+  title_placeholder: "Name of the experiment"
+  operator: "Operator"
+  operator_placeholder: "Who performed the assay"
+  operator_label: "Operator: "
+  plate: "Plate"
+  plate_placeholder: "Plate ID or number"
+  plate_label: "Plate: "
   type: "Report type"
   type_short: "Short"
   type_detailed: "Detailed"

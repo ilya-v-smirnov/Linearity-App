@@ -21,8 +21,9 @@ mod_report_server(id, lang, curve, summary)
 aggregated table and the assessment of the samples.}
 }
 \description{
-The sidebar holds the experiment title, the type of the report (short or
-detailed) and the download; the main area shows a preview of the report
+The sidebar holds the experiment (date chosen with a calendar, title,
+operator and plate), the type of the report (short or detailed) and the
+download; the main area shows a preview of the report
 built from the same blocks as the Word file (see \code{\link[=report_blocks]{report_blocks()}}).
 }
 \keyword{internal}

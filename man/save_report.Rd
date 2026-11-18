@@ -22,7 +22,9 @@ save_report(
   notes = character(0),
   lang = "en",
   type = "detailed",
-  exclusion_effect = NULL
+  exclusion_effect = NULL,
+  operator = NULL,
+  plate = NULL
 )
 }
 \arguments{
@@ -63,6 +65,8 @@ save_report(
 
 \item{exclusion_effect}{Optional tables comparing the calibration on all
 standards with the refitted one (see \code{\link[=exclusion_effect_tables]{exclusion_effect_tables()}}).}
+
+\item{operator, plate}{Optional operator and plate, shown under the title.}
 }
 \value{
 Called for its side effect.

@@ -1,9 +1,10 @@
-make_report <- function(lang) {
+make_report <- function(lang, ...) {
     r <- calculate(load_sample('griess'), 'QRM')
     path <- tempfile(fileext = '.docx')
     save_report(path,
                 date = '2026-11-14',
                 title = 'Test report',
+                ...,
                 plot = get_plots(r, plot.theme = report_theme(), lang = lang),
                 method = tr('model.QRM', lang),
                 scale = tr('scale.log', lang),
@@ -20,6 +21,15 @@ test_that('Word report is generated with a warnings section', {
     expect_true('Warnings' %in% text)
     expect_true(any(grepl('OD <= blank', text, fixed = TRUE)))
     expect_true(any(grepl('Quadratic regression model', text, fixed = TRUE)))
+})
+
+test_that('the head of the report has the date, the title, the operator and the plate', {
+    text <- make_report('en', operator = 'I. Smirnov', plate = 'P-07')
+    expect_equal(text[1:4], c('14.11.2026', 'Test report', 'Operator: I. Smirnov', 'Plate: P-07'))
+    # empty fields are left out
+    text <- make_report('ru', operator = '  ', plate = 'P-07')
+    expect_equal(text[3], paste0(tr('report.plate_label', 'ru'), 'P-07'))
+    expect_false(any(grepl(tr('report.operator_label', 'ru'), text, fixed = TRUE)))
 })
 
 test_that('Word report headings follow the language', {

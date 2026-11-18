@@ -309,8 +309,16 @@ summary:
   download: "Скачать сводку (xlsx)"
 
 report:
-  group_title: "Название эксперимента"
-  title_placeholder: "Название эксперимента, планшет, исполнитель..."
+  group_title: "Эксперимент"
+  date: "Дата"
+  title: "Название эксперимента"
+  title_placeholder: "Название эксперимента"
+  operator: "Исполнитель"
+  operator_placeholder: "Кто выполнил анализ"
+  operator_label: "Исполнитель: "
+  plate: "Планшет"
+  plate_placeholder: "Номер или ID планшета"
+  plate_label: "Планшет: "
   type: "Тип отчёта"
   type_short: "Краткий"
   type_detailed: "Подробный"
