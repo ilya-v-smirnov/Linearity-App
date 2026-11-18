@@ -144,7 +144,7 @@ curve_stat_ui <- function(label, value, zone = NA, verdict = NULL) {
 r2_ui <- function(r2, lang = 'en') {
     if (length(r2) != 1 || is.na(r2)) return(NULL)
     zone <- if (r2 >= 0.99) 'good' else if (r2 >= 0.98) 'fair' else 'poor'
-    curve_stat_ui('R² = ', sprintf('%.4f', r2), zone, tr(paste0('infographic.r2_', zone), lang))
+    curve_stat_ui('R\u00b2 = ', sprintf('%.4f', r2), zone, tr(paste0('infographic.r2_', zone), lang))
 }
 
 
