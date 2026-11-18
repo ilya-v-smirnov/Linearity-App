@@ -44,8 +44,9 @@ grouping_columns <- function(result) {
 #'
 #' @return Character vector.
 #' @keywords internal
-summary_statistics <- function() c('n', 'n.quantified', 'mean', 'min', 'max', 'sd', 'cv', 'range', 'precision',
-                                   'linearity')
+summary_statistics <- function() {
+    c('n', 'n.quantified', 'mean', 'min', 'max', 'sd', 'cv', 'range', 'precision', 'linearity')
+}
 
 
 #' Checks of the Groups of the Summary
