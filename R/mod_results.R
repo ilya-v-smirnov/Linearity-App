@@ -48,10 +48,24 @@ order_result <- function(result, by = 'column') {
 }
 
 
+#' Concentration Columns of the Interactive Tables
+#'
+#' Columns shown in e-notation when their values are very small or very large
+#' (see [results_datatable()]): the concentrations of the Results step and the
+#' QC, and the statistics of the result summary.
+#'
+#' @return Character vector.
+#' @keywords internal
+concentration_columns <- function() c('conc', 'conc.lower', 'conc.upper', 'nominal', 'mean', 'min', 'max', 'sd')
+
+
 #' Interactive Result Table
 #'
 #' Wells are sorted in the order of the plate rather than alphabetically, and
 #' flags are coloured like the infographic of the flags above the table.
+#' Concentrations below 1e-4 or from 1e5 in absolute value are shown in
+#' e-notation (`5.41e-5` instead of `0.0000541`); the table keeps the numbers,
+#' so that sorting and filtering are not affected.
 #'
 #' @param table Result table (see [order_result()]) with translated flags.
 #' @param lang Language code.
@@ -68,6 +82,15 @@ results_datatable <- function(table, lang, page_length = 25) {
         col_defs <- list(list(targets = well, orderData = hidden),
                          list(targets = hidden, visible = FALSE, searchable = FALSE))
     }
+    conc <- unname(which(names(table) %in% concentration_columns() & vapply(table, is.numeric, logical(1)))) - 1
+    if (length(conc) > 0) {
+        col_defs <- c(col_defs, list(list(targets = as.list(conc), render = DT::JS(
+            'function(data, type) {',
+            '  if (type !== "display" || data === null || data === "" || isNaN(data)) return data;',
+            '  var x = Number(data), a = Math.abs(x);',
+            '  return x !== 0 && (a < 1e-4 || a >= 1e5) ? x.toExponential() : data;',
+            '}'))))
+    }
     widget <- DT::datatable(
         table, rownames = FALSE, filter = 'top', selection = 'none', style = 'auto',
         class = 'compact stripe hover',
@@ -75,13 +98,20 @@ results_datatable <- function(table, lang, page_length = 25) {
                        order = list(), scrollX = TRUE, columnDefs = col_defs,
                        language = dt_language(lang))
     )
-    if ('flag' %in% names(table)) {
-        flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
-                   FLAGS$high_cv, FLAGS$nonlinear)
-        colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
-        widget <- DT::formatStyle(widget, 'flag', fontWeight = 'bold', whiteSpace = 'nowrap',
-                                  color = DT::styleEqual(translate_flags(flags, lang), colours))
+    flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
+               FLAGS$high_cv, FLAGS$nonlinear)
+    colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
+    style <- function(widget, column, values, colours) {
+        if (!column %in% names(table)) return(widget)
+        DT::formatStyle(widget, column, fontWeight = 'bold', whiteSpace = 'nowrap',
+                        color = DT::styleEqual(values, colours))
     }
+    widget <- style(widget, 'flag', translate_flags(flags, lang), colours)
+    # Checks of the groups of the result summary (see summary_checks())
+    widget <- style(widget, 'range', translate_flags(flags[1:6], lang), colours[1:6])
+    widget <- style(widget, 'precision', c(tr('flag.ok', lang), tr('flag.high_cv', lang)), c('#1b5e20', '#c62828'))
+    widget <- style(widget, 'linearity', c(tr('samples.legend_linear', lang), tr('samples.legend_nonlinear', lang)),
+                    c('#1b5e20', '#c62828'))
     widget
 }
 

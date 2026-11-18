@@ -10,9 +10,11 @@ sample_colours()
 A named character vector.
 }
 \description{
-The quantification status uses the colours of the quantification
-infographic (see \code{\link[=quantification_ui]{quantification_ui()}}); the precision of the
-replicates and the acceptance of dilutions and QC use a neutral blue for
-"within limits" and red for "outside".
+The quantification status uses the colours of the infographic of the
+Results step (see \code{\link[=flags_ui]{flags_ui()}}): red at or below the blank, orange below
+the lowest calibrator, green quantified, blue above the highest
+calibrator, grey other. The precision of the replicates and the accuracy
+of the QC use a neutral blue-grey for "within limits" and red for
+"outside".
 }
 \keyword{internal}

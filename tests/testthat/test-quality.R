@@ -162,6 +162,10 @@ test_that('dilution linearity is checked across dilutions of a sample', {
     expect_equal(nrow(d), 4)
     expect_equal(d$pass, c(TRUE, TRUE, FALSE, FALSE))
     expect_equal(d$deviation[1:2], c(0, 0))
+    # wells behind each mean, also in the table
+    expect_equal(d$n, c(1, 1, 1, 1))
+    expect_equal(d$n.quantified, c(1, 1, 1, 1))
+    expect_equal(names(quality_tables(r$quality, 'en')$dilution)[3:4], c('n', 'Quantified'))
     s <- r$quality$samples
     expect_equal(s$flag[s$sample.name == 'B'], c('Dilution non-linear', 'Dilution non-linear'))
     expect_match(message_text(r$notes), 'Non-linear dilutions in 1', all = FALSE)
@@ -186,6 +190,22 @@ test_that('dilution linearity is checked across dilutions of a sample', {
     odd$sample.name <- '<b>A</b>'
     expect_equal(quality_tables(list(dilution = odd), 'en', highlight = TRUE)$dilution$Sample[1],
                  '&lt;b&gt;A&lt;/b&gt;')
+})
+
+test_that('each sample of the dilution plot has its own colour', {
+    samples <- data.frame(name = rep(c('A', 'B', 'C'), each = 2), dilution = rep(c(2, 4), 3),
+                          od = c(0.4, 0.2, 0.4, 0.3, 0.3, 0.15))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    p <- plot_dilution_linearity(r$quality$dilution)
+    built <- ggplot2::ggplot_build(p)
+    colours <- unique(built$data[[3]]$colour)
+    expect_length(colours, 3)
+    # the non-linear sample is dashed, also in the legend
+    expect_equal(sort(unique(as.character(built$data[[3]]$linetype))), c('dashed', 'solid'))
+    expect_equal(unname(p$guides$guides$colour$params$override.aes$linetype), c('solid', 'dashed', 'solid'))
+    expect_equal(dilution_samples(r$quality$dilution), 3)
+    expect_gt(dilution_plot_height(20), dilution_plot_height(2))
+    expect_length(unique(dilution_palette(12)), 12)
 })
 
 test_that('quality controls follow the 4-6-X rule', {
@@ -469,4 +489,20 @@ test_that('quality controls without a code are grouped by their nominal concentr
     expect_equal(lv$n, c(1, 1, 2))
     expect_true(r$quality$qc$accepted)
     expect_false(anyNA(quality_tables(r$quality)$qc))
+})
+
+test_that('the flags of the summary are split into range, precision and linearity', {
+    samples <- data.frame(sample.name = c('A', 'A', 'B', 'C'), dilution = c(2, 4, 2, 1), cv = c(5, NA, 30, 4),
+                          flag = c('Dilution non-linear; < LLOQ', 'Dilution non-linear', 'High CV; > ULOQ; < LLOQ',
+                                   'OK'))
+    dilution <- data.frame(sample.name = c('A', 'A', 'B', 'B'), dilution = c(2, 4, 2, 4), n = 2, n.quantified = 2,
+                           mean = 1, deviation = 0, cv = 0, pass = c(FALSE, FALSE, TRUE, TRUE))
+    checks <- summary_checks(samples, dilution, 'en')
+    expect_equal(checks$range, c('Below', 'OK', 'Below; Above', 'OK'))
+    expect_equal(checks$precision, c('OK', '', 'High CV', 'OK'))
+    expect_equal(checks$linearity, c('Non-linear', 'Non-linear', 'Linear', ''))
+    expect_equal(summary_checks(samples, NULL, 'ru')$linearity, c('Нелинейно', 'Нелинейно', '', ''))
+    out <- summary_table(cbind(samples, mean = 1, sd = 0, min = 1, max = 1), 'sample.name',
+                         stats = c('cv', 'range', 'linearity'), dilution = dilution)
+    expect_equal(names(out), c('sample.name', 'cv', 'range', 'linearity'))
 })

@@ -220,6 +220,7 @@ mod_curve_ui <- function(id, lang) {
                 ),
                 shiny::uiOutput(ns('curve_stats')),
                 shiny::h5(with_tooltip(t('curve.compare'), t('compare.note'))),
+                shiny::uiOutput(ns('compare_mark')),
                 shiny::tableOutput(ns('compare')),
                 shiny::uiOutput(ns('notes')),
                 shiny::uiOutput(ns('exclusions'))
@@ -357,6 +358,13 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
+        # The row of the chosen model is shaded (renderTable gives no classes to the rows)
+        output$compare_mark <- shiny::renderUI({
+            row <- match(settings()$model, comparison()$model)
+            if (is.na(row)) return(NULL)
+            shiny::tags$style(sprintf('#%s tbody tr:nth-child(%d) td { background-color: #e9ecef; }',
+                                      ns('compare'), row))
+        })
 
         # Exclusion of standard points --------------------------------------
         point_text <- function(p) {

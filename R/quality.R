@@ -261,6 +261,15 @@ summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), gr
 }
 
 
+#' Value Columns of the Dilution Linearity
+#'
+#' The columns of [dilution_linearity()] that are not the keys of a sample.
+#'
+#' @return Character vector.
+#' @keywords internal
+dilution_value_columns <- function() c('dilution', 'n', 'n.quantified', 'mean', 'deviation', 'cv', 'pass')
+
+
 #' Dilution Linearity
 #'
 #' For each sample measured at two or more dilutions, compares the
@@ -272,9 +281,10 @@ summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), gr
 #' @param key_cols Columns identifying a sample; by default `sample.name` and
 #'   `sample.date`.
 #'
-#' @return A data.frame with the `key_cols`, `dilution`, `mean`, `deviation`
-#'   (%), `cv` (% across dilutions) and `pass`; `NULL` if no sample has
-#'   several dilutions.
+#' @return A data.frame with the `key_cols`, `dilution`, `n` and
+#'   `n.quantified` (wells of the sample at the dilution, summed over the
+#'   rows of `samples`), `mean`, `deviation` (%), `cv` (% across dilutions)
+#'   and `pass`; `NULL` if no sample has several dilutions.
 #' @export
 dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NULL) {
     if (is.null(samples) || !'dilution' %in% names(samples)) return(NULL)
@@ -282,14 +292,22 @@ dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NUL
     if (length(key_cols) == 0 || !all(key_cols %in% names(samples))) return(NULL)
     key <- do.call(paste, c(lapply(samples[key_cols], as.character), sep = ' | '))
     rows <- lapply(unique(key), function(k) {
-        s <- samples[key == k & !is.na(samples$mean), , drop = FALSE]
+        all_rows <- samples[key == k, , drop = FALSE]
+        s <- all_rows[!is.na(all_rows$mean), , drop = FALSE]
         if (length(unique(s$dilution)) < 2) return(NULL)
         by_dil <- stats::aggregate(s$mean, list(dilution = s$dilution), mean)
         overall <- mean(by_dil$x)
         dev <- 100 * (by_dil$x - overall) / overall
         cv <- cv_percent(by_dil$x)
+        # Wells behind each mean, including the rows without a quantified well
+        count <- function(col) {
+            if (!col %in% names(all_rows)) return(rep(NA_integer_, nrow(by_dil)))
+            vapply(by_dil$dilution, function(x) as.integer(sum(all_rows[[col]][all_rows$dilution %in% x])), 0L)
+        }
         out <- s[rep(1, nrow(by_dil)), key_cols, drop = FALSE]
         out$dilution <- by_dil$dilution
+        out$n <- count('n')
+        out$n.quantified <- count('n.quantified')
         out$mean <- by_dil$x
         out$deviation <- dev
         out$cv <- cv
@@ -345,7 +363,7 @@ assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group
     n_cv <- if (is.null(samples)) 0 else sum(grepl(FLAGS$high_cv, samples$flag, fixed = TRUE))
     if (n_cv > 0) warnings <- c(warnings, list(lin_message('quality.warn_cv', n = n_cv)))
     if (!is.null(dilution) && any(!dilution$pass)) {
-        cols <- setdiff(names(dilution), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
+        cols <- setdiff(names(dilution), dilution_value_columns())
         n_bad <- nrow(unique(dilution[!dilution$pass, cols, drop = FALSE]))
         warnings <- c(warnings, list(lin_message('quality.warn_dilution', n = n_bad)))
     }

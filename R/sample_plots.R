@@ -1,15 +1,17 @@
 #' Colours of the Sample Infographics
 #'
-#' The quantification status uses the colours of the quantification
-#' infographic (see [quantification_ui()]); the precision of the
-#' replicates and the acceptance of dilutions and QC use a neutral blue for
-#' "within limits" and red for "outside".
+#' The quantification status uses the colours of the infographic of the
+#' Results step (see [flags_ui()]): red at or below the blank, orange below
+#' the lowest calibrator, green quantified, blue above the highest
+#' calibrator, grey other. The precision of the replicates and the accuracy
+#' of the QC use a neutral blue-grey for "within limits" and red for
+#' "outside".
 #'
 #' @return A named character vector.
 #' @keywords internal
 sample_colours <- function() {
-    c(od_le_nc = '#c62828', below = '#ef8f00', ok = '#1b5e20', above = '#ef8f00', other = '#9e9e9e',
-      pass = '#2c6e9b', fail = '#c62828')
+    c(od_le_nc = '#c62828', below = '#ef8f00', ok = '#1b5e20', above = '#1976d2', other = '#9e9e9e',
+      pass = '#78909c', fail = '#c62828')
 }
 
 
@@ -193,7 +195,8 @@ samples_legend_ui <- function(lang) {
     }
     shiny::div(class = 'quant-legend',
                item('quant-ok', t('infographic.quantified')),
-               item('quant-below', paste(t('flag.below'), '/', t('flag.above'))),
+               item('quant-below', t('flag.below')),
+               item('quant-above', t('flag.above')),
                item('quant-od_le_nc', t('flag.od_le_nc')),
                item('quant-other', t('infographic.other')),
                shiny::span(class = 'quant-legend-item', shiny::span(class = 'legend-mean', '|'),
@@ -233,7 +236,7 @@ samples_tiles_ui <- function(assessment, qc, lang) {
     )
     d <- assessment$dilution
     if (!is.null(d)) {
-        cols <- setdiff(names(d), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
+        cols <- setdiff(names(d), dilution_value_columns())
         keys <- unique(d[c(cols, 'pass')])
         tiles <- c(tiles, list(tile(of(sum(keys$pass), nrow(keys)), t('samples.tile_linear'),
                                     good_if(all(keys$pass)))))
@@ -246,10 +249,49 @@ samples_tiles_ui <- function(assessment, qc, lang) {
 }
 
 
+#' Colours of the Samples in the Dilution Plot
+#'
+#' The Okabe-Ito palette (distinguishable with colour vision deficiency)
+#' without its yellow, which is hard to see on white; more samples get evenly
+#' spaced hues.
+#'
+#' @param n Number of samples.
+#' @return Character vector of `n` colours.
+#' @keywords internal
+dilution_palette <- function(n) {
+    okabe_ito <- c('#0072B2', '#D55E00', '#009E73', '#CC79A7', '#56B4E9', '#E69F00', '#000000')
+    if (n <= length(okabe_ito)) okabe_ito[seq_len(n)] else grDevices::hcl(seq(15, 375, length.out = n + 1)[-1], 80, 55)
+}
+
+
+#' Samples of the Dilution Plot
+#'
+#' @param dilution `dilution` element of [assess_samples()].
+#' @return Number of samples (lines of the plot).
+#' @keywords internal
+dilution_samples <- function(dilution) {
+    if (is.null(dilution)) return(0L)
+    cols <- setdiff(names(dilution), dilution_value_columns())
+    nrow(unique(dilution[cols]))
+}
+
+
+#' Height of the Dilution Plot in Pixels
+#'
+#' Grows with the number of samples in the legend on the right.
+#'
+#' @param n Number of samples.
+#' @return A number.
+#' @keywords internal
+dilution_plot_height <- function(n) max(400, 24 * n + 160)
+
+
 #' Plot of Dilution Linearity
 #'
 #' Deviation of the mean at each dilution from the mean over all dilutions of
-#' a sample, with the allowed deviation shaded.
+#' a sample, with the allowed deviation shaded. Each sample has its own colour
+#' (see [dilution_palette()]); the lines of the samples whose dilutions do not
+#' agree are dashed, also in the legend of the samples.
 #'
 #' @param dilution `dilution` element of [assess_samples()].
 #' @param criteria See [qc_criteria()].
@@ -259,25 +301,43 @@ samples_tiles_ui <- function(assessment, qc, lang) {
 #' @keywords internal
 plot_dilution_linearity <- function(dilution, criteria = qc_criteria(), lang = 'en') {
     t <- function(key) tr(key, lang)
-    cols <- setdiff(names(dilution), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
+    cols <- setdiff(names(dilution), dilution_value_columns())
     d <- dilution
     d$sample <- group_labels(d, cols)
+    samples <- unique(d$sample)
+    d$sample <- factor(d$sample, levels = samples)
+    pass <- vapply(samples, function(x) all(d$pass[d$sample == x]), logical(1))
     dil <- sort(unique(d$dilution))
     d$x <- factor(d$dilution, levels = dil, labels = paste0('\u00d7', format(dil, trim = TRUE, drop0trailing = TRUE)))
-    d$status <- ifelse(d$pass, 'pass', 'fail')
+    d$status <- factor(ifelse(d$pass, 'pass', 'fail'), levels = c('pass', 'fail'))
     limit <- criteria$dilution_bias
     span <- max(limit * 1.3, abs(d$deviation) * 1.1, na.rm = TRUE)
-    ggplot2::ggplot(d, ggplot2::aes(.data$x, .data$deviation, group = .data$sample, colour = .data$status)) +
+    ggplot2::ggplot(d, ggplot2::aes(.data$x, .data$deviation, group = .data$sample, colour = .data$sample)) +
         ggplot2::annotate('rect', xmin = -Inf, xmax = Inf, ymin = -limit, ymax = limit, fill = 'grey93') +
         ggplot2::geom_hline(yintercept = 0, colour = 'grey50', linewidth = 0.4) +
-        ggplot2::geom_line(linewidth = 0.7, alpha = 0.8) +
-        ggplot2::geom_point(size = 2.4) +
-        ggplot2::scale_colour_manual(values = sample_colours(), breaks = c('pass', 'fail'),
-                                     labels = c(t('samples.legend_linear'), t('samples.legend_nonlinear'))) +
+        # Keys of both statuses are shown even when only one occurs
+        ggplot2::geom_line(ggplot2::aes(linetype = .data$status), linewidth = 0.8, alpha = 0.9,
+                           position = ggplot2::position_dodge(width = 0.15), show.legend = TRUE) +
+        ggplot2::geom_point(ggplot2::aes(shape = .data$status), size = 2.6,
+                            position = ggplot2::position_dodge(width = 0.15), show.legend = TRUE) +
+        ggplot2::scale_colour_manual(values = stats::setNames(dilution_palette(length(samples)), samples),
+                                     name = NULL) +
+        ggplot2::scale_linetype_manual(values = c(pass = 'solid', fail = 'dashed'), drop = FALSE,
+                                       labels = c(t('samples.legend_linear'), t('samples.legend_nonlinear')),
+                                       name = NULL) +
+        ggplot2::scale_shape_manual(values = c(pass = 16, fail = 17), drop = FALSE,
+                                    labels = c(t('samples.legend_linear'), t('samples.legend_nonlinear')),
+                                    name = NULL) +
         ggplot2::scale_y_continuous(limits = c(-span, span)) +
-        ggplot2::labs(x = t('col.dilution'), y = t('col.deviation'), colour = NULL) +
+        ggplot2::labs(x = t('col.dilution'), y = t('col.deviation')) +
+        ggplot2::guides(colour = ggplot2::guide_legend(ncol = 1, order = 1, override.aes = list(
+                            linetype = ifelse(pass, 'solid', 'dashed'), shape = ifelse(pass, 16, 17))),
+                        linetype = ggplot2::guide_legend(order = 2, override.aes = list(colour = 'grey30')),
+                        shape = ggplot2::guide_legend(order = 2)) +
         sample_theme() +
-        ggplot2::theme(legend.position = 'bottom', panel.grid.major.y = ggplot2::element_blank())
+        ggplot2::theme(legend.position = 'right', legend.box = 'vertical', legend.justification = 'top',
+                       legend.text = ggplot2::element_text(size = 10),
+                       legend.key.width = ggplot2::unit(26, 'pt'), panel.grid.major.y = ggplot2::element_blank())
 }
 
 

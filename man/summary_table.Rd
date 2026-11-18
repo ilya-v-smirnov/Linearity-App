@@ -10,7 +10,8 @@ summary_table(
   stats = summary_statistics(),
   round_fun = signif,
   round_par = 3,
-  lang = "en"
+  lang = "en",
+  dilution = NULL
 )
 }
 \arguments{
@@ -22,7 +23,10 @@ summary_table(
 
 \item{round_fun, round_par}{Rounding of the concentrations.}
 
-\item{lang}{Language code of the flags.}
+\item{lang}{Language code of the checks.}
+
+\item{dilution}{\code{dilution} element of \code{\link[=assess_samples]{assess_samples()}}, or \code{NULL}; marks
+the samples compared across dilutions as linear (see \code{\link[=summary_checks]{summary_checks()}}).}
 }
 \value{
 A data.frame, or \code{NULL} without groups.

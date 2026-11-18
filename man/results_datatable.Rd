@@ -19,5 +19,8 @@ A DT widget.
 \description{
 Wells are sorted in the order of the plate rather than alphabetically, and
 flags are coloured like the infographic of the flags above the table.
+Concentrations below 1e-4 or from 1e5 in absolute value are shown in
+e-notation (\code{5.41e-5} instead of \code{0.0000541}); the table keeps the numbers,
+so that sorting and filtering are not affected.
 }
 \keyword{internal}

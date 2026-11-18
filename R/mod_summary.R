@@ -37,8 +37,58 @@ grouping_columns <- function(result) {
 
 
 #' Statistics of the Summary Table
+#'
+#' In the order of the columns: the counts, the mean with the minimum and the
+#' maximum, then the spread (SD and CV) and the checks of the group (see
+#' [summary_checks()]).
+#'
+#' @return Character vector.
 #' @keywords internal
-summary_statistics <- function() c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min', 'max', 'flag')
+summary_statistics <- function() c('n', 'n.quantified', 'mean', 'min', 'max', 'sd', 'cv', 'range', 'precision',
+                                   'linearity')
+
+
+#' Checks of the Groups of the Summary
+#'
+#' Splits the flags of the groups into three columns:
+#' * `range`: the flags of the wells against the calibration range (`OK`,
+#'   `OD <= blank`, `Below`, `Above`, `No solution`, `Missing OD`; several
+#'   are joined by `"; "` in this order);
+#' * `precision`: `High CV` above the limit of the replicates, `OK` within it,
+#'   empty when the CV cannot be computed (fewer than two quantified wells);
+#' * `linearity`: `Non-linear` or `Linear` for the samples compared across
+#'   dilutions, empty for the others.
+#'
+#' @param samples `samples` element of [assess_samples()].
+#' @param dilution `dilution` element of [assess_samples()], or `NULL`.
+#' @param lang Language code.
+#'
+#' @return A data.frame with the columns `range`, `precision` and `linearity`
+#'   (translated texts), one row per row of `samples`.
+#' @keywords internal
+summary_checks <- function(samples, dilution = NULL, lang = 'en') {
+    parts <- strsplit(ifelse(is.na(samples$flag), FLAGS$ok, samples$flag), '; ', fixed = TRUE)
+    sequence <- unlist(FLAGS[c('od_le_nc', 'below', 'above', 'no_solution', 'missing')])
+    range <- vapply(parts, function(p) {
+        p <- setdiff(p, c(FLAGS$ok, FLAGS$high_cv, FLAGS$nonlinear))
+        p <- p[order(match(p, sequence))]
+        translate_flags(if (length(p) == 0) FLAGS$ok else paste(p, collapse = '; '), lang)
+    }, '')
+    high_cv <- vapply(parts, function(p) FLAGS$high_cv %in% p, logical(1))
+    precision <- ifelse(high_cv, tr('flag.high_cv', lang), ifelse(is.na(samples$cv), '', tr('flag.ok', lang)))
+    nonlinear <- vapply(parts, function(p) FLAGS$nonlinear %in% p, logical(1))
+    assessed <- rep(FALSE, nrow(samples))
+    if (!is.null(dilution)) {
+        cols <- setdiff(names(dilution), dilution_value_columns())
+        if (length(cols) > 0 && all(cols %in% names(samples))) {
+            key <- function(x) do.call(paste, c(lapply(x[cols], as.character), sep = ' | '))
+            assessed <- key(samples) %in% key(dilution)
+        }
+    }
+    linearity <- ifelse(nonlinear, tr('samples.legend_nonlinear', lang),
+                        ifelse(assessed, tr('samples.legend_linear', lang), ''))
+    data.frame(range = range, precision = precision, linearity = linearity)
+}
 
 
 #' Summary Table for Display
@@ -47,17 +97,19 @@ summary_statistics <- function() c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min
 #' @param group_vars Grouping columns.
 #' @param stats Statistics to keep (see [summary_statistics()]).
 #' @param round_fun,round_par Rounding of the concentrations.
-#' @param lang Language code of the flags.
+#' @param lang Language code of the checks.
+#' @param dilution `dilution` element of [assess_samples()], or `NULL`; marks
+#'   the samples compared across dilutions as linear (see [summary_checks()]).
 #'
 #' @return A data.frame, or `NULL` without groups.
 #' @keywords internal
 summary_table <- function(samples, group_vars, stats = summary_statistics(), round_fun = signif, round_par = 3,
-                          lang = 'en') {
+                          lang = 'en', dilution = NULL) {
     if (is.null(samples) || length(group_vars) == 0) return(NULL)
     out <- samples
     for (col in c('mean', 'sd', 'min', 'max')) out[[col]] <- round_fun(out[[col]], round_par)
     out$cv <- round(out$cv, 1)
-    out$flag <- translate_flags(out$flag, lang)
+    out <- cbind(out, summary_checks(samples, dilution, lang))
     out[, c(group_vars, intersect(summary_statistics(), stats)), drop = FALSE]
 }
 
@@ -170,7 +222,7 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             r <- rounding()
             # No choice (before the first answer of the browser, or nothing ticked): all statistics
             stats <- if (is.null(input$stats)) summary_statistics() else input$stats
-            summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang)
+            summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang, a$dilution)
         })
         dilution_tables <- function(highlight) {
             a <- assessment()
@@ -233,26 +285,33 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             a <- assessment()
             if (is.null(a)) return(empty_state())
             qc <- curve$result()$quality$qc
+            criteria <- curve$result()$quality$criteria
             n_groups <- nrow(a$samples)
+            # The plots of the dilutions and the QC side by side share the height
+            height <- paste0(dilution_plot_height(dilution_samples(a$dilution)), 'px')
             shiny::tagList(
                 samples_tiles_ui(a, qc, lang),
-                quantification_ui(result()$flag, lang),
+                quantification_ui(result()$flag, lang, help = t('samples.quant_help')),
                 shiny::div(class = 'infographic',
-                           shiny::div(class = 'infographic-title', t('samples.figure_title')),
+                           shiny::div(class = 'infographic-title',
+                                      with_tooltip(t('samples.figure_title'), t('samples.figure_help'))),
                            shiny::plotOutput(ns('groups_plot'), height = paste0(groups_plot_height(n_groups), 'px')),
                            samples_legend_ui(lang)),
                 shiny::fluidRow(
                     shiny::column(6, shiny::div(
                         class = 'infographic',
-                        shiny::div(class = 'infographic-title', with_tooltip(t('quality.section_dilution'),
-                                                                             t('summary.dilution_help'))),
+                        shiny::div(class = 'infographic-title',
+                                   with_tooltip(t('quality.section_dilution'),
+                                                t('summary.dilution_help', bias = criteria$dilution_bias,
+                                                  cv = criteria$dilution_cv))),
                         if (is.null(a$dilution)) shiny::p(class = 'text-muted small mb-0', t('samples.no_dilution'))
-                        else shiny::plotOutput(ns('dilution_plot'), height = '300px'))),
+                        else shiny::plotOutput(ns('dilution_plot'), height = height))),
                     shiny::column(6, shiny::div(
                         class = 'infographic',
-                        shiny::div(class = 'infographic-title', t('quality.section_qc')),
+                        shiny::div(class = 'infographic-title',
+                                   with_tooltip(t('quality.section_qc'), t('samples.qc_help'))),
                         if (is.null(qc)) shiny::p(class = 'text-muted small mb-0', t('samples.no_qc'))
-                        else shiny::plotOutput(ns('qc_plot'), height = '300px')))
+                        else shiny::plotOutput(ns('qc_plot'), height = height)))
                 )
             )
         })

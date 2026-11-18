@@ -265,7 +265,7 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 2.5rem;
-    margin: 0.3rem 0 1rem 0.4rem;
+    margin: 0.3rem 0 1rem 2.5rem;
 }
 
 .curve-stat {
@@ -356,8 +356,8 @@
 }
 
 .quant-od_le_nc { background: #c62828; }
-.quant-below,
-.quant-above    { background: #ef8f00; }
+.quant-below    { background: #ef8f00; }
+.quant-above    { background: #1976d2; }
 .quant-ok       { background: #1b5e20; }
 .quant-other    { background: #9e9e9e; }
 
@@ -572,7 +572,7 @@
 .stat-tile.stat-good { border-left: 4px solid #1b5e20; }
 .stat-tile.stat-bad  { border-left: 4px solid #c62828; }
 
-.quant-swatch.cv-pass { background: #2c6e9b; }
+.quant-swatch.cv-pass { background: #78909c; }
 .quant-swatch.cv-fail { background: #c62828; }
 
 .legend-mean {

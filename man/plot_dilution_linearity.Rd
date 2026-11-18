@@ -18,6 +18,8 @@ A ggplot2 object.
 }
 \description{
 Deviation of the mean at each dilution from the mean over all dilutions of
-a sample, with the allowed deviation shaded.
+a sample, with the allowed deviation shaded. Each sample has its own colour
+(see \code{\link[=dilution_palette]{dilution_palette()}}); the lines of the samples whose dilutions do not
+agree are dashed, also in the legend of the samples.
 }
 \keyword{internal}

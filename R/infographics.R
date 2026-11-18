@@ -22,14 +22,16 @@ quantification_counts <- function(flags) {
 #'
 #' A horizontal bar of the sample wells: below the background (red) and below
 #' the LLOQ (orange) on the left, quantified (green) in the middle, above the
-#' ULOQ (orange) and other problems (grey) on the right.
+#' ULOQ (blue) and other problems (grey) on the right: the colours of the
+#' infographic of the Results step (see [flags_ui()]).
 #'
 #' @param flags Flags of the sample wells.
 #' @param lang Language code.
+#' @param help Text of the tooltip of the title, or `NULL` for none.
 #'
 #' @return A shiny tag, or `NULL` when there are no sample wells.
 #' @keywords internal
-quantification_ui <- function(flags, lang = 'en') {
+quantification_ui <- function(flags, lang = 'en', help = NULL) {
     counts <- quantification_counts(flags)
     total <- sum(counts)
     if (total == 0) return(NULL)
@@ -46,10 +48,10 @@ quantification_ui <- function(flags, lang = 'en') {
                     shiny::span(class = paste0('quant-swatch quant-', k)),
                     paste0(labels[[k]], ' (', counts[[k]], ')'))
     })
+    title <- tr('infographic.samples', lang, n = counts[['ok']], total = total)
     shiny::div(
         class = 'infographic',
-        shiny::div(class = 'infographic-title',
-                   tr('infographic.samples', lang, n = counts[['ok']], total = total)),
+        shiny::div(class = 'infographic-title', if (is.null(help)) title else with_tooltip(title, help)),
         shiny::div(class = 'quant-bar', segments),
         shiny::div(class = 'quant-legend', legend)
     )

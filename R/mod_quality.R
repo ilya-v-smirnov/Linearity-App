@@ -95,11 +95,14 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     dilution <- NULL
     if (!is.null(quality$dilution)) {
         d <- quality$dilution
-        id_cols <- setdiff(names(d), c('dilution', 'mean', 'deviation', 'cv', 'pass'))
-        dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution), num(d$mean),
+        id_cols <- setdiff(names(d), dilution_value_columns())
+        counts <- function(col) if (col %in% names(d)) d[[col]] else rep(NA_integer_, nrow(d))
+        dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution),
+                                    counts('n'), counts('n.quantified'), num(d$mean),
                                     fail(pct(d$deviation), abs(d$deviation) > criteria$dilution_bias),
                                     fail(pct(d$cv), d$cv > criteria$dilution_cv), fail(mark(d$pass), !d$pass)),
-                         c(id_keys(id_cols), 'col.dilution', 'col.mean', 'col.deviation', 'col.cv_dil', 'col.pass'))
+                         c(id_keys(id_cols), 'col.dilution', 'col.count', 'col.n_quant', 'col.mean', 'col.deviation',
+                           'col.cv_dil', 'col.pass'))
     }
 
     curve <- NULL

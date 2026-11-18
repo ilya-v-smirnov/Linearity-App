@@ -15,9 +15,10 @@ dilution_linearity(samples, criteria = qc_criteria(), key_cols = NULL)
 \code{sample.date}.}
 }
 \value{
-A data.frame with the \code{key_cols}, \code{dilution}, \code{mean}, \code{deviation}
-(\%), \code{cv} (\% across dilutions) and \code{pass}; \code{NULL} if no sample has
-several dilutions.
+A data.frame with the \code{key_cols}, \code{dilution}, \code{n} and
+\code{n.quantified} (wells of the sample at the dilution, summed over the
+rows of \code{samples}), \code{mean}, \code{deviation} (\%), \code{cv} (\% across dilutions)
+and \code{pass}; \code{NULL} if no sample has several dilutions.
 }
 \description{
 For each sample measured at two or more dilutions, compares the

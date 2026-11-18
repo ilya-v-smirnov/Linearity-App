@@ -6,7 +6,12 @@
 \usage{
 summary_statistics()
 }
+\value{
+Character vector.
+}
 \description{
-Statistics of the Summary Table
+In the order of the columns: the counts, the mean with the minimum and the
+maximum, then the spread (SD and CV) and the checks of the group (see
+\code{\link[=summary_checks]{summary_checks()}}).
 }
 \keyword{internal}

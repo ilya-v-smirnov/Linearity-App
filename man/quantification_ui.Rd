@@ -4,12 +4,14 @@
 \alias{quantification_ui}
 \title{Infographic of Quantified Samples}
 \usage{
-quantification_ui(flags, lang = "en")
+quantification_ui(flags, lang = "en", help = NULL)
 }
 \arguments{
 \item{flags}{Flags of the sample wells.}
 
 \item{lang}{Language code.}
+
+\item{help}{Text of the tooltip of the title, or \code{NULL} for none.}
 }
 \value{
 A shiny tag, or \code{NULL} when there are no sample wells.
@@ -20,6 +22,7 @@ Shown on the infographics tab of the result summary step.
 \details{
 A horizontal bar of the sample wells: below the background (red) and below
 the LLOQ (orange) on the left, quantified (green) in the middle, above the
-ULOQ (orange) and other problems (grey) on the right.
+ULOQ (blue) and other problems (grey) on the right: the colours of the
+infographic of the Results step (see \code{\link[=flags_ui]{flags_ui()}}).
 }
 \keyword{internal}

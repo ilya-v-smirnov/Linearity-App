@@ -83,7 +83,11 @@ test_that('summary module groups by sample by default, offers quick choices and 
         # before the browser answers, the samples are the groups
         out <- session$returned$table()
         expect_equal(names(out)[1:2], c('sample.name', 'sample.date'))
-        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv', 'flag') %in% names(out)))
+        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv', 'range', 'precision', 'linearity') %in% names(out)))
+        expect_false('flag' %in% names(out))
+        # the mean next to the minimum and the maximum, then the spread
+        expect_equal(names(out)[names(out) %in% c('mean', 'min', 'max', 'sd', 'cv')],
+                     c('mean', 'min', 'max', 'sd', 'cv'))
         expect_equal(sum(out$n), 12)
         expect_equal(out$sample.name, c('M0', 'M0', 'M1', 'M1', 'M2', 'M2'))
         expect_match(output$preview$html, '12 wells', fixed = TRUE)
@@ -96,6 +100,10 @@ test_that('summary module groups by sample by default, offers quick choices and 
         expect_match(output$infographics$html, 'groups_plot', fixed = TRUE)
         expect_match(output$groups_plot$src, '^data:image/png')
         expect_match(output$infographics$html, '4 of 12 sample wells quantified', fixed = TRUE)
+        # every infographic explains itself in a tooltip
+        for (key in c('samples.quant_help', 'samples.figure_help', 'samples.qc_help')) {
+            expect_match(output$infographics$html, html_escape(tr(key, 'en')), fixed = TRUE)
+        }
 
         session$setInputs(group_vars = c('sample.name', 'sample.date', 'dilution'), stats = c('n', 'mean'))
         out <- session$returned$table()
@@ -480,6 +488,12 @@ test_that('R2 is shown as an infographic and quantification moved to the result 
         # both warnings of this run are shown by the statistics: no warnings box
         expect_null(output$notes)
         expect_match(output$coefs, 'ci.lower', fixed = TRUE)
+        # the row of the chosen model is shaded in the comparison of models
+        row <- match('LRM', calibration_models())
+        expect_match(output$compare_mark$html, sprintf('tr:nth-child(%d)', row), fixed = TRUE)
+        session$setInputs(model = '4PL')
+        expect_match(output$compare_mark$html, sprintf('tr:nth-child(%d)', match('4PL', calibration_models())),
+                     fixed = TRUE)
     })
 })
 
@@ -566,4 +580,18 @@ test_that('the comparison tab is inserted after the model parameters and removed
     expect_match(calls[[1]][[6]], 'curve-effect', fixed = TRUE)
     expect_equal(calls[[2]], list('remove', 'tabs', 'refit'))
     expect_match(as.character(LinearityApp:::mod_curve_ui('curve', 'en')), 'id="curve-tabs"', fixed = TRUE)
+})
+
+test_that('very small and very large concentrations are shown in e-notation', {
+    table <- data.frame(well = c('A1', 'A2'), conc = c(0.0000541, 2.5), conc.lower = c(1e-6, 2), OD = c(0.06, 0.2),
+                        flag = 'OK')
+    defs <- LinearityApp:::results_datatable(table, 'en')$x$options$columnDefs
+    render <- Filter(function(d) !is.null(d$render), defs)
+    expect_length(render, 1)
+    # conc and conc.lower (0-based), not the OD
+    expect_equal(unlist(render[[1]]$targets), c(1, 2))
+    expect_match(render[[1]]$render, 'toExponential', fixed = TRUE)
+    # no concentrations: nothing to render
+    defs <- LinearityApp:::results_datatable(data.frame(well = 'A1', OD = 0.1), 'en')$x$options$columnDefs
+    expect_length(Filter(function(d) !is.null(d$render), defs), 0)
 })
