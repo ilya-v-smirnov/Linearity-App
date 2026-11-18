@@ -30,6 +30,9 @@ test_that('curve module recalculates when the model changes', {
         expect_equal(session$returned$result()$model, 'LRM')
         expect_equal(nrow(session$returned$coef_table()), 2)
         expect_equal(session$returned$plot_args()$xtitle, 'Concentration, ng/ml')
+        # with the units chosen, the plot can be saved and no message asks for them
+        expect_true(session$returned$units_ok())
+        expect_match(output$save_plot_ui$html, 'shiny-download-link', fixed = TRUE)
 
         session$setInputs(model = 'QRM')
         expect_equal(session$returned$result()$model, 'QRM')
@@ -57,9 +60,10 @@ test_that('curve module shows calculation errors as validation messages', {
     })
 })
 
-fake_curve <- function(lang = 'en') {
+fake_curve <- function(lang = 'en', units_ok = TRUE) {
     r <- calculate(load_sample('griess'), 'LRM')
     list(result = shiny::reactive(r),
+         units_ok = shiny::reactive(units_ok),
          coef_table = shiny::reactive(get_coef_ci(r$model_direct, signif, 3)),
          notes = shiny::reactive(message_text(r$notes, lang)),
          plot_args = shiny::reactive(list(xtitle = 'x', ytitle = 'y')),
@@ -594,4 +598,40 @@ test_that('very small and very large concentrations are shown in e-notation', {
     # no concentrations: nothing to render
     defs <- LinearityApp:::results_datatable(data.frame(well = 'A1', OD = 0.1), 'en')$x$options$columnDefs
     expect_length(Filter(function(d) !is.null(d$render), defs), 0)
+})
+
+test_that('nothing is exported until the units of the calibrator are chosen', {
+    data <- shiny::reactive(load_sample('griess'))
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = data, rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', xtitle = 'x', xunits = '', ytitle = 'y')
+        expect_false(session$returned$units_ok())
+        # the button looks the same but asks for the units instead of downloading
+        expect_match(output$save_plot_ui$html, 'id="proxy1-save_plot_locked"', fixed = TRUE)
+        expect_false(grepl('shiny-download-link', output$save_plot_ui$html, fixed = TRUE))
+        session$setInputs(xunits = ', ng/ml')
+        expect_true(session$returned$units_ok())
+    })
+    locked <- fake_curve(units_ok = FALSE)
+    shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'ru', curve = locked), {
+        expect_match(output$download_ui$html, 'export-locked', fixed = TRUE)
+        # no message next to the button: it comes with a click
+        expect_false(grepl(tr('export.units_needed', 'ru'), output$download_ui$html, fixed = TRUE))
+    })
+    shiny::testServer(LinearityApp:::mod_summary_server,
+                      args = list(lang = 'en', curve = locked, rounding = rounding_3()), {
+        expect_match(output$download_ui$html, 'export-locked', fixed = TRUE)
+    })
+    summary <- list(table = shiny::reactive(NULL), assessment = shiny::reactive(NULL),
+                    warnings = shiny::reactive(character(0)))
+    shiny::testServer(LinearityApp:::mod_report_server,
+                      args = list(lang = 'en', curve = locked, summary = summary), {
+        expect_match(output$download_ui$html, 'export-locked', fixed = TRUE)
+    })
+    modal <- as.character(units_modal('ru'))
+    expect_match(modal, tr('export.units_title', 'ru'), fixed = TRUE)
+    expect_match(modal, tr('export.units_needed', 'ru'), fixed = TRUE)
+    expect_false(units_chosen(''))
+    expect_false(units_chosen(NULL))
+    expect_true(units_chosen(', nM'))
 })

@@ -7,6 +7,11 @@ language:
 app:
   title: "Linearity App"
 
+export:
+  units_title: "Choose the units of the calibrator"
+  units_needed: "Figures, tables and reports are exported only with the units of the calibrator concentrations. Choose them on the Standard curve step (Axis titles → X units) and export again."
+  ok: "OK"
+
 common:
   warnings: "Warnings:"
   import_error: "Import error: {message}"

@@ -186,8 +186,7 @@ mod_results_ui <- function(id, lang) {
         ),
         sidebar_group(
             t('results.export'), 'file-excel',
-            shiny::downloadButton(ns('download'), t('results.download'), icon = shiny::icon('download'),
-                                  class = 'btn-primary w-100')
+            shiny::uiOutput(ns('download_ui'))
         )
     )
 
@@ -244,9 +243,13 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column')) 
         })
         output$qc_table <- DT::renderDT(results_datatable(qc(), lang, page_length = 10))
 
+        output$download_ui <- shiny::renderUI(
+            export_button_ui(ns('download'), tr('results.download', lang), 'download', curve$units_ok()))
+        observe_locked_export(input, 'download', lang)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_result_table.xlsx'),
             content = function(file) {
+                shiny::req(curve$units_ok())
                 sheets <- list(table())
                 names(sheets) <- tr('tab.results', lang)
                 if (!is.null(qc())) sheets[[tr('results.qc', lang)]] <- qc()

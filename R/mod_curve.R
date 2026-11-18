@@ -36,6 +36,72 @@ unit_choices <- function(lang) {
 }
 
 
+#' Are the Units of the Calibrator Chosen?
+#'
+#' @param units Value of the units input (see [unit_choices()]); `""` is
+#'   "None".
+#'
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+units_chosen <- function(units) length(units) == 1 && !is.na(units) && nzchar(units)
+
+
+#' Export Button That Requires the Units of the Calibrator
+#'
+#' Figures, tables and reports are exported only after the units of the
+#' calibrator concentrations are chosen on the standard curve step. Until
+#' then the button looks the same but is an action button with the id
+#' `<id>_locked`: a click shows a message asking for the units (see
+#' [observe_locked_export()]) instead of downloading.
+#'
+#' @param id Namespaced id of the download output.
+#' @param label Label of the button.
+#' @param icon Name of the icon.
+#' @param ready Whether the units are chosen (see [units_chosen()]).
+#'
+#' @return A download button or an action button.
+#' @keywords internal
+export_button_ui <- function(id, label, icon, ready) {
+    if (isTRUE(ready)) {
+        return(shiny::downloadButton(id, label, icon = shiny::icon(icon), class = 'btn-primary w-100'))
+    }
+    shiny::actionButton(paste0(id, '_locked'), label, icon = shiny::icon(icon),
+                        class = 'btn-primary w-100 export-locked')
+}
+
+
+#' Message Asking for the Units of the Calibrator
+#'
+#' @param lang Language code.
+#' @return A modal dialog.
+#' @keywords internal
+units_modal <- function(lang = 'en') {
+    shiny::modalDialog(
+        title = shiny::span(shiny::icon('triangle-exclamation', class = 'text-warning'), ' ',
+                            tr('export.units_title', lang)),
+        tr('export.units_needed', lang),
+        footer = shiny::modalButton(tr('export.ok', lang)),
+        easyClose = TRUE
+    )
+}
+
+
+#' Message on a Click of a Locked Export Button
+#'
+#' Shows [units_modal()] when the action button of [export_button_ui()] is
+#' clicked, i.e. when the units of the calibrator are not chosen.
+#'
+#' @param input Input of the module.
+#' @param id Id of the download output within the module.
+#' @param lang Language code.
+#'
+#' @return Called for its side effect.
+#' @keywords internal
+observe_locked_export <- function(input, id, lang = 'en') {
+    shiny::observeEvent(input[[paste0(id, '_locked')]], shiny::showModal(units_modal(lang)))
+}
+
+
 #' Translated Labels of Weighting Schemes
 #'
 #' @param weights Weighting codes.
@@ -186,8 +252,7 @@ mod_curve_ui <- function(id, lang) {
             shiny::selectInput(ns('xunits'), t('curve.xunits'), choices = unit_choices(lang), selected = '',
                                width = '100%'),
             shiny::textInput(ns('ytitle'), t('curve.ytitle'), value = t('curve.ydefault'), width = '100%'),
-            shiny::downloadButton(ns('save_plot'), t('curve.save_plot'), icon = shiny::icon('image'),
-                                  class = 'btn-primary w-100')
+            shiny::uiOutput(ns('save_plot_ui'))
         ),
         sidebar_group(
             t('curve.group_model'), 'chart-line',
@@ -259,8 +324,15 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         exclusions <- shiny::reactiveVal(no_exclusions)
         clicked <- shiny::reactiveVal(NULL)
 
-        # New data: forget the exclusions
-        shiny::observeEvent(data(), exclusions(no_exclusions))
+        # New data: forget the exclusions; the units must be chosen again
+        shiny::observeEvent(data(), {
+            exclusions(no_exclusions)
+            shiny::updateSelectInput(session, 'xunits', selected = '')
+        })
+        units_ok <- shiny::reactive(units_chosen(input$xunits))
+        output$save_plot_ui <- shiny::renderUI(export_button_ui(ns('save_plot'), t('curve.save_plot'), 'image',
+                                                                units_ok()))
+        observe_locked_export(input, 'save_plot', lang)
 
         settings <- shiny::reactive({
             shiny::req(input$model)
@@ -475,6 +547,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         output$save_plot <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_plot.jpeg'),
             content = function(file) {
+                shiny::req(units_ok())
                 ggplot2::ggsave(file, plots(), width = 20, height = 10, units = 'cm', dpi = 600)
             }
         )
@@ -483,6 +556,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
              coef_table = coef_table,
              notes = notes,
              plot_args = plot_args,
+             units_ok = units_ok,
              model = shiny::reactive(settings()$model),
              weights = shiny::reactive(settings()$weights),
              exclusions = exclusions,

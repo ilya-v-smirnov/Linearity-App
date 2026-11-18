@@ -141,8 +141,7 @@ mod_summary_ui <- function(id, lang) {
         mod_criteria_ui('criteria', lang, 'samples'),
         sidebar_group(
             t('results.export'), 'file-excel',
-            shiny::downloadButton(ns('download'), t('summary.download'), icon = shiny::icon('download'),
-                                  class = 'btn-primary w-100')
+            shiny::uiOutput(ns('download_ui'))
         )
     )
 
@@ -330,9 +329,13 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             plot_qc_accuracy(qc, lang)
         })
 
+        output$download_ui <- shiny::renderUI(
+            export_button_ui(ns('download'), t('summary.download'), 'download', curve$units_ok()))
+        observe_locked_export(input, 'download', lang)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_summary.xlsx'),
             content = function(file) {
+                shiny::req(curve$units_ok())
                 sheets <- list(table())
                 names(sheets) <- t('tab.summary')
                 if (!is.null(tables()$dilution)) sheets[[t('quality.section_dilution')]] <- tables()$dilution

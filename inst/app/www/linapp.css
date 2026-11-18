@@ -30,6 +30,12 @@
     margin-bottom: 0.75rem;
 }
 
+/* Export button while the units of the calibrator are not chosen (a click
+   asks for them) */
+.sidebar-group .export-locked {
+    margin-bottom: 0.75rem;
+}
+
 /* Outputs of a step view are wrapped in a block (not flex) container, so that
    empty outputs do not add gaps and wide content does not shrink */
 .step-view {

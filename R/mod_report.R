@@ -36,8 +36,7 @@ mod_report_ui <- function(id, lang) {
         ),
         sidebar_group(
             t('results.export'), 'file-word',
-            shiny::downloadButton(ns('download'), label = t('report.download'), icon = shiny::icon('download'),
-                                  class = 'btn-primary w-100')
+            shiny::uiOutput(ns('download_ui'))
         )
     )
 
@@ -94,9 +93,15 @@ mod_report_server <- function(id, lang, curve, summary) {
         })
         output$plot <- shiny::renderPlot(plot())
 
+        output$download_ui <- shiny::renderUI(
+            export_button_ui(session$ns('download'), tr('report.download', lang), 'download', curve$units_ok()))
+        observe_locked_export(input, 'download', lang)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_report_', type(), '.docx'),
-            content = function(file) write_report(blocks(), file, plot())
+            content = function(file) {
+                shiny::req(curve$units_ok())
+                write_report(blocks(), file, plot())
+            }
         )
 
         blocks
