@@ -314,6 +314,37 @@ test_that('single background wells are excluded from the background', {
     expect_s3_class(LinearityApp:::plot_background(bg, std, 'ru'), 'ggplot')
 })
 
+test_that('a scatter of the blanks above the signal of the lowest calibrator is reported', {
+    data <- load_sample('bca')
+    # the blanks of the example agree well: no warning
+    ok <- calculate(data, 'LRM')
+    expect_false(ok$background$scatter$warn)
+    expect_false(any(grepl('scatter', message_text(ok$notes), fixed = TRUE)))
+
+    # blanks 0.075 and 0.175: a range of 0.1 OD, while S7 (0.031) reads about 0.0885
+    data$OD[data$type == 'blank'] <- c(0.075, 0.175)
+    r <- calculate(data, 'LRM')
+    sc <- r$background$scatter
+    expect_equal(sc$range, 0.1)
+    expect_equal(sc$conc, 0.031)
+    expect_equal(sc$level, 'S7')
+    s7 <- mean(data$OD[data$type == 'standard' & data$conc == 0.031])
+    expect_equal(sc$signal, s7 - 0.125)
+    expect_true(sc$warn)
+    expect_match(message_text(r$notes, 'en'),
+                 sprintf('The background wells scatter by 0.1000 OD (maximum minus minimum), more than the lowest calibrator S7 (0.031) rises above the background (%.4f OD)',
+                         s7 - 0.125), fixed = TRUE, all = FALSE)
+    expect_match(message_text(r$notes, 'ru'), 'Разброс лунок фона 0.1000 OD', fixed = TRUE, all = FALSE)
+
+    # with the high blank excluded a single well is left: nothing to compare
+    keys <- well_keys(data)[data$type == 'blank']
+    one <- calculate(data, 'LRM', exclude_background = data.frame(key = keys[2], reason = 'Outlier'))
+    expect_null(one$background$scatter)
+
+    # saturation and a signal at the background level are no reasons for a background well
+    expect_equal(LinearityApp:::background_exclusion_reasons(), c('outlier', 'pipetting', 'bubble'))
+})
+
 test_that('the background correction is shown and reported', {
     data <- synthetic_data(function(x) 0.1 * x)
     data <- rbind(data, data.frame(sample.name = NA, sample.date = NA, type = 'NC', dilution = NA, conc = NA,

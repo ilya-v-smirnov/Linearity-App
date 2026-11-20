@@ -22,8 +22,9 @@ A list with \code{roles}, \code{keys} and \code{od} (the wells used), \code{n},
 with fewer than two wells), \code{value} (the value subtracted: the mean; 0
 without roles or without a usable well, then \code{empty} is \code{TRUE}), \code{unused} (a named vector with
 the number of wells of the roles left out), \code{legacy} (see
-\code{\link[=legacy_background]{legacy_background()}}) and \code{wells} (all wells of the background roles:
-\code{role}, \code{key}, \code{OD}, \code{used}, \code{excluded}, \code{reason}).
+\code{\link[=legacy_background]{legacy_background()}}), \code{wells} (all wells of the background roles:
+\code{role}, \code{key}, \code{OD}, \code{used}, \code{excluded}, \code{reason}) and \code{scatter} (see
+\code{\link[=blank_scatter]{blank_scatter()}}).
 }
 \description{
 Background Correction of a Plate

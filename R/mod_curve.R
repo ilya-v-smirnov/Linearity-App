@@ -196,6 +196,16 @@ exclusion_reasons <- function(lang = NULL) {
 }
 
 
+#' Reasons for Excluding a Background Well
+#'
+#' The reasons of [exclusion_reasons()] without signal saturation and a
+#' signal at the background level, which do not apply to background wells.
+#'
+#' @return Codes.
+#' @keywords internal
+background_exclusion_reasons <- function() setdiff(exclusion_reasons(), c('saturation', 'background'))
+
+
 #' Exclusions for Display
 #'
 #' @param ex A data.frame with `key`, `reason` and optionally `standard`,
@@ -331,6 +341,7 @@ mod_curve_ui <- function(id, lang) {
                        # The roles subtracted as background; single wells are excluded on the plot below
                        shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0), inline = TRUE),
                        shiny::tableOutput(ns('background_table')),
+                       shiny::uiOutput(ns('background_warning')),
                        shiny::uiOutput(ns('background_notes')),
                        shiny::h5(with_tooltip(t('bg.plot_section'), t('bg.click_hint'))),
                        shiny::div(class = 'background-panel',
@@ -540,6 +551,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shiny::req(p)
             p
         })
+        output$background_warning <- shiny::renderUI({
+            bg <- background_info()
+            if (!isTRUE(bg$scatter$warn)) return(NULL)
+            shiny::div(class = 'alert alert-warning', shiny::icon('triangle-exclamation'), ' ',
+                       message_text(list(background_scatter_message(bg)), lang))
+        })
         output$background_restore <- shiny::renderUI({
             if (nrow(bg_exclusions()) == 0) return(NULL)
             shiny::actionButton(ns('restore_background'), t('bg.restore_all'), icon = shiny::icon('undo'),
@@ -581,7 +598,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
 
         # The same dialog excludes or restores a standard point or a background well
         store <- function(target) if (identical(target, 'background')) bg_exclusions else exclusions
-        point_dialog <- function(text, reason = NULL) {
+        point_dialog <- function(text, reason = NULL, codes = exclusion_reasons()) {
             if (!is.null(reason)) {
                 return(shiny::showModal(shiny::modalDialog(
                     title = t('curve.restore_title'),
@@ -595,8 +612,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                 title = t('curve.exclude_title'),
                 shiny::p(text),
                 shiny::radioButtons(ns('reason_choice'), t('curve.reason'),
-                                    choices = stats::setNames(c(exclusion_reasons(), 'other'),
-                                                              c(exclusion_reasons(lang), t('reason.other'))),
+                                    choices = stats::setNames(c(codes, 'other'),
+                                                              c(exclusion_reasons(lang)[codes], t('reason.other'))),
                                     selected = character(0), width = '100%'),
                 shiny::conditionalPanel(
                     condition = "input.reason_choice == 'other'", ns = ns,
@@ -633,7 +650,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             if (nrow(near) == 0) return()
             clicked(list(key = near$key, target = 'background'))
             text <- t('bg.point', well = near$key, role = role_labels(near$role, lang), od = signif(near$OD, 3))
-            point_dialog(text, if (near$kind == 'excluded') bg_exclusions()$reason[bg_exclusions()$key == near$key])
+            point_dialog(text, if (near$kind == 'excluded') bg_exclusions()$reason[bg_exclusions()$key == near$key],
+                         codes = background_exclusion_reasons())
         })
 
         shiny::observeEvent(input$confirm_exclude, {

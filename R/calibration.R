@@ -128,6 +128,33 @@ legacy_background <- function(data) {
 }
 
 
+#' Scatter of the Background Wells Against the Lowest Calibrator
+#'
+#' The background wells used should agree much better than the signal of the
+#' lowest calibrator rises above them. The check fails when the range of the
+#' wells used (maximum minus minimum OD) exceeds the signal of the lowest
+#' standard level above the background (its mean OD as measured minus the
+#' value subtracted).
+#'
+#' @param od ODs of the background wells used.
+#' @param value Value subtracted.
+#' @param standards Standard wells as measured, with `conc` and `OD`.
+#'
+#' @return A list with `range`, `conc` and `level` (concentration and name of
+#'   the lowest standard level, see [standard_names()]), `signal` and `warn`;
+#'   `NULL` with fewer than two wells or without standards.
+#' @keywords internal
+blank_scatter <- function(od, value, standards) {
+    standards <- standards[!is.na(standards$conc) & !is.na(standards$OD), , drop = FALSE]
+    if (length(od) < 2 || nrow(standards) == 0) return(NULL)
+    lowest <- min(standards$conc)
+    signal <- mean(standards$OD[standards$conc == lowest]) - value
+    spread <- max(od) - min(od)
+    list(range = spread, conc = lowest, level = standard_names(lowest, standards$conc), signal = signal,
+         warn = spread > signal)
+}
+
+
 #' Background Correction of a Plate
 #'
 #' @param data A data.frame with columns `type`, `OD` and optionally `.key`
@@ -142,8 +169,9 @@ legacy_background <- function(data) {
 #'   with fewer than two wells), `value` (the value subtracted: the mean; 0
 #'   without roles or without a usable well, then `empty` is `TRUE`), `unused` (a named vector with
 #'   the number of wells of the roles left out), `legacy` (see
-#'   [legacy_background()]) and `wells` (all wells of the background roles:
-#'   `role`, `key`, `OD`, `used`, `excluded`, `reason`).
+#'   [legacy_background()]), `wells` (all wells of the background roles:
+#'   `role`, `key`, `OD`, `used`, `excluded`, `reason`) and `scatter` (see
+#'   [blank_scatter()]).
 #' @keywords internal
 background_summary <- function(data, roles, exclude = NULL) {
     bad <- setdiff(roles, background_roles())
@@ -168,7 +196,8 @@ background_summary <- function(data, roles, exclude = NULL) {
     list(roles = roles, keys = keys[used], od = od, n = length(od), n_roles = sum(in_roles), empty = empty,
          mean = if (length(od) > 0) mean(od) else NA_real_,
          sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
-         value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells)
+         value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells,
+         scatter = blank_scatter(od, value, data[data$type %in% 'standard', c('conc', 'OD'), drop = FALSE]))
 }
 
 
@@ -419,6 +448,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     } else if (defaulted && identical(background, 'NC')) {
         notes <- c(notes, list(lin_message('note.background_nc_legacy', n = bg$n)))
     }
+    if (isTRUE(bg$scatter$warn)) notes <- c(notes, list(background_scatter_message(bg)))
     # A plate analysed again: the background of earlier versions differs by more than 1 %
     if (!is.na(bg$legacy) && abs(bg$value - bg$legacy) > 0.01 * abs(bg$legacy)) {
         notes <- c(notes, list(lin_message('note.background_changed', value = signif(bg$value, 4),

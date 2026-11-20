@@ -73,6 +73,19 @@ background_notes <- function(bg, lang = 'en') {
 }
 
 
+#' Warning About the Scatter of the Background Wells
+#'
+#' @inheritParams background_table
+#'
+#' @return A `lin_message` (see [blank_scatter()]).
+#' @keywords internal
+background_scatter_message <- function(bg) {
+    sc <- bg$scatter
+    lin_message('note.blank_scatter', range = sprintf('%.4f', sc$range), signal = sprintf('%.4f', sc$signal),
+                level = sc$level, conc = signif(sc$conc, 3))
+}
+
+
 #' Background Correction in One Line
 #'
 #' For the parameters of the report.

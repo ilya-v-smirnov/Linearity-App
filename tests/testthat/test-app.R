@@ -637,11 +637,13 @@ test_that('background wells are excluded and restored by clicking on the plot', 
                       args = list(lang = 'en', data = shiny::reactive(data), rounding = rounding_3()), {
         session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
         expect_equal(session$returned$result()$nc_value, 0.125)
+        expect_match(output$background_warning$html, 'The background wells scatter by 0.1000 OD', fixed = TRUE)
         clicked_point <<- high
         session$setInputs(background_click = list(x = 1, y = 0.175))
         session$setInputs(reason_choice = 'outlier', reason = '', confirm_exclude = 1)
         expect_equal(session$returned$background_exclusions()$key, high)
         expect_equal(session$returned$result()$nc_value, 0.075)
+        expect_null(output$background_warning)
         # the standard exclusions are not touched
         expect_equal(nrow(session$returned$exclusions()), 0)
         expect_match(output$background_table, '1/2', fixed = TRUE)

@@ -387,6 +387,7 @@ flag:
   nonlinear: "Dilution non-linear"
 
 note:
+  blank_scatter: "The background wells scatter by {range} OD (maximum minus minimum), more than the lowest calibrator {level} ({conc}) rises above the background ({signal} OD): the background is not reliable near the LLOQ. Check the background wells in Standard curve → Background."
   background_empty: "No background is subtracted: all chosen background wells are excluded or have no OD."
   no_background: "No background is subtracted: no background wells are chosen."
   background_nc_legacy: "The plate has no reagent blank or zero calibrator: its {n} negative control well(s) (NC) are subtracted as background, as in earlier versions of the app. Choose the background wells in Standard curve → Background."
