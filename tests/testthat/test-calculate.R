@@ -269,11 +269,48 @@ test_that('files of earlier versions with NC wells are analysed visibly', {
     expect_equal(changed$background$legacy, sqrt(0.02 * 0.10))
     expect_match(message_text(changed$notes), 'differs from that of earlier versions of the app (0.04472',
                  fixed = TRUE, all = FALSE)
-    expect_match(LinearityApp:::background_notes(changed$background, 'en'), 'Earlier versions of the app subtracted 0.04472',
-                 fixed = TRUE)
+    # the value of earlier versions is not repeated under the background table
+    expect_false(any(grepl('Earlier versions', LinearityApp:::background_notes(changed$background, 'en'))))
     # a difference below 1 % is shown with the background only
     expect_false(any(grepl('earlier versions', message_text(r$notes), fixed = TRUE) &
                      grepl('differs', message_text(r$notes), fixed = TRUE)))
+})
+
+test_that('single background wells are excluded from the background', {
+    # blanks 0.075 and 0.175 (one too high) on the BCA example
+    data <- load_sample('bca')
+    data$OD[data$type == 'blank'] <- c(0.075, 0.175)
+    keys <- well_keys(data)[data$type == 'blank']
+    both <- calculate(data, 'LRM')
+    expect_equal(both$nc_value, 0.125)
+    excl <- data.frame(key = keys[2], reason = 'Outlier')
+    r <- calculate(data, 'LRM', exclude_background = excl)
+    expect_equal(r$nc_value, 0.075)
+    bg <- r$background
+    expect_equal(c(bg$n, bg$n_roles), c(1, 2))
+    expect_equal(LinearityApp:::background_table(bg, 'en')$Used, '1/2')
+    expect_equal(LinearityApp:::background_notes(bg, 'en'), paste0('Excluded by the user: ', keys[2], ' (Outlier).'))
+    wells <- LinearityApp:::background_wells_table(bg, 'en')
+    expect_equal(wells$Status, c('\u2713', 'excluded: Outlier'))
+    expect_true(endsWith(LinearityApp:::background_text(bg, 'en'), paste0('; excluded by the user: ', keys[2], ' (Outlier)')))
+    # an excluded background well is not a standard exclusion; with the high blank five low standards
+    # fell to OD <= 0 and left the log-log fit, now they are back
+    expect_equal(nrow(r$exclusions), 0)
+    expect_equal(c(nrow(both$standard_data), nrow(r$standard_data)), c(9, 14))
+
+    # all chosen wells excluded: nothing is subtracted, with a warning
+    none <- calculate(data, 'LRM', exclude_background = data.frame(key = keys, reason = 'Outlier'))
+    expect_equal(none$nc_value, 0)
+    expect_match(message_text(none$notes), 'all chosen background wells are excluded', fixed = TRUE, all = FALSE)
+
+    # the plot shows the calibrators as measured from the lowest level, to the right of the blanks
+    std <- data[data$type == 'standard', c('conc', 'OD')]
+    pts <- LinearityApp:::background_points(bg, std, 'en')
+    expect_equal(attr(pts, 'n_roles'), 1)
+    expect_equal(attr(pts, 'labels')[1:2], c('Reagent\nblank', 'S7\n0.031'))
+    expect_equal(sort(unique(pts$kind)), c('excluded', 'standard', 'used'))
+    expect_equal(sum(pts$kind == 'standard'), 14)
+    expect_s3_class(LinearityApp:::plot_background(bg, std, 'ru'), 'ggplot')
 })
 
 test_that('the background correction is shown and reported', {
@@ -282,23 +319,17 @@ test_that('the background correction is shown and reported', {
                                    OD = 0.3))
     r <- calculate(data, 'LIN')
     tab <- LinearityApp:::background_table(r$background, 'en')
-    expect_equal(names(tab), c('Background wells', 'Wells', 'Mean OD', 'SD', 'Subtracted'))
-    expect_equal(unlist(tab[1, ], use.names = FALSE),
-                 c('Reagent blank', paste0('2 (', paste(r$background$keys, collapse = ', '), ')'),
-                   '0.0500', '0.0000', '0.0500'))
-    # earlier versions mixed the NC well into the background
-    expect_equal(LinearityApp:::background_notes(r$background, 'en'),
-                 c('Not used: Negative control (1 well(s)).',
-                   sprintf('Earlier versions of the app subtracted %s (the geometric mean of the blank and NC wells).',
-                           signif(LinearityApp:::geom_mean(c(0.05, 0.05, 0.3)), 4))))
+    expect_equal(names(tab), c('Background wells', 'Used', 'Mean OD', 'SD', 'Subtracted'))
+    expect_equal(unlist(tab[1, ], use.names = FALSE), c('Reagent blank', '2/2', '0.0500', '0.0000', '0.0500'))
+    expect_equal(LinearityApp:::background_notes(r$background, 'en'), 'Not used: Negative control (1 well(s)).')
     expect_equal(LinearityApp:::background_text(r$background, 'en'),
-                 'Reagent blank, 2 well(s), mean OD 0.0500, SD 0.0000; subtracted 0.0500')
+                 'Reagent blank, wells used 2/2, mean OD 0.0500, SD 0.0000; subtracted 0.0500')
     wells <- LinearityApp:::background_wells_table(r$background, 'en')
-    expect_equal(names(wells), c('Role', 'Position', 'OD', 'Deviation from the subtracted value', 'Used'))
+    expect_equal(names(wells), c('Role', 'Position', 'OD', 'Deviation from the subtracted value', 'Status'))
     expect_equal(wells$Role, c('Reagent blank', 'Reagent blank', 'Negative control'))
-    expect_equal(wells$Used, c('✓', '✓', '—'))
+    expect_equal(wells$Status, c('\u2713', '\u2713', '\u2014'))
     expect_equal(wells[['Deviation from the subtracted value']], c('+0.0000', '+0.0000', '+0.2500'))
-    expect_s3_class(LinearityApp:::plot_background(r$background, 'en'), 'ggplot')
+    expect_s3_class(LinearityApp:::plot_background(r$background, lang = 'en'), 'ggplot')
     expect_null(LinearityApp:::background_wells_table(list(wells = r$background$wells[0, ]), 'en'))
     pts <- LinearityApp:::standard_points_table(r, 'en')
     expect_equal(pts[['OD as measured']][1], sprintf('%.4f', 0.1 * 32 + 0.05))

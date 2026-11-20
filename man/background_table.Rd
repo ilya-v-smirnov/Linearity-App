@@ -14,7 +14,8 @@ background_table(bg, lang = "en")
 }
 \value{
 A data.frame with translated column names: the roles used, the
-wells, their mean OD, SD and the value subtracted.
+wells used out of the wells of these roles (e.g. \code{3/4}), their mean OD,
+SD and the value subtracted.
 }
 \description{
 Background Correction as a Table

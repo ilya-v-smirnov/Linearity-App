@@ -14,9 +14,10 @@ background_wells_table(bg, lang = "en")
 }
 \value{
 A data.frame with translated column names: role, position, OD,
-deviation from the value subtracted and whether the well is used; the
-wells used first, then by role in the order of \code{\link[=background_roles]{background_roles()}}.
-\code{NULL} without background wells.
+deviation from the value subtracted and the status of the well (used,
+excluded by the user with the reason, or of a role left out); the wells
+used first, then by role in the order of \code{\link[=background_roles]{background_roles()}}. \code{NULL}
+without background wells.
 }
 \description{
 Wells of the Background Roles for Display

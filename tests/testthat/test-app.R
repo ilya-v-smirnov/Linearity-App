@@ -592,12 +592,12 @@ test_that('the comparison tab is inserted after the model parameters and removed
     expect_match(as.character(LinearityApp:::mod_curve_ui('curve', 'en')), 'id="curve-tabs"', fixed = TRUE)
 })
 
-test_that('the background has its own sub-tab, first and open by default', {
+test_that('the background has its own sub-tab, first, while the curve opens', {
     html <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
     values <- regmatches(html, gregexpr('data-value="[a-z]+"', html))[[1]]
     expect_equal(values[1:3], c('data-value="background"', 'data-value="curve"', 'data-value="coefs"'))
-    # the first panel is the active one
-    expect_match(html, '<div class="tab-pane active[^>]*data-value="background"')
+    expect_match(html, '<div class="tab-pane active[^>]*data-value="curve"')
+    expect_false(grepl('<div class="tab-pane active[^>]*data-value="background"', html))
 
     # blanks 0.04 and 0.16, a negative control 0.40; three standard levels only: the curve cannot be fitted
     conc <- c(1, 2, 4)
@@ -618,6 +618,33 @@ test_that('the background has its own sub-tab, first and open by default', {
         expect_match(output$background_notes$html, 'Not used: Negative control', fixed = TRUE)
         session$setInputs(background = c('blank', 'NC'))
         expect_match(output$background_table, '0.2000', fixed = TRUE)
+    })
+})
+
+test_that('background wells are excluded and restored by clicking on the plot', {
+    data <- load_sample('bca')
+    data$OD[data$type == 'blank'] <- c(0.075, 0.175)
+    high <- well_keys(data)[data$type == 'blank'][2]
+    clicked_point <- NULL
+    local_mocked_bindings(nearPoints = function(df, ...) df[df$key %in% clicked_point, ], .package = 'shiny')
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(data), rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        expect_equal(session$returned$result()$nc_value, 0.125)
+        clicked_point <<- high
+        session$setInputs(background_click = list(x = 1, y = 0.175))
+        session$setInputs(reason_choice = 'outlier', reason = '', confirm_exclude = 1)
+        expect_equal(session$returned$background_exclusions()$key, high)
+        expect_equal(session$returned$result()$nc_value, 0.075)
+        # the standard exclusions are not touched
+        expect_equal(nrow(session$returned$exclusions()), 0)
+        expect_match(output$background_table, '1/2', fixed = TRUE)
+        expect_match(output$background_restore$html, 'Restore all background wells', fixed = TRUE)
+        # a click on the cross restores the well
+        session$setInputs(background_click = list(x = 1, y = 0.175))
+        session$setInputs(confirm_restore = 1)
+        expect_equal(nrow(session$returned$background_exclusions()), 0)
+        expect_equal(session$returned$result()$nc_value, 0.125)
     })
 })
 

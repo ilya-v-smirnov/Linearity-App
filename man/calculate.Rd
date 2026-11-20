@@ -17,7 +17,8 @@ calculate(
   extrapolate = character(0),
   blank_zero = FALSE,
   interval = NULL,
-  background = NULL
+  background = NULL,
+  exclude_background = NULL
 )
 }
 \arguments{
@@ -57,6 +58,9 @@ Ignored for the other models.}
 \item{background}{Roles of the wells subtracted as background (see
 \code{\link[=background_roles]{background_roles()}}); \code{NULL} for the default role of the plate (see
 \code{\link[=default_background]{default_background()}}); \code{character(0)} subtracts nothing.}
+
+\item{exclude_background}{Background wells excluded by the user: a
+data.frame with columns \code{key} and \code{reason}.}
 }
 \value{
 A list with components:

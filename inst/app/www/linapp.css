@@ -142,6 +142,7 @@
 .well-empty    { background: transparent; border-style: dashed !important; }
 .well-standard { background: #cfe2f3; }
 .well-blank    { background: #e3e3e3; }
+.background-panel { max-width: 720px; }
 .well-zero     { background: #d0e0e3; }
 .well-nc       { background: #ead1dc; }
 .well-qc       { background: #fce5cd; }

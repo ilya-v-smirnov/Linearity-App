@@ -13,8 +13,8 @@ background_notes(bg, lang = "en")
 \item{lang}{Language code.}
 }
 \value{
-Character vector: the roles of the plate left out, and the value of
-earlier versions when it differs (to 4 significant digits).
+Character vector: the wells excluded by the user and the roles of
+the plate left out.
 }
 \description{
 Notes Under the Background Table

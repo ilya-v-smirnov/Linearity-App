@@ -134,26 +134,38 @@ legacy_background <- function(data) {
 #'   (well IDs, see [well_keys()]).
 #' @param roles Roles of the wells subtracted as background (see
 #'   [background_roles()]); `character(0)` subtracts nothing.
+#' @param exclude Background wells excluded by the user: a data.frame with
+#'   `key` and `reason`, or `NULL`.
 #'
 #' @return A list with `roles`, `keys` and `od` (the wells used), `n`,
-#'   `mean`, `sd` (`NA` with fewer than two wells), `value` (the value
-#'   subtracted: the mean, 0 without roles), `unused` (a named vector with
+#'   `n_roles` (wells of the chosen roles, used or not), `mean`, `sd` (`NA`
+#'   with fewer than two wells), `value` (the value subtracted: the mean; 0
+#'   without roles or without a usable well, then `empty` is `TRUE`), `unused` (a named vector with
 #'   the number of wells of the roles left out), `legacy` (see
 #'   [legacy_background()]) and `wells` (all wells of the background roles:
-#'   `role`, `key`, `OD`, `used`).
+#'   `role`, `key`, `OD`, `used`, `excluded`, `reason`).
 #' @keywords internal
-background_summary <- function(data, roles) {
+background_summary <- function(data, roles, exclude = NULL) {
     bad <- setdiff(roles, background_roles())
     if (length(bad) > 0) lin_abort('error.background_role', roles = bad, choices = background_roles())
     keys <- if ('.key' %in% names(data)) data$.key else well_keys(data)
-    used <- data$type %in% roles & !is.na(data$OD)
+    all <- is_background(data$type)
+    reason <- rep(NA_character_, nrow(data))
+    if (!is.null(exclude) && nrow(exclude) > 0) {
+        idx <- match(keys, exclude$key)
+        reason[all & !is.na(idx)] <- as.character(exclude$reason[idx[all & !is.na(idx)]])
+    }
+    excluded <- !is.na(reason)
+    in_roles <- data$type %in% roles
+    used <- in_roles & !is.na(data$OD) & !excluded
     od <- data$OD[used]
-    value <- if (length(roles) == 0) 0 else background_value(od)$value
+    empty <- length(roles) > 0 && length(od) == 0
+    value <- if (length(roles) == 0 || empty) 0 else background_value(od)$value
     others <- setdiff(background_roles(), roles)
     unused <- vapply(others, function(r) sum(data$type %in% r), 0)
-    all <- is_background(data$type)
-    wells <- data.frame(role = data$type[all], key = keys[all], OD = data$OD[all], used = used[all])
-    list(roles = roles, keys = keys[used], od = od, n = length(od),
+    wells <- data.frame(role = data$type[all], key = keys[all], OD = data$OD[all], used = used[all],
+                        excluded = excluded[all], reason = reason[all])
+    list(roles = roles, keys = keys[used], od = od, n = length(od), n_roles = sum(in_roles), empty = empty,
          mean = if (length(od) > 0) mean(od) else NA_real_,
          sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
          value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells)
@@ -331,6 +343,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   the ULOQ). Their flags are kept.
 #' @param blank_zero If `TRUE`, samples with OD at or below the blank get
 #'   concentration 0 (flag kept).
+#' @param exclude_background Background wells excluded by the user: a
+#'   data.frame with columns `key` and `reason`.
 #' @param background Roles of the wells subtracted as background (see
 #'   [background_roles()]); `NULL` for the default role of the plate (see
 #'   [default_background()]); `character(0)` subtracts nothing.
@@ -386,7 +400,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
                       round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
-                      extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL) {
+                      extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL,
+                      exclude_background = NULL) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
@@ -395,10 +410,12 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     # Background subtraction; the results show the OD as measured and corrected
     defaulted <- is.null(background)
     if (defaulted) background <- default_background(data$type)
-    bg <- background_summary(data, background)
+    bg <- background_summary(data, background, exclude_background)
     notes <- list()
     if (length(background) == 0) {
         notes <- c(notes, list(lin_message('note.no_background')))
+    } else if (bg$empty) {
+        notes <- c(notes, list(lin_message('note.background_empty')))
     } else if (defaulted && identical(background, 'NC')) {
         notes <- c(notes, list(lin_message('note.background_nc_legacy', n = bg$n)))
     }

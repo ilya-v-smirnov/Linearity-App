@@ -4,7 +4,7 @@
 \alias{background_summary}
 \title{Background Correction of a Plate}
 \usage{
-background_summary(data, roles)
+background_summary(data, roles, exclude = NULL)
 }
 \arguments{
 \item{data}{A data.frame with columns \code{type}, \code{OD} and optionally \code{.key}
@@ -12,14 +12,18 @@ background_summary(data, roles)
 
 \item{roles}{Roles of the wells subtracted as background (see
 \code{\link[=background_roles]{background_roles()}}); \code{character(0)} subtracts nothing.}
+
+\item{exclude}{Background wells excluded by the user: a data.frame with
+\code{key} and \code{reason}, or \code{NULL}.}
 }
 \value{
 A list with \code{roles}, \code{keys} and \code{od} (the wells used), \code{n},
-\code{mean}, \code{sd} (\code{NA} with fewer than two wells), \code{value} (the value
-subtracted: the mean, 0 without roles), \code{unused} (a named vector with
+\code{n_roles} (wells of the chosen roles, used or not), \code{mean}, \code{sd} (\code{NA}
+with fewer than two wells), \code{value} (the value subtracted: the mean; 0
+without roles or without a usable well, then \code{empty} is \code{TRUE}), \code{unused} (a named vector with
 the number of wells of the roles left out), \code{legacy} (see
 \code{\link[=legacy_background]{legacy_background()}}) and \code{wells} (all wells of the background roles:
-\code{role}, \code{key}, \code{OD}, \code{used}).
+\code{role}, \code{key}, \code{OD}, \code{used}, \code{excluded}, \code{reason}).
 }
 \description{
 Background Correction of a Plate

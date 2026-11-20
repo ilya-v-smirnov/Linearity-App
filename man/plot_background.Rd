@@ -4,11 +4,14 @@
 \alias{plot_background}
 \title{Plot of the Background Wells}
 \usage{
-plot_background(bg, lang = "en")
+plot_background(bg, standards = NULL, lang = "en")
 }
 \arguments{
 \item{bg}{The \code{background} element of \code{\link[=calculate]{calculate()}} (see
 \code{\link[=background_summary]{background_summary()}}).}
+
+\item{standards}{Standard wells as measured: a data.frame with \code{conc} and
+\code{OD}, or \code{NULL}.}
 
 \item{lang}{Language code.}
 }
@@ -16,7 +19,11 @@ plot_background(bg, lang = "en")
 A ggplot2 object, or \code{NULL} without background wells.
 }
 \description{
-The OD of every well of a background role, by role: the wells used are
-filled, the others open; the dashed line is the value subtracted.
+The OD of every well of a background role next to the standards as
+measured (from the lowest level), so that the scatter of the blanks can be
+judged against the signal of the calibrators. Wells used are filled,
+wells of a role left out open, wells excluded by the user red crosses; the
+dashed line is the value subtracted. A click on a background well excludes
+or restores it.
 }
 \keyword{internal}
