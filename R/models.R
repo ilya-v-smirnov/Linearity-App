@@ -546,41 +546,75 @@ information_criteria <- function(fit) {
 
 #' Compare Calibration Models
 #'
-#' Fits all models to the same standards with the same weighting and reports
-#' the number of parameters, AIC and BIC on the OD scale, R-squared (OD scale),
-#' the mean and maximum absolute error of back-calculated standards (%) and the
-#' lack-of-fit p-value. The recommended model has the lowest AIC.
+#' Fits all models with the same weighting to the common set of calibration
+#' wells and reports the number of parameters, AIC and BIC on the OD scale,
+#' R-squared (OD scale), the mean and maximum absolute error of
+#' back-calculated standards (%) and the lack-of-fit p-value.
 #'
-#' @param standard_data Background-subtracted standards used in the fit.
+#' Each model uses every well of `standard_data` it can use: the log-log
+#' models leave out wells with OD <= 0 (no logarithm), the others use all of
+#' them. The wells used by each model are kept; AIC and BIC are comparable
+#' only between fits on the same wells (see [same_wells()]), so the model
+#' with the lowest AIC is marked only then.
+#'
+#' @param standard_data Common set of calibration wells: background-subtracted
+#'   standards after the exclusions by the user, before the restrictions of
+#'   the models (`calibration_pool` of [calculate()]); with `.key` (well IDs),
+#'   otherwise the rows are numbered. Wells with a missing OD are not counted.
 #' @param linear,weights See [fit_curve()].
 #'
 #' @return A data.frame with one row per model; models that cannot be fitted
-#'   have `NA` statistics.
+#'   have `NA` statistics. Besides the statistics: `n.used` (wells in the
+#'   fit), `n.available` (wells of the common set), the list columns `wells`
+#'   (IDs of the wells used; `NULL` if not fitted) and `dropped` (IDs left
+#'   out by the restrictions of the model) and `lowest.aic`.
 #' @export
 compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
+    pool <- standard_data[!is.na(standard_data$OD), , drop = FALSE]
+    keys <- if ('.key' %in% names(pool)) as.character(pool$.key) else as.character(seq_len(nrow(pool)))
     rows <- lapply(calibration_models(), function(m) {
-        empty <- data.frame(model = m, n.par = n_params(m), AIC = NA_real_, BIC = NA_real_,
-                            R2 = NA_real_, mean.abs.error = NA_real_, max.abs.error = NA_real_,
-                            lof.p = NA_real_)
-        std <- standard_data
-        if (model_log_scale(m, linear)) std <- std[std$OD > 0, ]
-        if (length(unique(std$conc)) <= n_params(m)) return(empty)
+        stats <- data.frame(model = m, n.par = n_params(m), n.used = NA_integer_, n.available = nrow(pool),
+                            AIC = NA_real_, BIC = NA_real_, R2 = NA_real_, mean.abs.error = NA_real_,
+                            max.abs.error = NA_real_, lof.p = NA_real_)
+        usable <- if (model_log_scale(m, linear)) pool$OD > 0 else rep(TRUE, nrow(pool))
+        row <- list(stats = stats, wells = NULL, dropped = keys[!usable])
+        std <- pool[usable, , drop = FALSE]
+        if (length(unique(std$conc)) <= n_params(m)) return(row)
         fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) NULL)
-        if (is.null(fit)) return(empty)
+        if (is.null(fit)) return(row)
         ic <- information_criteria(fit)
         res <- fit$y - curve_fun(fit, fit$x)
         bc <- back_calculate(fit)
         err <- abs(bc$recovery - 100)
-        empty$AIC <- ic[['AIC']]
-        empty$BIC <- ic[['BIC']]
-        empty$R2 <- 1 - sum(res^2) / sum((fit$y - mean(fit$y))^2)
-        empty$mean.abs.error <- if (all(is.na(err))) NA_real_ else mean(err, na.rm = TRUE)
-        empty$max.abs.error <- if (all(is.na(err))) NA_real_ else max(err, na.rm = TRUE)
-        empty$lof.p <- lack_of_fit(fit)$p
-        empty
+        stats$n.used <- nrow(std)
+        stats$AIC <- ic[['AIC']]
+        stats$BIC <- ic[['BIC']]
+        stats$R2 <- 1 - sum(res^2) / sum((fit$y - mean(fit$y))^2)
+        stats$mean.abs.error <- if (all(is.na(err))) NA_real_ else mean(err, na.rm = TRUE)
+        stats$max.abs.error <- if (all(is.na(err))) NA_real_ else max(err, na.rm = TRUE)
+        stats$lof.p <- lack_of_fit(fit)$p
+        row$stats <- stats
+        row$wells <- keys[usable]
+        row
     })
-    out <- do.call(rbind, rows)
+    out <- do.call(rbind, lapply(rows, `[[`, 'stats'))
+    out$wells <- lapply(rows, `[[`, 'wells')
+    out$dropped <- lapply(rows, `[[`, 'dropped')
     best <- if (all(is.na(out$AIC))) NA_real_ else min(out$AIC, na.rm = TRUE)
-    out$recommended <- !is.na(out$AIC) & out$AIC == best
+    out$lowest.aic <- same_wells(out) & !is.na(out$AIC) & out$AIC == best
     out
+}
+
+
+#' Do the Compared Models Use the Same Wells?
+#'
+#' The sets of wells are compared, not only their sizes.
+#'
+#' @param cmp Output of [compare_models()].
+#'
+#' @return `TRUE` if all fitted models use the same wells.
+#' @keywords internal
+same_wells <- function(cmp) {
+    sets <- lapply(Filter(Negate(is.null), cmp$wells), sort)
+    length(sets) < 2 || all(vapply(sets[-1], identical, logical(1), sets[[1]]))
 }

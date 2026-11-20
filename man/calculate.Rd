@@ -51,6 +51,9 @@ A list with components:
 \item \code{model}, \code{linear_scale}, \code{weights}: settings;
 \item \code{nc_value}: background value subtracted from all ODs;
 \item \code{standard_data}: standards used in the fit (with \code{.key});
+\item \code{calibration_pool}: common set of calibration wells (with \code{.key}):
+background-subtracted standards with an OD, without those excluded by
+the user, before the restrictions of the model (see \code{\link[=compare_models]{compare_models()}});
 \item \code{excluded_standards}: standards not used in the fit with a \code{reason};
 \item \code{exclusions}: standards excluded by the user (\code{standard}: level name,
 see \code{\link[=standard_names]{standard_names()}}; \code{key}: position; \code{conc}, \code{OD}, \code{reason});

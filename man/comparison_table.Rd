@@ -15,6 +15,10 @@ comparison_table(cmp, lang)
 A data.frame with translated column names and rounded values.
 }
 \description{
-Comparison of Models for Display
+While all fitted models use the same wells the table is compact and marks
+the model with the lowest AIC. Otherwise it gets a column with the wells
+used (\code{15/16}: wells in the fit / wells of the common set) instead of the
+mark, and the attribute \code{note} explains the difference (see
+\code{\link[=comparison_note]{comparison_note()}}).
 }
 \keyword{internal}

@@ -118,6 +118,12 @@ weight_labels <- function(weights, lang) {
 
 #' Comparison of Models for Display
 #'
+#' While all fitted models use the same wells the table is compact and marks
+#' the model with the lowest AIC. Otherwise it gets a column with the wells
+#' used (`15/16`: wells in the fit / wells of the common set) instead of the
+#' mark, and the attribute `note` explains the difference (see
+#' [comparison_note()]).
+#'
 #' @param cmp Output of [compare_models()].
 #' @param lang Language code.
 #'
@@ -125,21 +131,48 @@ weight_labels <- function(weights, lang) {
 #' @keywords internal
 comparison_table <- function(cmp, lang) {
     fmt <- function(x, pattern) ifelse(is.na(x), '', sprintf(pattern, x))
+    same <- same_wells(cmp)
     out <- data.frame(
         model = vapply(paste0('model_short.', cmp$model), tr, '', lang = lang),
         n.par = as.integer(cmp$n.par),
+        wells = ifelse(is.na(cmp$n.used), '', paste0(cmp$n.used, '/', cmp$n.available)),
         AIC = fmt(cmp$AIC, '%.1f'),
         BIC = fmt(cmp$BIC, '%.1f'),
         R2 = fmt(cmp$R2, '%.4f'),
         mean = fmt(cmp$mean.abs.error, '%.1f'),
         max = fmt(cmp$max.abs.error, '%.1f'),
         lof = ifelse(is.na(cmp$lof.p), '', format(signif(cmp$lof.p, 2))),
-        rec = ifelse(cmp$recommended, tr('compare.mark', lang), '')
+        rec = ifelse(cmp$lowest.aic, tr('compare.mark', lang), '')
     )
-    names(out) <- vapply(c('compare.model', 'compare.n_par', 'compare.aic', 'compare.bic', 'compare.r2',
-                           'compare.mean_error', 'compare.max_error', 'compare.lof', 'compare.recommended'),
-                         tr, '', lang = lang)
+    keys <- c('compare.model', 'compare.n_par', 'compare.wells_used', 'compare.aic', 'compare.bic', 'compare.r2',
+              'compare.mean_error', 'compare.max_error', 'compare.lof', 'compare.lowest_aic')
+    names(out) <- vapply(keys, tr, '', lang = lang)
+    out <- out[, if (same) -3 else -ncol(out)]
+    rownames(out) <- NULL
+    attr(out, 'note') <- comparison_note(cmp, lang)
     out
+}
+
+
+#' Why the Compared Models Use Different Wells
+#'
+#' @param cmp Output of [compare_models()].
+#' @param lang Language code.
+#'
+#' @return Text, or `NULL` if all fitted models use the same wells.
+#' @keywords internal
+comparison_note <- function(cmp, lang) {
+    if (same_wells(cmp)) return(NULL)
+    fitted <- !vapply(cmp$wells, is.null, logical(1))
+    dropped <- vapply(cmp$dropped, function(k) paste(k, collapse = ', '), '')
+    groups <- unique(dropped[fitted & nzchar(dropped)])
+    lines <- vapply(groups, function(g) {
+        models <- cmp$model[fitted & dropped == g]
+        tr('compare.dropped_log', lang,
+           models = paste(vapply(paste0('model_short.', models), tr, '', lang = lang), collapse = ', '),
+           wells = g)
+    }, '')
+    paste(c(tr('compare.wells_differ', lang), lines), collapse = ' ')
 }
 
 
@@ -285,6 +318,7 @@ mod_curve_ui <- function(id, lang) {
                 shiny::h5(with_tooltip(t('curve.compare'), t('compare.note'))),
                 shiny::uiOutput(ns('compare_mark')),
                 shiny::tableOutput(ns('compare')),
+                shiny::uiOutput(ns('compare_note')),
                 shiny::uiOutput(ns('notes')),
                 shiny::uiOutput(ns('exclusions'))
             )
@@ -374,9 +408,10 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             get_coef_ci(result()$fit, round_fun = r$fun, round_par = r$par)
         })
 
+        # All models on the common set of wells: the choice of the model does not change it
         comparison <- shiny::reactive({
             s <- settings()
-            compare_models(result()$standard_data, weights = s$weights)
+            compare_models(result()$calibration_pool, weights = s$weights)
         })
 
         # Original (all standards) and refitted (without the excluded points) calibrations
@@ -428,6 +463,11 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
+        output$compare_note <- shiny::renderUI({
+            note <- comparison_note(comparison(), lang)
+            if (is.null(note)) return(NULL)
+            shiny::div(class = 'alert alert-warning compare-note', shiny::icon('triangle-exclamation'), ' ', note)
+        })
         # The row of the chosen model is shaded (renderTable gives no classes to the rows)
         output$compare_mark <- shiny::renderUI({
             row <- match(settings()$model, comparison()$model)

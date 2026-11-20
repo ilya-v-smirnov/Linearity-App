@@ -256,6 +256,9 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `model`, `linear_scale`, `weights`: settings;
 #'   * `nc_value`: background value subtracted from all ODs;
 #'   * `standard_data`: standards used in the fit (with `.key`);
+#'   * `calibration_pool`: common set of calibration wells (with `.key`):
+#'     background-subtracted standards with an OD, without those excluded by
+#'     the user, before the restrictions of the model (see [compare_models()]);
 #'   * `excluded_standards`: standards not used in the fit with a `reason`;
 #'   * `exclusions`: standards excluded by the user (`standard`: level name,
 #'     see [standard_names()]; `key`: position; `conc`, `OD`, `reason`);
@@ -303,6 +306,11 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     log_scale <- model_log_scale(model, linear)
     std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude)
     standard_data <- std$used
+    # Common set of calibration wells for the comparison of models: after the exclusions
+    # by the user, before the restrictions of the chosen model
+    pool <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale = FALSE, exclude)$used
+    rownames(pool) <- NULL
+    pool$.od_raw <- NULL
     # Points excluded by the user are listed in `exclusions`; warn about the others
     automatic <- std$excluded$reason[std$excluded$reason != FLAGS$excluded]
     if (length(automatic) > 0) {
@@ -415,6 +423,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          weights = weights,
          nc_value = bg$value,
          standard_data = standard_data,
+         calibration_pool = pool,
          excluded_standards = std$excluded,
          exclusions = exclusions,
          original_fit = original_fit,

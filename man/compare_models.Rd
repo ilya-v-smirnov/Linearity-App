@@ -7,17 +7,30 @@
 compare_models(standard_data, linear = FALSE, weights = "none")
 }
 \arguments{
-\item{standard_data}{Background-subtracted standards used in the fit.}
+\item{standard_data}{Common set of calibration wells: background-subtracted
+standards after the exclusions by the user, before the restrictions of
+the models (\code{calibration_pool} of \code{\link[=calculate]{calculate()}}); with \code{.key} (well IDs),
+otherwise the rows are numbered. Wells with a missing OD are not counted.}
 
 \item{linear, weights}{See \code{\link[=fit_curve]{fit_curve()}}.}
 }
 \value{
 A data.frame with one row per model; models that cannot be fitted
-have \code{NA} statistics.
+have \code{NA} statistics. Besides the statistics: \code{n.used} (wells in the
+fit), \code{n.available} (wells of the common set), the list columns \code{wells}
+(IDs of the wells used; \code{NULL} if not fitted) and \code{dropped} (IDs left
+out by the restrictions of the model) and \code{lowest.aic}.
 }
 \description{
-Fits all models to the same standards with the same weighting and reports
-the number of parameters, AIC and BIC on the OD scale, R-squared (OD scale),
-the mean and maximum absolute error of back-calculated standards (\%) and the
-lack-of-fit p-value. The recommended model has the lowest AIC.
+Fits all models with the same weighting to the common set of calibration
+wells and reports the number of parameters, AIC and BIC on the OD scale,
+R-squared (OD scale), the mean and maximum absolute error of
+back-calculated standards (\%) and the lack-of-fit p-value.
+}
+\details{
+Each model uses every well of \code{standard_data} it can use: the log-log
+models leave out wells with OD <= 0 (no logarithm), the others use all of
+them. The wells used by each model are kept; AIC and BIC are comparable
+only between fits on the same wells (see \code{\link[=same_wells]{same_wells()}}), so the model
+with the lowest AIC is marked only then.
 }

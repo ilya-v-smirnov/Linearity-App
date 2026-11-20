@@ -190,7 +190,7 @@ test_that('models are compared on a common scale', {
     std <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), '4PL')$standard_data
     cmp <- compare_models(std)
     expect_equal(cmp$model, calibration_models())
-    expect_equal(sum(cmp$recommended), 1)
+    expect_equal(sum(cmp$lowest.aic), 1)
     expect_true(all(cmp$R2 > 0.99))
     # the BCA curve bends: a straight line on the original scale misses the low standards
     curved <- cmp$model %in% c('LRM', 'QRM', '4PL', '5PL')
@@ -325,11 +325,70 @@ test_that('every model works on the example data in both scales', {
     }
 })
 
+test_that('models are compared on the common set of calibration wells', {
+    truth <- function(x) 0.01 + 1.8 / (1 + (8 / x)^1.2)
+    data <- synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4, 8, 16, 32), sample_od = 0.3)
+    # 16 measured standard wells; one of them reads 0.003 below the blank
+    low <- which(data$type == 'standard' & data$conc == 0.25)[1]
+    data$OD[low] <- data$OD[data$type == 'NC'][1] - 0.003
+    key <- well_keys(data)[low]
+    label <- function(m) tr(paste0('model_short.', m), 'en')
+
+    # the chosen model changes neither the wells nor the statistics of the comparison
+    cmps <- lapply(c('LRM', '4PL', 'LIN'), function(m) {
+        r <- calculate(data, m)
+        expect_equal(nrow(r$calibration_pool), 16)
+        expect_equal(r$calibration_pool$OD[r$calibration_pool$.key == key], -0.003, tolerance = 1e-12)
+        compare_models(r$calibration_pool)
+    })
+    expect_identical(cmps[[2]], cmps[[1]])
+    expect_identical(cmps[[3]], cmps[[1]])
+    cmp <- cmps[[1]]
+
+    loglog <- cmp$model %in% c('LRM', 'QRM')
+    expect_equal(cmp$n.used[loglog], c(15, 15))
+    expect_equal(cmp$n.used[!loglog], rep(16, 4))
+    expect_equal(cmp$n.available, rep(16, 6))
+    expect_equal(cmp$dropped[[which(cmp$model == 'LRM')]], key)
+    expect_false(key %in% cmp$wells[[which(cmp$model == 'LRM')]])
+    expect_true(key %in% cmp$wells[[which(cmp$model == '4PL')]])
+    expect_false(LinearityApp:::same_wells(cmp))
+    expect_false(any(cmp$lowest.aic))
+
+    tab <- LinearityApp:::comparison_table(cmp, 'en')
+    expect_true('Wells used' %in% names(tab))
+    expect_false('Lowest AIC' %in% names(tab))
+    expect_equal(tab[['Wells used']][tab$Model == '4PL'], '16/16')
+    expect_equal(tab[['Wells used']][tab$Model == label('LRM')], '15/16')
+    expect_match(attr(tab, 'note'), 'not comparable', fixed = TRUE)
+    expect_match(attr(tab, 'note'), paste0(label('LRM'), ', ', label('QRM'), ' leave out ', key, ':'),
+                 fixed = TRUE)
+
+    # once the user excludes that well all models share the same 15 wells
+    r <- calculate(data, '4PL', exclude = data.frame(key = key, reason = 'bubble'))
+    cmp <- compare_models(r$calibration_pool)
+    expect_equal(cmp$n.used, rep(15, 6))
+    expect_true(LinearityApp:::same_wells(cmp))
+    expect_equal(sum(cmp$lowest.aic), 1)
+    tab <- LinearityApp:::comparison_table(cmp, 'en')
+    expect_false('Wells used' %in% names(tab))
+    expect_true('Lowest AIC' %in% names(tab))
+    expect_null(attr(tab, 'note'))
+})
+
+test_that('the sets of wells are compared, not their sizes', {
+    cmp <- data.frame(model = c('LIN', 'LRM', '4PL'))
+    cmp$wells <- list(c('A1', 'A2'), c('A2', 'A1'), NULL)
+    expect_true(LinearityApp:::same_wells(cmp))
+    cmp$wells <- list(c('A1', 'A2'), c('A1', 'A3'), NULL)
+    expect_false(LinearityApp:::same_wells(cmp))
+})
+
 test_that('a comparison without any fitted model recommends nothing and does not warn', {
     few <- data.frame(conc = c(1, 1, 2, 2), OD = c(0.1, 0.1, 0.2, 0.2))
     expect_no_warning(cmp <- compare_models(few))
     expect_true(all(is.na(cmp$AIC)))
-    expect_false(any(cmp$recommended))
+    expect_false(any(cmp$lowest.aic))
 })
 
 test_that('a flat calibration line has no inverse', {

@@ -75,7 +75,10 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
       list(b('heading', text = t('report.section_curve')), b('plot'),
            b('subheading', text = t('curve.coefs'))),
       table(model_table),
-      if (has_rows(comparison)) c(list(b('subheading', text = t('report.section_models'))), table(comparison)),
+      if (has_rows(comparison)) {
+          c(list(b('subheading', text = t('report.section_models'))), table(comparison),
+            if (!is.null(attr(comparison, 'note'))) list(b('text', text = attr(comparison, 'note'))))
+      },
       if (has_rows(exclusions)) c(list(b('subheading', text = t('report.section_exclusions'))), table(exclusions)),
       if (!is.null(exclusion_effect)) {
           c(list(b('subheading', text = t('effect.title'))),
