@@ -6,7 +6,7 @@ sample.name;sample.date;type;dilution;conc;OD
 ;NA;standard;NA;0,125;0,1241
 ;NA;standard;NA;0,063;0,101899996
 ;NA;standard;NA;0,031;0,086999997
-;NA;NC;NA;NA;0,078400001
+;NA;blank;NA;NA;0,078400001
 ;NA;standard;NA;2;0,640399992
 ;NA;standard;NA;1;0,389600009
 ;NA;standard;NA;0,5;0,252299994
@@ -14,7 +14,7 @@ sample.name;sample.date;type;dilution;conc;OD
 ;NA;standard;NA;0,125;0,128199995
 ;NA;standard;NA;0,063;0,1039
 ;NA;standard;NA;0,031;0,090099998
-;NA;NC;NA;NA;0,075300001
+;NA;blank;NA;NA;0,075300001
 T1;NA;sample;5;NA;0,223000005
 T2;NA;sample;5;NA;0,178000003
 T3;NA;sample;5;NA;0,2324

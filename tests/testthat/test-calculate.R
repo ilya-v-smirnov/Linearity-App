@@ -250,8 +250,10 @@ test_that('files of earlier versions with NC wells are analysed visibly', {
                  c('NC', 'NC', 'blank', 'NC', 'zero'))
     expect_equal(LinearityApp:::classify_codes(c('NC', 'B', 'S0', 'Z', 'S1')), c('NC', 'blank', 'zero', 'zero', 'standard'))
 
-    # only NC wells: they are the background, as before, with a note
+    # only NC wells (the examples before they were relabelled): they are the background, as before, with a note
     data <- load_sample('bca')
+    expect_equal(sum(data$type == 'blank'), 2)
+    data$type[data$type == 'blank'] <- 'NC'
     r <- calculate(data, 'LRM')
     expect_equal(r$background$roles, 'NC')
     expect_match(message_text(r$notes), 'its 2 negative control well(s) (NC) are subtracted as background', fixed = TRUE,

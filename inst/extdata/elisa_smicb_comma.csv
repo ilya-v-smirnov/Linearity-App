@@ -6,7 +6,7 @@ NA,NA,"standard",NA,0.625,0.477
 NA,NA,"standard",NA,0.313,0.3
 NA,NA,"standard",NA,0.156,0.163
 NA,NA,"standard",NA,0.078,0.107
-NA,NA,"NC",NA,NA,0.04
+NA,NA,"blank",NA,NA,0.04
 NA,NA,"standard",NA,5,3.286
 NA,NA,"standard",NA,2.5,1.83
 NA,NA,"standard",NA,1.25,0.943
@@ -14,7 +14,7 @@ NA,NA,"standard",NA,0.625,0.482
 NA,NA,"standard",NA,0.313,0.261
 NA,NA,"standard",NA,0.156,0.157
 NA,NA,"standard",NA,0.078,0.104
-NA,NA,"NC",NA,NA,0.039
+NA,NA,"blank",NA,NA,0.039
 74,NA,"sample",2,NA,1.578
 80,NA,"sample",2,NA,0.07
 81,NA,"sample",2,NA,0.444
@@ -94,4 +94,4 @@ NA,NA,"NC",NA,NA,0.039
 163,NA,"sample",2,NA,0.172
 164,NA,"sample",2,NA,0.062
 165,NA,"sample",2,NA,0.193
-NA,NA,"NC",NA,NA,0.041
+NA,NA,"blank",NA,NA,0.041

@@ -12,9 +12,9 @@ make_plate_template(path, size = 96, start = 2, step = 2, n.levels = 7, n.standa
 layout <- matrix(NA_character_, 8, 12)
 od <- matrix(NA_real_, 8, 12)
 
-# Standards: two series in columns 1-2, NC in row H
+# Standards: two series in columns 1-2, reagent blanks (B) in row H
 standards <- legacy[legacy$type != 'sample', ]
-layout[, 1:2] <- c(paste0('S', 1:7), 'NC')
+layout[, 1:2] <- c(paste0('S', 1:7), 'B')
 od[, 1] <- standards$OD[1:8]
 od[, 2] <- standards$OD[9:16]
 
