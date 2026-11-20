@@ -67,6 +67,9 @@ format_param <- function(x, lang) {
     if (inherits(x, 'lin_message')) {
         return(message_text(list(x), lang))
     }
+    if (is.list(x) && length(x) > 0 && all(vapply(x, inherits, logical(1), 'lin_message'))) {
+        return(paste(message_text(x, lang), collapse = '; '))
+    }
     if (inherits(x, 'flag_counts')) {
         return(paste0(translate_flags(names(x), lang), ' (', unclass(x), ')', collapse = ', '))
     }

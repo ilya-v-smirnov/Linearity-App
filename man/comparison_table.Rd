@@ -16,7 +16,9 @@ A data.frame with translated column names and rounded values.
 }
 \description{
 While all fitted models use the same wells the table is compact and marks
-the model with the lowest AIC. Otherwise it gets a column with the wells
+the model with the lowest AIC. A column with the number of standards
+without a back-calculated concentration appears when a model has some
+(the errors are those of the back-calculated standards). Otherwise it gets a column with the wells
 used (\code{15/16}: wells in the fit / wells of the common set) instead of the
 mark, and the attribute \code{note} explains the difference (see
 \code{\link[=comparison_note]{comparison_note()}}).

@@ -67,8 +67,13 @@ test_that('all standard levels of the run count for the acceptance of the calibr
     st <- r$quality$standards
     expect_equal(st$n, c(1, 0, 1, 0, 1, 0, 1))
     expect_false(any(st$pass[st$n == 0]))
+    # duplicates left with one well are accepted by their bias, not as plain passes
+    expect_equal(st$status, rep(c('pass_no_cv', 'no_points'), length.out = 7))
     tab <- quality_tables(r$quality, 'en')$standards
-    expect_equal(tab[['Bias, %']][tab$n == 0], rep('—', 3))
+    empty <- tab[['Back-calculated wells']] == '0/2'
+    expect_equal(sum(empty), 3)
+    expect_equal(tab[['Bias, %']][empty], rep('—', 3))
+    expect_equal(tab[['CV of back-calculated, %']][empty], rep('—', 3))
     html <- as.character(LinearityApp:::verdict_ui(r, 'en'))
     expect_match(html, 'Calibration not accepted', fixed = TRUE)
     expect_match(html, '4 of 7 (6 required)', fixed = TRUE)
@@ -344,6 +349,39 @@ test_that('the verdict of the calibration is shown with the model parameters', {
     qc <- calculate(run_data(qc = data.frame(id = 'QC-M', nominal = 10, od = 0.9)), 'LRM')
     expect_false(qc$quality$accepted)
     expect_match(as.character(LinearityApp:::verdict_ui(qc, 'en')), 'Calibration accepted', fixed = TRUE)
+})
+
+test_that('a planned singlet is told apart from a replicate left alone', {
+    data <- run_data()
+    # level 16 is planned as a single well
+    data <- data[-which(data$type == 'standard' & data$conc == 16)[1], ]
+    std <- calculate(data, 'LIN')$standard_data
+    # one of the two wells of level 8 is excluded by the user
+    exclude <- data.frame(key = std$.key[std$conc == 8][1], reason = 'bubble')
+    r <- calculate(data, 'LIN', exclude = exclude)
+    st <- r$quality$standards
+    expect_equal(st$status[st$conc == 16], 'pass_singlet')
+    expect_equal(st$status[st$conc == 8], 'pass_no_cv')
+    expect_equal(c(st$n.planned[st$conc == 8], st$n.measured[st$conc == 8], st$n[st$conc == 8]), c(2, 2, 1))
+    expect_true(all(st$pass))
+    expect_equal(r$quality$calibration$n_no_cv, 2)
+
+    tab <- quality_tables(r$quality, 'en')$standards
+    row <- function(conc) tab[tab$Concentration == conc, ]
+    expect_equal(row('16')[['CV of back-calculated, %']], '\u2014')
+    expect_equal(row('8')[['CV of back-calculated, %']], 'CV unavailable')
+    expect_equal(row('16')[['Back-calculated wells']], '1/1')
+    expect_equal(row('8')[['Back-calculated wells']], '1/2')
+    expect_equal(row('16')$Accepted, '\u2713 singlet')
+    expect_equal(row('8')$Accepted, '\u2713 single result')
+
+    # the method may not allow singlets; a replicate left alone is not a singlet
+    strict <- calculate(data, 'LIN', exclude = exclude, criteria = qc_criteria(singlets = FALSE))
+    st <- strict$quality$standards
+    expect_equal(st$status[st$conc == 16], 'singlet')
+    expect_false(st$pass[st$conc == 16])
+    expect_equal(st$status[st$conc == 8], 'pass_no_cv')
+    expect_error(qc_criteria(singlets = NA), 'singlets')
 })
 
 test_that('the CV criterion of the standards uses back-calculated concentrations', {

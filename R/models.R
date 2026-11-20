@@ -195,6 +195,48 @@ inverse_fun <- function(fit, od, par = fit$par) {
 }
 
 
+#' Why an OD Has No Back-Calculated Concentration
+#'
+#' Codes (translated with the prefix `backcalc.`):
+#'
+#' * `missing`: no OD;
+#' * `od_le_blank`: OD <= 0 on log scales (no logarithm);
+#' * `flat`: the line is horizontal;
+#' * `beyond_vertex`: the OD lies beyond the vertex of the parabola;
+#' * `outside_asymptotes`: the OD lies outside the asymptotes of the logistic curve;
+#' * `no_solution`: any other failure.
+#'
+#' @param fit A `lin_fit` object.
+#' @param od Background-subtracted ODs.
+#'
+#' @return Character vector: a code where [inverse_fun()] gives `NA`, `NA`
+#'   where it gives a concentration.
+#' @keywords internal
+inverse_reason <- function(fit, od) {
+    calc <- inverse_fun(fit, od)
+    out <- ifelse(is.na(calc), 'no_solution', NA_character_)
+    par <- fit$par
+    degree <- poly_degree(fit$model)
+    if (degree > 0) {
+        q <- if (degree == 2) par[['c']] else 0
+        if (q == 0) {
+            if (par[['b']] == 0) out[is.na(calc)] <- 'flat'
+        } else {
+            y <- suppressWarnings(fit_scale(fit, od))
+            disc <- par[['b']]^2 - 4 * q * (par[['a']] - y)
+            out[is.na(calc) & !is.na(disc) & disc < 0] <- 'beyond_vertex'
+        }
+    } else {
+        lo <- min(par[['a']], par[['d']])
+        hi <- max(par[['a']], par[['d']])
+        out[is.na(calc) & !is.na(od) & (od <= lo | od >= hi)] <- 'outside_asymptotes'
+    }
+    if (fit$log_scale) out[is.na(calc) & !is.na(od) & od <= 0] <- 'od_le_blank'
+    out[is.na(od)] <- 'missing'
+    out
+}
+
+
 #' Starting Values for the Logistic Models
 #'
 #' @param x,y Concentrations and ODs.
@@ -328,8 +370,9 @@ logistic_vcov <- function(model, par, x, w, sigma) {
 #'   `par` (internal parameters; for the polynomial models `a` is the
 #'   intercept, `b` the linear and `c` the quadratic coefficient), `vcov`,
 #'   `df`, `sigma`, `rss` (weighted residual sum of squares), `loglik`, `x`,
-#'   `y`, `w`, `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and,
-#'   for the polynomial models, the underlying `lm` object in `object`.
+#'   `y`, `w`, `keys` (well IDs from `.key`, `NULL` without them),
+#'   `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and, for the
+#'   polynomial models, the underlying `lm` object in `object`.
 #' @export
 fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'none') {
     x <- standard_data$conc
@@ -383,6 +426,7 @@ fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'n
                           par = par, vcov = vc, vcov_exact = vcov_exact, df = df_res,
                           sigma = sigma, rss = rss,
                           loglik = loglik, x = x, y = y, w = w,
+                          keys = if ('.key' %in% names(standard_data)) as.character(standard_data$.key),
                           conc_range = range(x), weight_fun = wf$fun, w_scale = w_scale,
                           theta = wf$theta, notes = notes, object = object),
                      class = 'lin_fit')
@@ -517,11 +561,15 @@ lack_of_fit <- function(fit) {
 #'
 #' @param fit A `lin_fit` object.
 #'
-#' @return A data.frame with `conc` (nominal), `OD`, `calc` and `recovery` (%).
+#' @return A data.frame with `conc` (nominal), `OD`, `calc`, `recovery` (%),
+#'   `key` (well ID, `NA` if the fit has none) and `reason` (why `calc` is
+#'   missing, see [inverse_reason()]; `NA` when it is not).
 #' @export
 back_calculate <- function(fit) {
     calc <- inverse_fun(fit, fit$y)
-    data.frame(conc = fit$x, OD = fit$y, calc = calc, recovery = 100 * calc / fit$x)
+    keys <- if (is.null(fit$keys)) rep(NA_character_, length(fit$x)) else fit$keys
+    data.frame(conc = fit$x, OD = fit$y, calc = calc, recovery = 100 * calc / fit$x,
+               key = keys, reason = inverse_reason(fit, fit$y))
 }
 
 
@@ -549,7 +597,9 @@ information_criteria <- function(fit) {
 #' Fits all models with the same weighting to the common set of calibration
 #' wells and reports the number of parameters, AIC and BIC on the OD scale,
 #' R-squared (OD scale), the mean and maximum absolute error of
-#' back-calculated standards (%) and the lack-of-fit p-value.
+#' back-calculated standards (%) and the lack-of-fit p-value. The errors use
+#' the standards with a back-calculated concentration; `n.failed` counts the
+#' others (failed inversions).
 #'
 #' Each model uses every well of `standard_data` it can use: the log-log
 #' models leave out wells with OD <= 0 (no logarithm), the others use all of
@@ -565,7 +615,8 @@ information_criteria <- function(fit) {
 #'
 #' @return A data.frame with one row per model; models that cannot be fitted
 #'   have `NA` statistics. Besides the statistics: `n.used` (wells in the
-#'   fit), `n.available` (wells of the common set), the list columns `wells`
+#'   fit), `n.failed` (wells of the fit without a back-calculated
+#'   concentration), `n.available` (wells of the common set), the list columns `wells`
 #'   (IDs of the wells used; `NULL` if not fitted) and `dropped` (IDs left
 #'   out by the restrictions of the model) and `lowest.aic`.
 #' @export
@@ -573,7 +624,8 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
     pool <- standard_data[!is.na(standard_data$OD), , drop = FALSE]
     keys <- if ('.key' %in% names(pool)) as.character(pool$.key) else as.character(seq_len(nrow(pool)))
     rows <- lapply(calibration_models(), function(m) {
-        stats <- data.frame(model = m, n.par = n_params(m), n.used = NA_integer_, n.available = nrow(pool),
+        stats <- data.frame(model = m, n.par = n_params(m), n.used = NA_integer_, n.failed = NA_integer_,
+                            n.available = nrow(pool),
                             AIC = NA_real_, BIC = NA_real_, R2 = NA_real_, mean.abs.error = NA_real_,
                             max.abs.error = NA_real_, lof.p = NA_real_)
         usable <- if (model_log_scale(m, linear)) pool$OD > 0 else rep(TRUE, nrow(pool))
@@ -587,6 +639,7 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
         bc <- back_calculate(fit)
         err <- abs(bc$recovery - 100)
         stats$n.used <- nrow(std)
+        stats$n.failed <- sum(is.na(bc$calc))
         stats$AIC <- ic[['AIC']]
         stats$BIC <- ic[['BIC']]
         stats$R2 <- 1 - sum(res^2) / sum((fit$y - mean(fit$y))^2)

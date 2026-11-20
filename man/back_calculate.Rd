@@ -10,7 +10,9 @@ back_calculate(fit)
 \item{fit}{A \code{lin_fit} object.}
 }
 \value{
-A data.frame with \code{conc} (nominal), \code{OD}, \code{calc} and \code{recovery} (\%).
+A data.frame with \code{conc} (nominal), \code{OD}, \code{calc}, \code{recovery} (\%),
+\code{key} (well ID, \code{NA} if the fit has none) and \code{reason} (why \code{calc} is
+missing, see \code{\link[=inverse_reason]{inverse_reason()}}; \code{NA} when it is not).
 }
 \description{
 Back-Calculated Concentrations of the Standards

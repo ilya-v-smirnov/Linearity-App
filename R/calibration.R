@@ -330,8 +330,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
 
     # Quantification range: accepted standard levels
     # All levels of the run count, also those without points in the fit
-    standards <- assess_standards(fit, criteria, levels = data$conc[data$type == 'standard'])
+    standards <- assess_standards(fit, criteria, wells = data[data$type == 'standard', c('conc', 'OD')])
     calibration <- calibration_acceptance(standards, criteria)
+    # Levels whose fitted wells are not all back-calculated
+    all_levels <- data$conc[data$type == 'standard']
+    for (i in which(standards$status == 'incomplete')) {
+        lost <- standards$failed[[i]]
+        wells <- lapply(seq_len(nrow(lost)), function(k) {
+            lin_message('backcalc.well', well = lost$key[k], reason = lin_message(paste0('backcalc.', lost$reason[k])))
+        })
+        notes <- c(notes, list(lin_message('note.incomplete_backcalc',
+                                           level = standard_names(standards$conc[i], all_levels),
+                                           conc = signif(standards$conc[i], 3), n = standards$n.calc[i],
+                                           total = standards$n[i], wells = wells)))
+    }
     conc_range <- fit$conc_range
     if (criteria$range == 'accepted') {
         if (is.na(calibration$lloq)) {

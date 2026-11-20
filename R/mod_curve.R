@@ -119,7 +119,9 @@ weight_labels <- function(weights, lang) {
 #' Comparison of Models for Display
 #'
 #' While all fitted models use the same wells the table is compact and marks
-#' the model with the lowest AIC. Otherwise it gets a column with the wells
+#' the model with the lowest AIC. A column with the number of standards
+#' without a back-calculated concentration appears when a model has some
+#' (the errors are those of the back-calculated standards). Otherwise it gets a column with the wells
 #' used (`15/16`: wells in the fit / wells of the common set) instead of the
 #' mark, and the attribute `note` explains the difference (see
 #' [comparison_note()]).
@@ -136,6 +138,7 @@ comparison_table <- function(cmp, lang) {
         model = vapply(paste0('model_short.', cmp$model), tr, '', lang = lang),
         n.par = as.integer(cmp$n.par),
         wells = ifelse(is.na(cmp$n.used), '', paste0(cmp$n.used, '/', cmp$n.available)),
+        failed = ifelse(is.na(cmp$n.failed) | cmp$n.failed == 0, '', as.character(cmp$n.failed)),
         AIC = fmt(cmp$AIC, '%.1f'),
         BIC = fmt(cmp$BIC, '%.1f'),
         R2 = fmt(cmp$R2, '%.4f'),
@@ -144,10 +147,13 @@ comparison_table <- function(cmp, lang) {
         lof = ifelse(is.na(cmp$lof.p), '', format(signif(cmp$lof.p, 2))),
         rec = ifelse(cmp$lowest.aic, tr('compare.mark', lang), '')
     )
-    keys <- c('compare.model', 'compare.n_par', 'compare.wells_used', 'compare.aic', 'compare.bic', 'compare.r2',
-              'compare.mean_error', 'compare.max_error', 'compare.lof', 'compare.lowest_aic')
+    keys <- c('compare.model', 'compare.n_par', 'compare.wells_used', 'compare.n_failed', 'compare.aic',
+              'compare.bic', 'compare.r2', 'compare.mean_error', 'compare.max_error', 'compare.lof',
+              'compare.lowest_aic')
     names(out) <- vapply(keys, tr, '', lang = lang)
-    out <- out[, if (same) -3 else -ncol(out)]
+    # Optional columns: the wells used when they differ, failed inversions when there are any
+    drop <- c(if (same) 3 else ncol(out), if (all(out[[4]] == '')) 4)
+    out <- out[, -drop]
     rownames(out) <- NULL
     attr(out, 'note') <- comparison_note(cmp, lang)
     out
@@ -334,6 +340,7 @@ mod_curve_ui <- function(id, lang) {
                        shiny::tableOutput(ns('coefs')),
                        shiny::h5(t('quality.section_standards')),
                        shiny::tableOutput(ns('standards')),
+                       shiny::p(class = 'text-muted small', t('quality.backcalc_legend')),
                        # Collapsed by default
                        shiny::tags$details(class = 'std-points',
                                            shiny::tags$summary(t('quality.section_points')),

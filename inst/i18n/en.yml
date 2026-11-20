@@ -186,6 +186,7 @@ reason:
   other_placeholder: "Describe the reason"
 
 compare:
+  n_failed: "Not back-calculated"
   model: "Model"
   n_par: "Parameters"
   aic: "AIC"
@@ -202,6 +203,8 @@ compare:
   note: "All models are fitted to the same calibration wells, whichever model is chosen; the log–log models leave out wells with OD <= blank. AIC and BIC are on the OD scale and comparable between models that use the same wells; errors are those of back-calculated standards; lack of fit compares the residuals with the scatter of replicates."
 
 col:
+  n_backcalc: "Back-calculated wells"
+  backcalc_reason: "Not back-calculated"
   conc: "Concentration"
   count: "n"
   od_mean: "Mean OD"
@@ -226,6 +229,8 @@ col:
   error: "Abs. error"
 
 crit:
+  singlets: "Accept single-well standard levels"
+  singlets_help: "For methods that plan some standard levels as single wells: such a level is accepted by its bias, its CV cannot be assessed. A level planned in replicate that keeps one result is not a singlet."
   title_standards: "Acceptance criteria"
   note_standards: "ICH M10 – LBA: ICH M10 (2022) requirements for ligand binding assays. Colorimetric assay: tighter limits for BCA, Griess and similar assays. Custom: editable values, starting from those of ICH M10. Boundary calibrators are the lowest and the highest standard level."
   preset: "Criteria set"
@@ -373,6 +378,7 @@ flag:
   nonlinear: "Dilution non-linear"
 
 note:
+  incomplete_backcalc: "Incomplete back-calculation of standard {level} ({conc}): {n} of {total} wells in the fit back-calculated; {wells}. The level is not accepted."
   nc_arithmetic: "Some blank values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
   not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
@@ -384,14 +390,21 @@ note:
   range_narrowed: "The quantification range is limited to the accepted standard levels: LLOQ = {lloq}, ULOQ = {uloq}."
 
 quality:
+  cv_unavailable: "CV unavailable"
+  status_incomplete: "Incomplete back-calculation"
+  status_pass_no_cv: "✓ single result"
+  status_pass_singlet: "✓ singlet"
+  status_singlet: "✗ singlet"
+  status_no_points: "✗ no wells in the fit"
+  backcalc_legend: "Back-calculated wells: wells with a concentration from the curve / wells with an OD. The wells that were not back-calculated are listed in the warnings and in the individual points. CV unavailable: fewer than two back-calculated results of a level planned in replicate; such a level is accepted by its bias only if the other wells are excluded or have no OD."
   accepted: "Run accepted"
   rejected: "Run rejected"
   range: "Quantification range (LLOQ – ULOQ): {lloq} – {uloq}"
   calibration_accepted: "Calibration accepted"
   calibration_rejected: "Calibration not accepted"
   calibration_accepted_no_cv: "Calibration accepted, CV not assessed"
-  reason_no_cv: "The CV criterion was checked for only {n_cv} accepted standard levels ({needed} required): {n} accepted levels have no replicates."
-  warn_cv_not_assessed: "The CV of the standards was checked for only {n_cv} accepted levels ({needed} required): {n} levels have no replicates."
+  reason_no_cv: "The CV criterion was checked for only {n_cv} accepted standard levels ({needed} required): {n} accepted levels have a single result."
+  warn_cv_not_assessed: "The CV of the standards was checked for only {n_cv} accepted levels ({needed} required): {n} levels have a single result."
   calibration_range: "Accepted calibration range: {lloq}–{uloq}{unit}"
   levels: "Accepted standard levels: {n} of {total} ({needed} required)"
   section_standards: "Standards (level means)"
@@ -544,3 +557,12 @@ effect:
   mean_error: "Mean absolute relative error, %"
   max_error: "Maximum absolute relative error, %"
   n_pass: "Number of standards meeting acceptance criteria"
+
+backcalc:
+  well: "{well}: {reason}"
+  missing: "no OD"
+  od_le_blank: "OD <= blank (no logarithm)"
+  flat: "flat curve"
+  beyond_vertex: "OD beyond the vertex of the parabola"
+  outside_asymptotes: "OD outside fitted asymptotes"
+  no_solution: "no solution"

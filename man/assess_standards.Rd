@@ -4,27 +4,48 @@
 \alias{assess_standards}
 \title{Assess Standard Levels}
 \usage{
-assess_standards(fit, criteria = qc_criteria(), levels = NULL)
+assess_standards(fit, criteria = qc_criteria(), levels = NULL, wells = NULL)
 }
 \arguments{
 \item{fit}{A \code{lin_fit} object.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
 
-\item{levels}{Concentrations of all standard levels of the run; by default
-the levels of the fit.}
+\item{levels}{Concentrations of all standard wells of the run (one value
+per well, so that the planned replicates are counted); by default the
+wells of the fit. Not used with \code{wells}.}
+
+\item{wells}{All standard wells of the run with \code{conc} and \code{OD} (\code{NA}
+where the OD is missing).}
 }
 \value{
-A data.frame with one row per level: \code{conc}, \code{n} (points in the
-fit), \code{od.mean}, \code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%),
-\code{bias.limit}, \code{cv.limit}, \code{pass}.
+A data.frame with one row per level: \code{conc}, \code{n} (wells in the
+fit), \code{n.planned}, \code{n.measured}, \code{n.calc} (back-calculated), \code{od.mean},
+\code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%), \code{bias.limit},
+\code{cv.limit}, \code{status}, \code{pass} and \code{failed} (wells of the fit without a
+back-calculated concentration: a data.frame with \code{key} and \code{reason} for
+each level, see \code{\link[=inverse_reason]{inverse_reason()}}).
 }
 \description{
 Back-calculates the standards used in the fit and checks, for each level,
 the bias of the mean back-calculated concentration and the CV of the
-back-calculated concentrations of the replicates.
-The lowest and highest levels of the fit (boundary calibrators) use the
-\verb{_edge} limits. The CV of a level with one point cannot be assessed: such a
-level is judged by its bias only. Levels of the run without points in the
-fit (all excluded or without a valid OD) are not accepted.
+back-calculated concentrations of the replicates. The lowest and highest
+levels of the fit (boundary calibrators) use the \verb{_edge} limits.
+}
+\details{
+Each level counts its wells: planned (in the layout), measured (with an
+OD), fitted (used in the fit) and back-calculated (with a concentration
+from the inverse of the curve). The bias and the CV use the back-calculated
+concentrations only; the CV of the OD is kept apart (\code{od.cv}). The status
+of a level (\code{status}):
+\itemize{
+\item \code{pass}, \code{fail}: the bias and the CV against their limits;
+\item \code{incomplete}: some fitted wells have no back-calculated concentration
+(e.g. the OD lies outside the asymptotes); not accepted;
+\item \code{pass_no_cv}: planned in replicate, but one result is left (the others
+excluded or without an OD); accepted by its bias, the CV is unavailable;
+\item \code{pass_singlet}, \code{singlet}: planned as a single well; accepted by its bias
+if the criteria allow singlets (\code{singlets}), otherwise not accepted;
+\item \code{no_points}: no well of the level in the fit; not accepted.
+}
 }

@@ -65,10 +65,14 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         dash <- function(x) ifelse(x == '', '\u2014', x)
         bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
         cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
-        standards <- name(data.frame(num(st$conc), st$n, dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
-                                     fail(dash(pct(st$calc.cv)), cv_failed), fail(dash(pct(st$bias)), bias_failed),
-                                     sprintf('%g', st$bias.limit), fail(mark(st$pass), !st$pass)),
-                          c('col.conc', 'col.count', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
+        # A level planned in replicate without two back-calculated results: the CV is unavailable
+        cv_text <- pct(st$calc.cv)
+        cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
+        standards <- name(data.frame(num(st$conc), paste0(st$n.calc, '/', st$n.measured),
+                                     dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
+                                     fail(dash(cv_text), cv_failed), fail(dash(pct(st$bias)), bias_failed),
+                                     sprintf('%g', st$bias.limit), fail(standard_status(st$status, lang), !st$pass)),
+                          c('col.conc', 'col.n_backcalc', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
                             'col.limit', 'col.pass'))
     }
 
@@ -118,6 +122,22 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
 }
 
 
+#' Status of a Standard Level for Display
+#'
+#' @param status Codes from [assess_standards()].
+#' @param lang Language code.
+#'
+#' @return Character vector: the marks of accepted and failed levels, a short
+#'   text for the other statuses.
+#' @keywords internal
+standard_status <- function(status, lang = 'en') {
+    keys <- c(pass = 'quality.pass', fail = 'quality.fail', incomplete = 'quality.status_incomplete',
+              pass_no_cv = 'quality.status_pass_no_cv', pass_singlet = 'quality.status_pass_singlet',
+              singlet = 'quality.status_singlet', no_points = 'quality.status_no_points')
+    vapply(status, function(x) tr(keys[[x]], lang), '', USE.NAMES = FALSE)
+}
+
+
 #' Verdict Lines of a Quality Assessment
 #'
 #' @param result Output of [calculate()].
@@ -159,13 +179,16 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #'
 #' @return A data.frame with translated column names: level name, position,
 #'   nominal concentration, OD, back-calculated concentration, bias (%) and
-#'   absolute error (back-calculated minus nominal).
+#'   absolute error (back-calculated minus nominal); when some points have
+#'   no back-calculated concentration, a last column with the reason (see
+#'   [inverse_reason()]).
 #' @keywords internal
 standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     std <- result$standard_data
     # Three significant digits without scientific notation (small errors near 0)
     num <- function(x) ifelse(is.na(x), '', trimws(formatC(x, digits = 3, format = 'fg')))
     calc <- inverse_fun(result$fit, std$OD)
+    reason <- inverse_reason(result$fit, std$OD)
     levels <- c(std$conc, result$exclusions$conc)
     bias <- 100 * (calc - std$conc) / std$conc
     criteria <- if (is.null(result$quality$criteria)) qc_criteria() else result$quality$criteria
@@ -178,10 +201,16 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     out <- data.frame(standard = standard_names(std$conc, levels), key = std$.key, conc = num(std$conc),
                       OD = sprintf('%.4f', std$OD), calc = num(calc), bias = bias_text,
                       error = num(calc - std$conc))
+    cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'exclusion.od', 'col.calc', 'col.bias',
+              'col.error')
+    if (any(!is.na(reason))) {
+        out$reason <- ifelse(is.na(reason), '', vapply(paste0('backcalc.', reason), tr, '', lang = lang))
+        if (highlight) out$reason <- ifelse(is.na(reason), '', paste0('<span class="crit-fail">', out$reason, '</span>'))
+        cols <- c(cols, 'col.backcalc_reason')
+    }
     out <- out[order(std$conc, decreasing = TRUE), , drop = FALSE]
     rownames(out) <- NULL
-    names(out) <- vapply(c('exclusion.standard', 'exclusion.key', 'col.nominal', 'exclusion.od', 'col.calc',
-                           'col.bias', 'col.error'), tr, '', lang = lang)
+    names(out) <- vapply(cols, tr, '', lang = lang)
     out
 }
 
@@ -316,6 +345,8 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
         return(sidebar_group(
             title('crit.title_standards', 'crit.note_standards'), 'vial',
             preset_panels('preset', function(rows) rows('standards')),
+            shiny::checkboxInput(ns('singlets'), with_tooltip(t('crit.singlets'), t('crit.singlets_help')),
+                                 value = TRUE, width = '100%'),
             shiny::radioButtons(ns('range'), t('crit.range'),
                                 choices = stats::setNames(c('accepted', 'all'),
                                                           c(t('crit.range_accepted'), t('crit.range_all'))),
@@ -348,6 +379,7 @@ mod_criteria_server <- function(id, lang) {
         shiny::observeEvent(input$reset_standards, {
             reset('standards')
             shiny::updateRadioButtons(session, 'range', selected = 'accepted')
+            shiny::updateCheckboxInput(session, 'singlets', value = TRUE)
         })
         shiny::observeEvent(input$reset_samples, reset('samples'))
         # The criteria of the samples follow the choice of the standards; they can be changed after it
@@ -369,6 +401,7 @@ mod_criteria_server <- function(id, lang) {
                 if (preset != 'custom') values[names(fixed)] <- fixed
             }
             values$range <- if (is.null(input$range)) 'accepted' else input$range
+            values$singlets <- if (is.null(input$singlets)) TRUE else isTRUE(input$singlets)
             with_validation(do.call(qc_criteria, values), 'common.calc_error', lang)
         })
     })

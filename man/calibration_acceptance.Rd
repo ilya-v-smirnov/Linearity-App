@@ -22,7 +22,8 @@ A list with \code{n_levels}, \code{n_pass}, \code{n_needed}, \code{accepted},
 \description{
 The calibration is accepted if at least \code{min_fraction} of all standard
 levels of the run, and at least \code{min_levels} levels, are accepted. The CV
-of a level without replicates cannot be assessed: when fewer than
+of a level with a single result (a singlet, or a replicate left alone)
+cannot be assessed: when fewer than
 \code{min_levels} accepted levels have an assessed CV, the calibration is
 accepted with this exception (\code{status = "accepted_no_cv"}).
 }

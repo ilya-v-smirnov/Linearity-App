@@ -25,6 +25,9 @@
 #' @param edge Concentrations within this factor of the boundary calibrators
 #'   (the lowest and highest level of the quantification range, LLOQ and ULOQ)
 #'   use the `_edge` limits.
+#' @param singlets Are standard levels planned as single wells accepted (by
+#'   their bias, the CV cannot be assessed)? A level planned in replicate
+#'   that keeps one result is not a singlet (see [assess_standards()]).
 #'
 #' @return A list of class `lin_criteria`.
 #' @export
@@ -34,14 +37,18 @@
 qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25,
                         min_fraction = 0.75, min_levels = 6, sample_cv = cv, sample_cv_edge = cv_edge,
                         qc_bias = 20, qc_bias_edge = 25, qc_fraction = 2 / 3, qc_level_fraction = 0.5,
-                        dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25) {
+                        dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25,
+                        singlets = TRUE) {
     out <- list(std_bias = std_bias, std_bias_edge = std_bias_edge, cv = cv, cv_edge = cv_edge,
                 min_fraction = min_fraction, min_levels = min_levels,
                 sample_cv = sample_cv, sample_cv_edge = sample_cv_edge,
                 qc_bias = qc_bias, qc_bias_edge = qc_bias_edge, qc_fraction = qc_fraction,
                 qc_level_fraction = qc_level_fraction, dilution_bias = dilution_bias,
-                dilution_cv = dilution_cv, range = range, edge = edge)
-    numeric <- setdiff(names(out), 'range')
+                dilution_cv = dilution_cv, range = range, edge = edge, singlets = singlets)
+    if (!(is.logical(singlets) && length(singlets) == 1 && !is.na(singlets))) {
+        lin_abort('error.criteria', names = 'singlets')
+    }
+    numeric <- setdiff(names(out), c('range', 'singlets'))
     bad <- numeric[!vapply(out[numeric], function(v) is.numeric(v) && length(v) == 1 && !is.na(v) && v >= 0,
                            logical(1))]
     if (length(bad) > 0) lin_abort('error.criteria', names = bad)
@@ -104,45 +111,87 @@ near_edge <- function(conc, range, edge) {
 #'
 #' Back-calculates the standards used in the fit and checks, for each level,
 #' the bias of the mean back-calculated concentration and the CV of the
-#' back-calculated concentrations of the replicates.
-#' The lowest and highest levels of the fit (boundary calibrators) use the
-#' `_edge` limits. The CV of a level with one point cannot be assessed: such a
-#' level is judged by its bias only. Levels of the run without points in the
-#' fit (all excluded or without a valid OD) are not accepted.
+#' back-calculated concentrations of the replicates. The lowest and highest
+#' levels of the fit (boundary calibrators) use the `_edge` limits.
+#'
+#' Each level counts its wells: planned (in the layout), measured (with an
+#' OD), fitted (used in the fit) and back-calculated (with a concentration
+#' from the inverse of the curve). The bias and the CV use the back-calculated
+#' concentrations only; the CV of the OD is kept apart (`od.cv`). The status
+#' of a level (`status`):
+#'
+#' * `pass`, `fail`: the bias and the CV against their limits;
+#' * `incomplete`: some fitted wells have no back-calculated concentration
+#'   (e.g. the OD lies outside the asymptotes); not accepted;
+#' * `pass_no_cv`: planned in replicate, but one result is left (the others
+#'   excluded or without an OD); accepted by its bias, the CV is unavailable;
+#' * `pass_singlet`, `singlet`: planned as a single well; accepted by its bias
+#'   if the criteria allow singlets (`singlets`), otherwise not accepted;
+#' * `no_points`: no well of the level in the fit; not accepted.
 #'
 #' @param fit A `lin_fit` object.
 #' @param criteria See [qc_criteria()].
-#' @param levels Concentrations of all standard levels of the run; by default
-#'   the levels of the fit.
+#' @param levels Concentrations of all standard wells of the run (one value
+#'   per well, so that the planned replicates are counted); by default the
+#'   wells of the fit. Not used with `wells`.
+#' @param wells All standard wells of the run with `conc` and `OD` (`NA`
+#'   where the OD is missing).
 #'
-#' @return A data.frame with one row per level: `conc`, `n` (points in the
-#'   fit), `od.mean`, `od.cv`, `calc.mean`, `calc.cv` (%), `bias` (%),
-#'   `bias.limit`, `cv.limit`, `pass`.
+#' @return A data.frame with one row per level: `conc`, `n` (wells in the
+#'   fit), `n.planned`, `n.measured`, `n.calc` (back-calculated), `od.mean`,
+#'   `od.cv`, `calc.mean`, `calc.cv` (%), `bias` (%), `bias.limit`,
+#'   `cv.limit`, `status`, `pass` and `failed` (wells of the fit without a
+#'   back-calculated concentration: a data.frame with `key` and `reason` for
+#'   each level, see [inverse_reason()]).
 #' @export
-assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL) {
+assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells = NULL) {
     bc <- back_calculate(fit)
     ends <- range(bc$conc)
-    levels <- sort(unique(c(bc$conc, levels[!is.na(levels)])))
-    rows <- lapply(levels, function(lv) {
+    planned <- if (!is.null(wells)) wells$conc else levels
+    planned <- planned[!is.na(planned)]
+    measured <- if (!is.null(wells)) wells$conc[!is.na(wells$conc) & !is.na(wells$OD)] else planned
+    all_levels <- sort(unique(c(bc$conc, planned)))
+    rows <- lapply(all_levels, function(lv) {
         b <- bc[bc$conc == lv, ]
+        n_fit <- nrow(b)
+        n_planned <- max(sum(planned == lv), n_fit)
+        n_measured <- max(sum(measured == lv), n_fit)
+        calc <- b$calc[!is.na(b$calc)]
+        n_calc <- length(calc)
         edge <- lv <= ends[1] || lv >= ends[2]
-        if (nrow(b) == 0) {
-            return(data.frame(conc = lv, n = 0L, od.mean = NA_real_, od.cv = NA_real_, calc.mean = NA_real_,
-                              calc.cv = NA_real_, bias = NA_real_,
-                              bias.limit = if (edge) criteria$std_bias_edge else criteria$std_bias,
-                              cv.limit = if (edge) criteria$cv_edge else criteria$cv, pass = FALSE))
-        }
-        calc_mean <- if (all(is.na(b$calc))) NA_real_ else mean(b$calc, na.rm = TRUE)
-        bias <- 100 * (calc_mean - lv) / lv
         bias_limit <- if (edge) criteria$std_bias_edge else criteria$std_bias
         cv_limit <- if (edge) criteria$cv_edge else criteria$cv
-        calc_cv <- cv_percent(b$calc)
-        pass <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(calc_cv) || calc_cv <= cv_limit)
-        data.frame(conc = lv, n = nrow(b), od.mean = mean(b$OD), od.cv = cv_percent(b$OD),
-                   calc.mean = calc_mean, calc.cv = calc_cv, bias = bias, bias.limit = bias_limit,
-                   cv.limit = cv_limit, pass = pass)
+        calc_mean <- if (n_calc > 0) mean(calc) else NA_real_
+        bias <- 100 * (calc_mean - lv) / lv
+        calc_cv <- cv_percent(calc)
+        within <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(calc_cv) || calc_cv <= cv_limit)
+        status <- if (n_fit == 0) {
+            'no_points'
+        } else if (n_calc < n_fit) {
+            'incomplete'
+        } else if (!within) {
+            'fail'
+        } else if (n_calc >= 2) {
+            'pass'
+        } else if (n_planned >= 2) {
+            'pass_no_cv'
+        } else if (isFALSE(criteria$singlets)) {
+            'singlet'
+        } else {
+            'pass_singlet'
+        }
+        out <- data.frame(conc = lv, n = n_fit, n.planned = n_planned, n.measured = n_measured, n.calc = n_calc,
+                          od.mean = if (n_fit > 0) mean(b$OD) else NA_real_,
+                          od.cv = if (n_fit > 0) cv_percent(b$OD) else NA_real_,
+                          calc.mean = calc_mean, calc.cv = calc_cv, bias = bias, bias.limit = bias_limit,
+                          cv.limit = cv_limit, status = status,
+                          pass = status %in% c('pass', 'pass_no_cv', 'pass_singlet'))
+        lost <- is.na(b$calc)
+        list(row = out, failed = data.frame(key = b$key[lost], reason = b$reason[lost]))
     })
-    do.call(rbind, rows)
+    out <- do.call(rbind, lapply(rows, `[[`, 'row'))
+    out$failed <- lapply(rows, `[[`, 'failed')
+    out
 }
 
 
@@ -150,7 +199,8 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL) {
 #'
 #' The calibration is accepted if at least `min_fraction` of all standard
 #' levels of the run, and at least `min_levels` levels, are accepted. The CV
-#' of a level without replicates cannot be assessed: when fewer than
+#' of a level with a single result (a singlet, or a replicate left alone)
+#' cannot be assessed: when fewer than
 #' `min_levels` accepted levels have an assessed CV, the calibration is
 #' accepted with this exception (`status = "accepted_no_cv"`).
 #'

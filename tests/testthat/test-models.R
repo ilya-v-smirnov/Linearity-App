@@ -384,6 +384,68 @@ test_that('the sets of wells are compared, not their sizes', {
     expect_false(LinearityApp:::same_wells(cmp))
 })
 
+test_that('a duplicate with one failed inversion is an incomplete back-calculation', {
+    f <- function(x) logistic(x, 0.05, 1.3, 10, 2.5)
+    std <- make_standards(f, conc = c(0.5, 1, 2, 4, 16, 32, 64))
+    fit <- fit_curve(std, '4PL')
+    # level 10 in duplicate: one well reads 10.1, the other lies above the upper asymptote
+    fit$x <- c(fit$x, 10, 10)
+    fit$y <- c(fit$y, f(10.1), 2.6)
+    fit$keys <- c(paste0('W', seq_len(nrow(std))), 'C5', 'C6')
+    st <- assess_standards(fit, wells = data.frame(conc = fit$x, OD = fit$y))
+    lv <- st[st$conc == 10, ]
+    expect_equal(c(lv$n.planned, lv$n.measured, lv$n, lv$n.calc), c(2, 2, 2, 1))
+    expect_equal(lv$status, 'incomplete')
+    expect_false(lv$pass)
+    expect_true(is.na(lv$calc.cv))
+    # the bias belongs to the single back-calculated replicate
+    expect_equal(lv$calc.mean, 10.1, tolerance = 1e-6)
+    expect_equal(lv$bias, 1, tolerance = 1e-4)
+    expect_equal(lv$failed[[1]], data.frame(key = 'C6', reason = 'outside_asymptotes'))
+
+    tab <- quality_tables(list(standards = st), 'en')$standards
+    row <- tab[tab$Concentration == '10', ]
+    expect_equal(row[['Back-calculated wells']], '1/2')
+    expect_equal(row[['CV of back-calculated, %']], 'CV unavailable')
+    expect_equal(row[['Bias, %']], '1.0')
+    expect_equal(row$Accepted, 'Incomplete back-calculation')
+    expect_equal(tab[['Back-calculated wells']][tab$Concentration == '4'], '2/2')
+})
+
+test_that('incomplete back-calculation is reported in the notes, the points and the comparison', {
+    truth <- function(x) 0.05 + 2 / (1 + (1 / x)^3)
+    data <- synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4, 8, 16, 32), sample_od = 0.5)
+    # one well of the top level reads above the plateau of the curve
+    top <- which(data$type == 'standard' & data$conc == 32)
+    data$OD[top[2]] <- 2.15
+    key <- well_keys(data)[top[2]]
+    r <- calculate(data, '4PL')
+    lv <- r$quality$standards[r$quality$standards$conc == 32, ]
+    expect_equal(lv$status, 'incomplete')
+    expect_equal(lv$n.calc, 1)
+    expect_match(message_text(r$notes, 'en'),
+                 paste0('S1 (32): 1 of 2 wells in the fit back-calculated; ', key, ': OD outside fitted asymptotes'),
+                 fixed = TRUE, all = FALSE)
+    pts <- LinearityApp:::standard_points_table(r, 'en')
+    expect_equal(pts[['Not back-calculated']][pts$Position == key], 'OD outside fitted asymptotes')
+    expect_equal(pts[['Back-calculated']][pts$Position == key], '')
+
+    # the errors of the comparison use the back-calculated standards; the failures are counted
+    cmp <- compare_models(r$calibration_pool)
+    i <- which(cmp$model == '4PL')
+    expect_equal(cmp$n.failed[i], 1)
+    bc <- back_calculate(r$fit)
+    expect_equal(cmp$mean.abs.error[i], mean(abs(bc$recovery - 100), na.rm = TRUE))
+    tab <- LinearityApp:::comparison_table(cmp, 'en')
+    expect_equal(tab[['Not back-calculated']][tab$Model == '4PL'], '1')
+    expect_equal(tab[['Not back-calculated']][tab$Model == tr('model_short.LIN', 'en')], '')
+
+    clean <- calculate(synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4), sample_od = 0.5), '4PL')
+    expect_false('Not back-calculated' %in% names(LinearityApp:::comparison_table(
+        compare_models(clean$calibration_pool), 'en')))
+    expect_false('Not back-calculated' %in% names(LinearityApp:::standard_points_table(clean, 'en')))
+})
+
 test_that('a comparison without any fitted model recommends nothing and does not warn', {
     few <- data.frame(conc = c(1, 1, 2, 2), OD = c(0.1, 0.1, 0.2, 0.2))
     expect_no_warning(cmp <- compare_models(few))

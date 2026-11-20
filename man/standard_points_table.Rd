@@ -17,7 +17,9 @@ standard_points_table(result, lang = "en", highlight = FALSE)
 \value{
 A data.frame with translated column names: level name, position,
 nominal concentration, OD, back-calculated concentration, bias (\%) and
-absolute error (back-calculated minus nominal).
+absolute error (back-calculated minus nominal); when some points have
+no back-calculated concentration, a last column with the reason (see
+\code{\link[=inverse_reason]{inverse_reason()}}).
 }
 \description{
 The standards used in the fit with their back-calculated concentrations,

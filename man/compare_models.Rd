@@ -17,7 +17,8 @@ otherwise the rows are numbered. Wells with a missing OD are not counted.}
 \value{
 A data.frame with one row per model; models that cannot be fitted
 have \code{NA} statistics. Besides the statistics: \code{n.used} (wells in the
-fit), \code{n.available} (wells of the common set), the list columns \code{wells}
+fit), \code{n.failed} (wells of the fit without a back-calculated
+concentration), \code{n.available} (wells of the common set), the list columns \code{wells}
 (IDs of the wells used; \code{NULL} if not fitted) and \code{dropped} (IDs left
 out by the restrictions of the model) and \code{lowest.aic}.
 }
@@ -25,7 +26,9 @@ out by the restrictions of the model) and \code{lowest.aic}.
 Fits all models with the same weighting to the common set of calibration
 wells and reports the number of parameters, AIC and BIC on the OD scale,
 R-squared (OD scale), the mean and maximum absolute error of
-back-calculated standards (\%) and the lack-of-fit p-value.
+back-calculated standards (\%) and the lack-of-fit p-value. The errors use
+the standards with a back-calculated concentration; \code{n.failed} counts the
+others (failed inversions).
 }
 \details{
 Each model uses every well of \code{standard_data} it can use: the log-log

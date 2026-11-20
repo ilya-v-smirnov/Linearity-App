@@ -20,7 +20,8 @@ qc_criteria(
   dilution_bias = 20,
   dilution_cv = 20,
   range = "accepted",
-  edge = 1.25
+  edge = 1.25,
+  singlets = TRUE
 )
 }
 \arguments{
@@ -50,6 +51,10 @@ highest accepted standard level) or \code{"all"} (all standards used in the fit)
 \item{edge}{Concentrations within this factor of the boundary calibrators
 (the lowest and highest level of the quantification range, LLOQ and ULOQ)
 use the \verb{_edge} limits.}
+
+\item{singlets}{Are standard levels planned as single wells accepted (by
+their bias, the CV cannot be assessed)? A level planned in replicate
+that keeps one result is not a singlet (see \code{\link[=assess_standards]{assess_standards()}}).}
 }
 \value{
 A list of class \code{lin_criteria}.
