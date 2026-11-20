@@ -138,8 +138,9 @@ legacy_background <- function(data) {
 #' @return A list with `roles`, `keys` and `od` (the wells used), `n`,
 #'   `mean`, `sd` (`NA` with fewer than two wells), `value` (the value
 #'   subtracted: the mean, 0 without roles), `unused` (a named vector with
-#'   the number of wells of the roles left out) and `legacy` (see
-#'   [legacy_background()]).
+#'   the number of wells of the roles left out), `legacy` (see
+#'   [legacy_background()]) and `wells` (all wells of the background roles:
+#'   `role`, `key`, `OD`, `used`).
 #' @keywords internal
 background_summary <- function(data, roles) {
     bad <- setdiff(roles, background_roles())
@@ -150,10 +151,12 @@ background_summary <- function(data, roles) {
     value <- if (length(roles) == 0) 0 else background_value(od)$value
     others <- setdiff(background_roles(), roles)
     unused <- vapply(others, function(r) sum(data$type %in% r), 0)
+    all <- is_background(data$type)
+    wells <- data.frame(role = data$type[all], key = keys[all], OD = data$OD[all], used = used[all])
     list(roles = roles, keys = keys[used], od = od, n = length(od),
          mean = if (length(od) > 0) mean(od) else NA_real_,
          sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
-         value = value, unused = unused[unused > 0], legacy = legacy_background(data))
+         value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells)
 }
 
 

@@ -584,6 +584,17 @@ backcalc:
   no_solution: "no solution"
 
 bg:
+  wells_section: "Background wells"
+  role: "Role"
+  position: "Position"
+  od: "OD"
+  deviation: "Deviation from the subtracted value"
+  used: "Used"
+  used_yes: "✓"
+  used_no: "—"
+  legend_used: "subtracted as background"
+  legend_unused: "not used"
+  hint: "The roles subtracted as background are chosen in the sidebar, under Background. The dashed line is the value subtracted from all wells."
   group: "Background"
   help: "The arithmetic mean OD of the ticked wells is subtracted from all wells. Reagent blank, zero calibrator and negative control are separate roles: combine them only if the method says so. By default the reagent blank is used; without it the zero calibrator; negative controls only when the plate has neither."
   roles: "Wells subtracted as background"

@@ -17,8 +17,9 @@ background_summary(data, roles)
 A list with \code{roles}, \code{keys} and \code{od} (the wells used), \code{n},
 \code{mean}, \code{sd} (\code{NA} with fewer than two wells), \code{value} (the value
 subtracted: the mean, 0 without roles), \code{unused} (a named vector with
-the number of wells of the roles left out) and \code{legacy} (see
-\code{\link[=legacy_background]{legacy_background()}}).
+the number of wells of the roles left out), \code{legacy} (see
+\code{\link[=legacy_background]{legacy_background()}}) and \code{wells} (all wells of the background roles:
+\code{role}, \code{key}, \code{OD}, \code{used}).
 }
 \description{
 Background Correction of a Plate

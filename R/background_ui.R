@@ -110,3 +110,58 @@ background_import_ui <- function(data, lang = 'en') {
                if (length(unused) > 0) paste0(' ', tr('bg.unused', lang, roles = roles_text(unused, lang))),
                paste0(' ', tr('bg.import_hint', lang)))
 }
+
+
+#' Wells of the Background Roles for Display
+#'
+#' @inheritParams background_table
+#'
+#' @return A data.frame with translated column names: role, position, OD,
+#'   deviation from the value subtracted and whether the well is used; the
+#'   wells used first, then by role in the order of [background_roles()].
+#'   `NULL` without background wells.
+#' @keywords internal
+background_wells_table <- function(bg, lang = 'en') {
+    w <- bg$wells
+    if (is.null(w) || nrow(w) == 0) return(NULL)
+    w <- w[order(!w$used, match(w$role, background_roles())), , drop = FALSE]
+    num <- function(x, fmt) ifelse(is.na(x), '', sprintf(fmt, x))
+    out <- data.frame(role_labels(w$role, lang), w$key, num(w$OD, '%.4f'), num(w$OD - bg$value, '%+.4f'),
+                      ifelse(w$used, tr('bg.used_yes', lang), tr('bg.used_no', lang)))
+    names(out) <- vapply(c('bg.role', 'bg.position', 'bg.od', 'bg.deviation', 'bg.used'), tr, '', lang = lang)
+    out
+}
+
+
+#' Plot of the Background Wells
+#'
+#' The OD of every well of a background role, by role: the wells used are
+#' filled, the others open; the dashed line is the value subtracted.
+#'
+#' @inheritParams background_table
+#'
+#' @return A ggplot2 object, or `NULL` without background wells.
+#' @keywords internal
+plot_background <- function(bg, lang = 'en') {
+    w <- bg$wells
+    if (is.null(w) || nrow(w) == 0 || all(is.na(w$OD))) return(NULL)
+    roles <- intersect(background_roles(), w$role)
+    w$role <- factor(role_labels(w$role, lang), levels = role_labels(roles, lang))
+    w$used <- factor(ifelse(w$used, 'used', 'unused'), levels = c('used', 'unused'))
+    labels <- c(used = tr('bg.legend_used', lang), unused = tr('bg.legend_unused', lang))
+    plot <- ggplot2::ggplot(w[!is.na(w$OD), ], ggplot2::aes(.data$role, .data$OD, fill = .data$used)) +
+        ggplot2::geom_point(shape = 21, size = 3, colour = 'grey20',
+                            position = ggplot2::position_jitter(width = 0.08, height = 0, seed = 1)) +
+        ggplot2::scale_fill_manual(values = c(used = 'grey20', unused = 'white'), labels = labels, name = NULL,
+                                   drop = FALSE) +
+        # Role names on two lines: they are long in some languages
+        ggplot2::scale_x_discrete(labels = function(x) sub(' ', '
+', x)) +
+        ggplot2::labs(x = NULL, y = tr('bg.od', lang)) +
+        lin_theme() +
+        ggplot2::theme(legend.position = 'bottom', axis.text.x = ggplot2::element_text(size = 10))
+    if (length(bg$roles) > 0) {
+        plot <- plot + ggplot2::geom_hline(yintercept = bg$value, linetype = 'dashed', colour = 'blue')
+    }
+    plot
+}

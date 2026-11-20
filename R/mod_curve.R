@@ -325,6 +325,20 @@ mod_curve_ui <- function(id, lang) {
     main <- bslib::navset_card_underline(
         id = ns('tabs'),
         full_screen = TRUE,
+        # First and open by default: the background is subtracted before the curve is fitted
+        bslib::nav_panel(
+            t('bg.group'), value = 'background', icon = shiny::icon('fill-drip'),
+            shiny::div(class = 'step-view',
+                       shiny::h5(t('bg.section')),
+                       shiny::tableOutput(ns('background_table')),
+                       shiny::uiOutput(ns('background_notes')),
+                       shiny::h5(t('bg.wells_section')),
+                       shiny::div(class = 'curve-panels',
+                                  shiny::div(class = 'curve-panel',
+                                             shiny::plotOutput(ns('background_plot'), height = '260px'))),
+                       shiny::tableOutput(ns('background_wells')),
+                       shiny::p(class = 'text-muted small', t('bg.hint')))
+        ),
         bslib::nav_panel(
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
             shiny::div(
@@ -353,9 +367,6 @@ mod_curve_ui <- function(id, lang) {
             shiny::div(class = 'step-view',
                        shiny::uiOutput(ns('verdict')),
                        shiny::uiOutput(ns('refit_note')),
-                       shiny::h5(t('bg.section')),
-                       shiny::tableOutput(ns('background_table')),
-                       shiny::uiOutput(ns('background_notes')),
                        shiny::h5(t('curve.section_equation')),
                        shiny::uiOutput(ns('equation')),
                        shiny::h5(t('curve.section_coefs')),
@@ -505,9 +516,22 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             tab[-1] <- lapply(tab[-1], as.character)
             tab
         })
-        output$background_table <- shiny::renderTable(background_table(result()$background, lang))
+        # The background does not depend on the fit: it is shown even if the curve cannot be fitted
+        background_info <- shiny::reactive({
+            d <- data()
+            shiny::req(d, !is.null(bg_roles()))
+            d$.key <- well_keys(d)
+            with_validation(background_summary(d, bg_roles()), 'common.calc_error', lang)
+        })
+        output$background_table <- shiny::renderTable(background_table(background_info(), lang))
+        output$background_wells <- shiny::renderTable(background_wells_table(background_info(), lang))
+        output$background_plot <- shiny::renderPlot({
+            p <- plot_background(background_info(), lang)
+            shiny::req(p)
+            p
+        })
         output$background_notes <- shiny::renderUI({
-            lines <- background_notes(result()$background, lang)
+            lines <- background_notes(background_info(), lang)
             if (length(lines) == 0) return(NULL)
             shiny::tagList(lapply(lines, function(x) shiny::p(class = 'text-muted small', x)))
         })

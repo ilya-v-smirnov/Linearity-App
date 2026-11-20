@@ -592,6 +592,35 @@ test_that('the comparison tab is inserted after the model parameters and removed
     expect_match(as.character(LinearityApp:::mod_curve_ui('curve', 'en')), 'id="curve-tabs"', fixed = TRUE)
 })
 
+test_that('the background has its own sub-tab, first and open by default', {
+    html <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
+    values <- regmatches(html, gregexpr('data-value="[a-z]+"', html))[[1]]
+    expect_equal(values[1:3], c('data-value="background"', 'data-value="curve"', 'data-value="coefs"'))
+    # the first panel is the active one
+    expect_match(html, '<div class="tab-pane active[^>]*data-value="background"')
+
+    # blanks 0.04 and 0.16, a negative control 0.40; three standard levels only: the curve cannot be fitted
+    conc <- c(1, 2, 4)
+    data <- data.frame(sample.name = c(rep(NA, 9), 'A'), sample.date = NA,
+                       type = c(rep('standard', 6), 'blank', 'blank', 'NC', 'sample'),
+                       conc = c(conc, conc, NA, NA, NA, NA), dilution = c(rep(NA, 9), 1),
+                       OD = c(0.02 * conc + 0.10, 0.02 * conc + 0.10, 0.04, 0.16, 0.40, 0.30))
+    data <- check_assay(normalize_table(data))
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(data), rounding = rounding_3()), {
+        session$setInputs(model = 'QRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        expect_error(session$returned$result())
+        expect_match(output$background_table, '0.1000', fixed = TRUE)
+        wells <- output$background_wells
+        expect_match(wells, 'Deviation from the subtracted value', fixed = TRUE)
+        expect_match(wells, '+0.3000', fixed = TRUE)
+        expect_match(output$background_plot$src, '^data:image/png')
+        expect_match(output$background_notes$html, 'Not used: Negative control', fixed = TRUE)
+        session$setInputs(background = c('blank', 'NC'))
+        expect_match(output$background_table, '0.2000', fixed = TRUE)
+    })
+})
+
 test_that('very small and very large concentrations are shown in e-notation', {
     table <- data.frame(well = c('A1', 'A2'), conc = c(0.0000541, 2.5), conc.lower = c(1e-6, 2), OD = c(0.06, 0.2),
                         flag = 'OK')

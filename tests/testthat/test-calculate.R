@@ -293,6 +293,13 @@ test_that('the background correction is shown and reported', {
                            signif(LinearityApp:::geom_mean(c(0.05, 0.05, 0.3)), 4))))
     expect_equal(LinearityApp:::background_text(r$background, 'en'),
                  'Reagent blank, 2 well(s), mean OD 0.0500, SD 0.0000; subtracted 0.0500')
+    wells <- LinearityApp:::background_wells_table(r$background, 'en')
+    expect_equal(names(wells), c('Role', 'Position', 'OD', 'Deviation from the subtracted value', 'Used'))
+    expect_equal(wells$Role, c('Reagent blank', 'Reagent blank', 'Negative control'))
+    expect_equal(wells$Used, c('✓', '✓', '—'))
+    expect_equal(wells[['Deviation from the subtracted value']], c('+0.0000', '+0.0000', '+0.2500'))
+    expect_s3_class(LinearityApp:::plot_background(r$background, 'en'), 'ggplot')
+    expect_null(LinearityApp:::background_wells_table(list(wells = r$background$wells[0, ]), 'en'))
     pts <- LinearityApp:::standard_points_table(r, 'en')
     expect_equal(pts[['OD as measured']][1], sprintf('%.4f', 0.1 * 32 + 0.05))
     expect_equal(pts[['Corrected OD']][1], sprintf('%.4f', 0.1 * 32))
