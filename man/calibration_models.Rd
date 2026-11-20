@@ -17,7 +17,7 @@ optical density):
 \itemize{
 \item \code{LIN}: linear OD = a + b*C;
 \item \code{QUAD}: quadratic OD = a + b\emph{C + c}C^2;
-\item \code{LRM}: power (log-log linear) log10(OD) = a + b*log10(C);
+\item \code{LRM}: log-log linear log10(OD) = a + b*log10(C);
 \item \code{QRM}: log-log quadratic log10(OD) = a + b\emph{log10(C) + c}log10(C)^2.
 }
 

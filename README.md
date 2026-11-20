@@ -15,7 +15,7 @@ The **Linearity App** is an R package with a Shiny application that calculates a
 - Simple table format with only two required columns (`type`, `OD`); old files keep working
 - Validation lists every problem in the file with the well or row where it occurs
 - Blank wells and quality controls (QC) with recovery
-- Calibration models: linear and quadratic on the original scale, power (log–log linear) and log–log quadratic, four- and five-parameter logistic (4PL, 5PL)
+- Calibration models: linear and quadratic on the original scale, log–log linear and log–log quadratic, four- and five-parameter logistic (4PL, 5PL)
 - Weighting: 1/y, 1/y², 1/x, 1/x² or a variance function estimated from replicates
 - Concentrations with 95 % confidence intervals (delta method)
 - Comparison of models (AIC/BIC on the OD scale, R², back-calculated standards, lack-of-fit test)
@@ -93,7 +93,7 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
   |--------------|----------|--------|
   | Linear (`LIN`) | OD = a + b·C | original |
   | Quadratic (`QUAD`) | OD = a + b·C + c·C² | original |
-  | Power, log–log linear (`LRM`) | log10(OD) = a + b·log10(C) | log10 conc / log10 OD |
+  | Log–log linear (`LRM`) | log10(OD) = a + b·log10(C) | log10 conc / log10 OD |
   | Log–log quadratic (`QRM`) | log10(OD) = a + b·log10(C) + c·[log10(C)]² | log10 conc / log10 OD |
   | 4PL | OD = d + (a − d) / (1 + (C/c)^b) | OD linear, concentration log |
   | 5PL | OD = d + (a − d) / (1 + (C/c)^b)^g | OD linear, concentration log |

@@ -5,7 +5,7 @@
 #'
 #' * `LIN`: linear OD = a + b*C;
 #' * `QUAD`: quadratic OD = a + b*C + c*C^2;
-#' * `LRM`: power (log-log linear) log10(OD) = a + b*log10(C);
+#' * `LRM`: log-log linear log10(OD) = a + b*log10(C);
 #' * `QRM`: log-log quadratic log10(OD) = a + b*log10(C) + c*log10(C)^2.
 #'
 #' `LRM` and `QRM` are fitted on the original scale (as `LIN` and `QUAD`)

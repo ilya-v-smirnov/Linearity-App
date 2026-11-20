@@ -103,7 +103,7 @@ data:
 model:
   LIN: "Linear"
   QUAD: "Quadratic"
-  LRM: "Power (log–log linear)"
+  LRM: "Log–log linear"
   QRM: "Log–log quadratic"
   4PL: "Four-parameter logistic (4PL)"
   5PL: "Five-parameter logistic (5PL)"
@@ -111,7 +111,7 @@ model:
 model_short:
   LIN: "Linear"
   QUAD: "Quadratic"
-  LRM: "Power (log–log)"
+  LRM: "Log–log linear"
   QRM: "Log–log quadratic"
   4PL: "4PL"
   5PL: "5PL"
