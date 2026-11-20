@@ -330,7 +330,7 @@ test_that('models are compared on the common set of calibration wells', {
     data <- synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4, 8, 16, 32), sample_od = 0.3)
     # 16 measured standard wells; one of them reads 0.003 below the blank
     low <- which(data$type == 'standard' & data$conc == 0.25)[1]
-    data$OD[low] <- data$OD[data$type == 'NC'][1] - 0.003
+    data$OD[low] <- data$OD[data$type == 'blank'][1] - 0.003
     key <- well_keys(data)[low]
     label <- function(m) tr(paste0('model_short.', m), 'en')
 

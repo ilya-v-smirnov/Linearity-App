@@ -14,7 +14,8 @@ A list of problems (see \code{\link[=problems_table]{problems_table()}}).
 }
 \description{
 Checks mandatory and numeric columns, values of \code{type}, presence of
-standards, samples and background wells (NC or blank), dilution factors,
+standards, samples and background wells (reagent blank, zero calibrator or
+negative control), dilution factors,
 concentrations of standards and QC, the number of standard wells and
 duplicated wells. Unlike \code{\link[=check_assay]{check_assay()}}, it does not stop at the first
 problem.

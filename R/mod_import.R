@@ -95,7 +95,8 @@ mod_import_server <- function(id, lang, by = shiny::reactive('column')) {
             d <- data()
             shiny::tagList(
                 shiny::p(class = 'text-muted', shiny::icon('file'), ' ', input$file$name),
-                data_summary_ui(data_counts(d), 'well' %in% names(d), lang)
+                data_summary_ui(data_counts(d), 'well' %in% names(d), lang),
+                background_import_ui(d, lang)
             )
         })
 

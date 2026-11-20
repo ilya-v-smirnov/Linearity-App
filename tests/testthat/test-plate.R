@@ -46,7 +46,8 @@ small_plate <- function(extra_layout = NULL, extra_od = NULL) {
 test_that('example plate gives the same results as the table format', {
     plate <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
     expect_true(all(c('well', 'id') %in% names(plate)))
-    expect_equal(as.vector(table(plate$type)[c('blank', 'sample', 'standard')]), c(2, 24, 14))
+    # the NC wells of the example are negative controls, kept apart from reagent blanks
+    expect_equal(as.vector(table(plate$type)[c('NC', 'sample', 'standard')]), c(2, 24, 14))
 
     r_plate <- calculate(plate, 'QRM')
     r_table <- calculate(load_sample('bca'), 'QRM')

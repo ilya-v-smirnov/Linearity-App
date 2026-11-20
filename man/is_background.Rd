@@ -2,7 +2,7 @@
 % Please edit documentation in R/calibration.R
 \name{is_background}
 \alias{is_background}
-\title{Wells Used as Background}
+\title{Wells of a Background Role}
 \usage{
 is_background(type)
 }
@@ -10,9 +10,10 @@ is_background(type)
 \item{type}{Vector of well types.}
 }
 \value{
-Logical vector.
+Logical vector: \code{TRUE} for reagent blanks, zero calibrators and
+negative controls (see \code{\link[=background_roles]{background_roles()}}).
 }
 \description{
-Blank and NC wells are equivalent: both are background wells.
+Wells of a Background Role
 }
 \keyword{internal}

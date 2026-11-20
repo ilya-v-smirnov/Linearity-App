@@ -32,7 +32,7 @@ FLAGS <- list(ok = 'OK',
               nonlinear = 'Dilution non-linear')
 
 
-##################### BACKGROUND (NC) ##########################################
+##################### BACKGROUND ###############################################
 
 #' Geometric Mean of Positive Values
 #'
@@ -47,10 +47,56 @@ geom_mean <- function(x) {
 }
 
 
+#' Roles of Background Wells
+#'
+#' * `blank`: reagent blank (plate codes `B`, `BLANK`);
+#' * `zero`: zero calibrator (plate codes `Z`, `ZERO`, `S0`);
+#' * `NC`: negative control (plate code `NC`).
+#'
+#' The roles are kept apart: the wells subtracted as background are chosen
+#' explicitly (see [calculate()], argument `background`), and roles are
+#' combined only when the method says so.
+#'
+#' @return Character vector of well types.
+#' @export
+background_roles <- function() c('blank', 'zero', 'NC')
+
+
+#' Wells of a Background Role
+#'
+#' @param type Vector of well types.
+#'
+#' @return Logical vector: `TRUE` for reagent blanks, zero calibrators and
+#'   negative controls (see [background_roles()]).
+#' @keywords internal
+is_background <- function(type) {
+    type %in% background_roles()
+}
+
+
+#' Default Background Roles
+#'
+#' The reagent blanks; without them the zero calibrators. Negative controls
+#' are used by default only when the plate has neither (files of earlier
+#' versions, where `NC` meant the blank).
+#'
+#' @param type Vector of well types.
+#'
+#' @return A role (see [background_roles()]), or `character(0)` without
+#'   background wells.
+#' @export
+default_background <- function(type) {
+    for (role in background_roles()) {
+        if (any(type %in% role)) return(role)
+    }
+    character(0)
+}
+
+
 #' Estimate the Background Value
 #'
-#' The background is the geometric mean of the background ODs. If some values
-#' are zero or negative, the arithmetic mean is used instead.
+#' The background is the arithmetic mean of the background ODs, whatever
+#' their sign (the same rule for every plate).
 #'
 #' @param od Numeric vector of background ODs.
 #'
@@ -61,37 +107,68 @@ background_value <- function(od) {
     if (length(od) == 0) {
         lin_abort('error.no_nc')
     }
-    if (any(od <= 0)) {
-        return(list(value = mean(od), notes = list(lin_message('note.nc_arithmetic'))))
-    }
-    list(value = geom_mean(od), notes = list())
+    list(value = mean(od), notes = list())
 }
 
 
-#' Wells Used as Background
+#' Background of Earlier Versions
 #'
-#' Blank and NC wells are equivalent: both are background wells.
+#' Earlier versions subtracted the geometric mean of all blank and NC wells
+#' (the arithmetic mean if some were zero or negative). Kept to show when a
+#' plate is analysed again with a different background.
 #'
-#' @param type Vector of well types.
+#' @param data A data.frame with columns `type` and `OD`.
 #'
-#' @return Logical vector.
+#' @return A numeric value, `NA` without blank or NC wells.
 #' @keywords internal
-is_background <- function(type) {
-    type %in% c('blank', 'NC')
+legacy_background <- function(data) {
+    od <- data$OD[data$type %in% c('blank', 'NC') & !is.na(data$OD)]
+    if (length(od) == 0) return(NA_real_)
+    if (any(od <= 0)) mean(od) else geom_mean(od)
+}
+
+
+#' Background Correction of a Plate
+#'
+#' @param data A data.frame with columns `type`, `OD` and optionally `.key`
+#'   (well IDs, see [well_keys()]).
+#' @param roles Roles of the wells subtracted as background (see
+#'   [background_roles()]); `character(0)` subtracts nothing.
+#'
+#' @return A list with `roles`, `keys` and `od` (the wells used), `n`,
+#'   `mean`, `sd` (`NA` with fewer than two wells), `value` (the value
+#'   subtracted: the mean, 0 without roles), `unused` (a named vector with
+#'   the number of wells of the roles left out) and `legacy` (see
+#'   [legacy_background()]).
+#' @keywords internal
+background_summary <- function(data, roles) {
+    bad <- setdiff(roles, background_roles())
+    if (length(bad) > 0) lin_abort('error.background_role', roles = bad, choices = background_roles())
+    keys <- if ('.key' %in% names(data)) data$.key else well_keys(data)
+    used <- data$type %in% roles & !is.na(data$OD)
+    od <- data$OD[used]
+    value <- if (length(roles) == 0) 0 else background_value(od)$value
+    others <- setdiff(background_roles(), roles)
+    unused <- vapply(others, function(r) sum(data$type %in% r), 0)
+    list(roles = roles, keys = keys[used], od = od, n = length(od),
+         mean = if (length(od) > 0) mean(od) else NA_real_,
+         sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
+         value = value, unused = unused[unused > 0], legacy = legacy_background(data))
 }
 
 
 #' Subtract Background Values
 #'
 #' @param data A data.frame with columns `type` and `OD`.
-#' @param nc_value Background value; estimated with [background_value()] from
-#'   the blank (or NC) wells if `NULL`.
+#' @param nc_value Background value; if `NULL`, the mean of the wells of the
+#'   default role (see [default_background()]).
 #'
-#' @return A data.frame without NC and blank rows, with background-subtracted `OD`.
+#' @return A data.frame without background rows (all roles), with
+#'   background-subtracted `OD`.
 #' @keywords internal
 subtract_nc <- function(data, nc_value = NULL) {
     if (is.null(nc_value)) {
-        nc_value <- background_value(data$OD[is_background(data$type)])$value
+        nc_value <- background_summary(data, default_background(data$type))$value
     }
     out <- data[!is_background(data$type), , drop = FALSE]
     out$OD <- out$OD - nc_value
@@ -251,6 +328,9 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   the ULOQ). Their flags are kept.
 #' @param blank_zero If `TRUE`, samples with OD at or below the blank get
 #'   concentration 0 (flag kept).
+#' @param background Roles of the wells subtracted as background (see
+#'   [background_roles()]); `NULL` for the default role of the plate (see
+#'   [default_background()]); `character(0)` subtracts nothing.
 #' @param interval For the quadratic models: the monotonic interval of
 #'   concentrations (lower and upper bound) set by the user, or `NULL` for the
 #'   range of the standards. The curve is inverted on the branch of the
@@ -265,7 +345,9 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `monotonic`: `FALSE` if a quadratic curve turns inside its working
 #'     interval (the concentrations are then not calculated);
 #'   * `nc_value`: background value subtracted from all ODs;
-#'   * `standard_data`: standards used in the fit (with `.key`);
+#'   * `background`: the background correction (see [background_summary()]);
+#'   * `standard_data`: standards used in the fit (with `.key`; `OD` corrected,
+#'     `OD.raw` as measured);
 #'   * `calibration_pool`: common set of calibration wells (with `.key`):
 #'     background-subtracted standards with an OD, without those excluded by
 #'     the user, before the restrictions of the model (see [compare_models()]);
@@ -283,13 +365,14 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `lack_of_fit`: lack-of-fit test (see [lack_of_fit()]);
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
 #'   * `result`: sample results with `OD` as measured (before the blank is
-#'     subtracted), `conc` (dilution-corrected), its confidence interval
+#'     subtracted), `OD.corrected` (after it), `conc` (dilution-corrected), its confidence interval
 #'     `conc.lower`, `conc.upper` and `flag`;
 #'   * `qc`: quality controls with nominal and measured concentration, OD as measured,
 #'     recovery (%) and flag (`NULL` if there are no QC wells).
 #'
-#' The background is the geometric mean of the blank wells (type `blank` or
-#' `NC`, which are equivalent). Columns `well` and `id` are kept in the results
+#' The background is the arithmetic mean of the wells of the chosen roles
+#' (argument `background`): reagent blank, zero calibrator and negative
+#' control are kept apart. Columns `well` and `id` are kept in the results
 #' when they contain values.
 #' @export
 #' @examples
@@ -300,15 +383,27 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
                       round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
-                      extrapolate = character(0), blank_zero = FALSE, interval = NULL) {
+                      extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
     data$.key <- well_keys(data)
 
-    # Background subtraction; the results show the OD as measured
-    bg <- background_value(data$OD[is_background(data$type)])
-    notes <- bg$notes
+    # Background subtraction; the results show the OD as measured and corrected
+    defaulted <- is.null(background)
+    if (defaulted) background <- default_background(data$type)
+    bg <- background_summary(data, background)
+    notes <- list()
+    if (length(background) == 0) {
+        notes <- c(notes, list(lin_message('note.no_background')))
+    } else if (defaulted && identical(background, 'NC')) {
+        notes <- c(notes, list(lin_message('note.background_nc_legacy', n = bg$n)))
+    }
+    # A plate analysed again: the background of earlier versions differs by more than 1 %
+    if (!is.na(bg$legacy) && abs(bg$value - bg$legacy) > 0.01 * abs(bg$legacy)) {
+        notes <- c(notes, list(lin_message('note.background_changed', value = signif(bg$value, 4),
+                                           legacy = signif(bg$legacy, 4))))
+    }
     data$.od_raw <- data$OD
     data <- subtract_nc(data, bg$value)
 
@@ -398,7 +493,9 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
         rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
         if (blank_zero) rows$conc[flag == FLAGS$od_le_nc] <- 0
+        corrected <- rows$OD
         rows$OD <- round(rows$.od_raw, 4)
+        rows$OD.corrected <- round(corrected, 4)
         rows$.od_raw <- NULL
         rows$flag <- flag
         rownames(rows) <- NULL
@@ -445,6 +542,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     }
 
     rownames(standard_data) <- NULL
+    # The standards keep the OD as measured next to the corrected one
+    standard_data$OD.raw <- standard_data$.od_raw
     standard_data$.od_raw <- NULL
     sample_data$type <- NULL
     sample_data$.key <- NULL
@@ -461,6 +560,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          monotonic = monotonic,
          weights = weights,
          nc_value = bg$value,
+         background = bg,
          standard_data = standard_data,
          calibration_pool = pool,
          excluded_standards = std$excluded,

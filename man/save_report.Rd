@@ -12,6 +12,7 @@ save_report(
   method,
   scale = NULL,
   weights = NULL,
+  background = NULL,
   model_table,
   result_table,
   means_table = NULL,
@@ -41,6 +42,9 @@ save_report(
 \item{scale}{Scale of the fit (text shown in the report).}
 
 \item{weights}{Weighting (text shown in the report).}
+
+\item{background}{Background correction (text shown in the report, see
+\code{background_text()}).}
 
 \item{model_table}{Coefficients table from \code{\link[=get_coef_ci]{get_coef_ci()}}.}
 

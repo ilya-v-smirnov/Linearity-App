@@ -9,11 +9,12 @@ subtract_nc(data, nc_value = NULL)
 \arguments{
 \item{data}{A data.frame with columns \code{type} and \code{OD}.}
 
-\item{nc_value}{Background value; estimated with \code{\link[=background_value]{background_value()}} from
-the blank (or NC) wells if \code{NULL}.}
+\item{nc_value}{Background value; if \code{NULL}, the mean of the wells of the
+default role (see \code{\link[=default_background]{default_background()}}).}
 }
 \value{
-A data.frame without NC and blank rows, with background-subtracted \code{OD}.
+A data.frame without background rows (all roles), with
+background-subtracted \code{OD}.
 }
 \description{
 Subtract Background Values

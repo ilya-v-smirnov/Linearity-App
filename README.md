@@ -14,7 +14,7 @@ The **Linearity App** is an R package with a Shiny application that calculates a
 - Plate format: paste the plate reader grid into an Excel template with the plate layout
 - Simple table format with only two required columns (`type`, `OD`); old files keep working
 - Validation lists every problem in the file with the well or row where it occurs
-- Blank wells and quality controls (QC) with recovery
+- Explicit background correction: reagent blank, zero calibrator and negative control as separate roles; quality controls (QC) with recovery
 - Calibration models: linear and quadratic on the original scale, log–log linear and log–log quadratic, four- and five-parameter logistic (4PL, 5PL)
 - Weighting: 1/y, 1/y², 1/x, 1/x² or a variance function estimated from replicates
 - Concentrations with 95 % confidence intervals (delta method)
@@ -68,7 +68,7 @@ message_text(res$notes, "en")   # warnings
 
 | Sheet | Content |
 |-------|---------|
-| `Layout` | well codes on the plate grid: `S1`...`Sn` standards, `B` blank, `NC` negative control, `QC-L`/`QC-M`/`QC-H` quality controls, `X1`...`Xn` samples; empty wells are not used; wells with the same code are replicates |
+| `Layout` | well codes on the plate grid: `S1`...`Sn` standards, `B` reagent blank, `Z` (or `S0`) zero calibrator, `NC` negative control, `QC-L`/`QC-M`/`QC-H` quality controls, `X1`...`Xn` samples; empty wells are not used; wells with the same code are replicates |
 | `OD` | optical densities pasted from the plate reader at the same positions (decimal comma accepted) |
 | `Standards` | `level`, `conc` - filled in from the template parameters |
 | `Samples` | `id`, `name`, `dilution` and any extra columns (e.g. `date`) |
@@ -76,9 +76,9 @@ message_text(res$notes, "en")   # warnings
 
 The template generated in Russian has Russian sheet names; both languages are recognised on import. Column names and well codes are the same in all languages.
 
-**Table** - one row per well. Required columns: `type` (`standard`, `sample`, `NC`, `blank`, `QC`) and `OD`; `conc` for standards and QC; optional `dilution` (default 1), `id`, `sample.name`, `well` and any metadata columns. The six-column format of earlier versions is accepted as is.
+**Table** - one row per well. Required columns: `type` (`standard`, `sample`, `blank` — reagent blank, `zero` — zero calibrator, `NC` — negative control, `QC`) and `OD`; `conc` for standards and QC; optional `dilution` (default 1), `id`, `sample.name`, `well` and any metadata columns. The six-column format of earlier versions is accepted as is.
 
-The background is the mean OD of `NC` wells, or of blank wells if there are no `NC` wells.
+The background is the arithmetic mean OD of the wells chosen in **Standard curve → Background**, the same rule whatever the sign of the values. Reagent blank, zero calibrator and negative control are separate roles; combine them only if the method says so. By default the reagent blank is used; without it the zero calibrator; the negative controls only when the plate has neither — this keeps files of earlier versions, where `NC` meant the blank, working, and the import step and the warnings say so. Earlier versions subtracted the geometric mean of all blank and `NC` wells: when that value differs by more than 1 % from the current one, a warning shows both, and **Model parameters → Background correction** always lists the wells used, their mean, SD and the value subtracted. The results keep the OD as measured (`OD`) and after the correction (`OD.corrected`).
 
 ### 3. Import Data
 - Click **"Browse"** and choose the file; the format is recognised automatically.
@@ -111,7 +111,7 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
 - Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor; `conc.lower` and `conc.upper` give the 95 % confidence interval (uncertainty of the curve and of a single OD measurement).
 - Each sample well gets a **flag**. Only wells flagged `OK` receive a concentration; the others are left empty:
   - `< LLOQ` / `> ULOQ` - outside the range of standards used in the fit;
-  - `OD <= NC` - optical density at or below the negative control;
+  - `OD <= blank` - optical density at or below the background;
   - `No solution` - the OD cannot be reached by the quadratic curve;
   - `Missing OD` - no optical density value.
 - Quality controls are shown in a separate table with nominal and measured concentration and recovery (%).

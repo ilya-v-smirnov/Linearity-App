@@ -179,7 +179,8 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #'   `<span class="crit-fail">`, for tables rendered as HTML.
 #'
 #' @return A data.frame with translated column names: level name, position,
-#'   nominal concentration, OD, back-calculated concentration, bias (%) and
+#'   nominal concentration, OD as measured and after the background
+#'   correction, back-calculated concentration, bias (%) and
 #'   absolute error (back-calculated minus nominal); when some points have
 #'   no back-calculated concentration, a last column with the reason (see
 #'   [inverse_reason()]).
@@ -199,11 +200,12 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
         failed <- is.na(bias) | abs(bias) > limit
         bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)
     }
+    raw <- if ('OD.raw' %in% names(std)) std$OD.raw else std$OD + result$nc_value
     out <- data.frame(standard = standard_names(std$conc, levels), key = std$.key, conc = num(std$conc),
-                      OD = sprintf('%.4f', std$OD), calc = num(calc), bias = bias_text,
+                      raw = sprintf('%.4f', raw), OD = sprintf('%.4f', std$OD), calc = num(calc), bias = bias_text,
                       error = num(calc - std$conc))
-    cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'exclusion.od', 'col.calc', 'col.bias',
-              'col.error')
+    cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'col.od_raw', 'col.od_corrected', 'col.calc',
+              'col.bias', 'col.error')
     if (any(!is.na(reason))) {
         out$reason <- ifelse(is.na(reason), '', vapply(paste0('backcalc.', reason), tr, '', lang = lang))
         if (highlight) out$reason <- ifelse(is.na(reason), '', paste0('<span class="crit-fail">', out$reason, '</span>'))

@@ -14,13 +14,13 @@ load_sample <- function(name) {
         format_input_table()
 }
 
-# Synthetic data set: standards follow OD = f(conc) exactly, NC = 0.05
+# Synthetic data set: standards follow OD = f(conc) exactly, reagent blank = 0.05
 synthetic_data <- function(f, conc = c(1, 2, 4, 8, 16, 32), sample_od = 0.5,
                            nc = 0.05) {
     rbind(
         data.frame(sample.name = NA, sample.date = NA, type = 'standard',
                    dilution = NA, conc = rep(conc, 2), OD = rep(f(conc), 2) + nc),
-        data.frame(sample.name = NA, sample.date = NA, type = 'NC',
+        data.frame(sample.name = NA, sample.date = NA, type = 'blank',
                    dilution = NA, conc = NA, OD = c(nc, nc)),
         data.frame(sample.name = paste0('S', seq_along(sample_od)), sample.date = NA,
                    type = rep('sample', length(sample_od)), dilution = 1, conc = NA,

@@ -171,9 +171,11 @@ classify_codes <- function(code, sample_ids = character(0)) {
     type <- rep(NA_character_, length(code))
     type[grepl('^X[0-9]+$', code) | code %in% sample_ids] <- 'sample'
     type[grepl('^QC', code)] <- 'QC'
+    # Reagent blank, zero calibrator and negative control are separate roles
     type[code %in% c('B', 'BLANK')] <- 'blank'
-    type[code == 'NC'] <- 'blank'  # NC and blank are equivalent
+    type[code == 'NC'] <- 'NC'
     type[grepl('^S[0-9]+$', code)] <- 'standard'
+    type[code %in% c('Z', 'ZERO', 'S0')] <- 'zero'
     type
 }
 

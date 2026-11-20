@@ -50,7 +50,7 @@ test_that('notes and errors keep the key and are shown in any language', {
     ru <- message_text(r$notes, 'ru')
     expect_length(ru, length(en))
     expect_match(ru, tr('flag.od_le_nc', 'ru'), fixed = TRUE, all = FALSE)
-    expect_output(print(r$notes[[1]]), 'sample wells')
+    expect_output(print(Find(function(m) m$key == 'note.not_quantified', r$notes)), 'sample wells')
 
     cnd <- tryCatch(check_input_file(data.frame(x = 1)), error = identity)
     expect_s3_class(cnd, 'lin_error')

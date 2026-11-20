@@ -40,7 +40,7 @@ plate_map <- function(codes, values = NULL, types = NULL, lang = 'en', editable 
         shiny::tags$tr(shiny::tags$th(class = 'plate-row', `data-row` = row, row), cells)
     })
 
-    legend_types <- c('standard', 'blank', 'QC', 'sample')
+    legend_types <- c('standard', 'blank', 'zero', 'NC', 'QC', 'sample')
     counts <- vapply(legend_types, function(x) sum(types == x, na.rm = TRUE), 0)
     legend <- lapply(legend_types[counts > 0], function(type) {
         shiny::span(class = paste0('legend-item well-', tolower(type)),
@@ -116,7 +116,7 @@ well_order <- function(well, by = 'column') {
 #' @return Character vector of column names.
 #' @keywords internal
 sample_columns <- function(data) {
-    setdiff(names(data), c('well', 'type', 'dilution', 'conc', 'OD', 'id', 'rep'))
+    setdiff(names(data), c('well', 'type', 'dilution', 'conc', 'OD', 'OD.corrected', 'id', 'rep'))
 }
 
 

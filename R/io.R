@@ -111,9 +111,12 @@ normalize_table <- function(table) {
     if ('type' %in% names(table)) {
         type <- trimws(as.character(table$type))
         low <- tolower(type)
-        simple <- low %in% c('standard', 'sample', 'blank')
+        simple <- low %in% c('standard', 'sample', 'blank', 'zero')
         type[simple] <- low[simple]
-        type[low %in% 'nc'] <- 'blank'  # NC and blank are equivalent
+        # Reagent blank, zero calibrator and negative control are separate roles
+        type[low %in% c('reagent blank')] <- 'blank'
+        type[low %in% c('zero calibrator')] <- 'zero'
+        type[low %in% c('nc', 'negative control')] <- 'NC'
         type[low %in% 'qc'] <- 'QC'
         table$type <- type
         if (!'dilution' %in% names(table)) {

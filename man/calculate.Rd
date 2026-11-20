@@ -16,7 +16,8 @@ calculate(
   criteria = qc_criteria(),
   extrapolate = character(0),
   blank_zero = FALSE,
-  interval = NULL
+  interval = NULL,
+  background = NULL
 )
 }
 \arguments{
@@ -52,6 +53,10 @@ parabola that holds the interval, and the quantification range is limited
 to it. If the vertex of the parabola lies inside the interval, the
 concentrations are ambiguous and are not calculated (see \code{\link[=quad_vertex]{quad_vertex()}}).
 Ignored for the other models.}
+
+\item{background}{Roles of the wells subtracted as background (see
+\code{\link[=background_roles]{background_roles()}}); \code{NULL} for the default role of the plate (see
+\code{\link[=default_background]{default_background()}}); \code{character(0)} subtracts nothing.}
 }
 \value{
 A list with components:
@@ -61,7 +66,9 @@ A list with components:
 \item \code{monotonic}: \code{FALSE} if a quadratic curve turns inside its working
 interval (the concentrations are then not calculated);
 \item \code{nc_value}: background value subtracted from all ODs;
-\item \code{standard_data}: standards used in the fit (with \code{.key});
+\item \code{background}: the background correction (see \code{\link[=background_summary]{background_summary()}});
+\item \code{standard_data}: standards used in the fit (with \code{.key}; \code{OD} corrected,
+\code{OD.raw} as measured);
 \item \code{calibration_pool}: common set of calibration wells (with \code{.key}):
 background-subtracted standards with an OD, without those excluded by
 the user, before the restrictions of the model (see \code{\link[=compare_models]{compare_models()}});
@@ -79,14 +86,15 @@ calibration (see \code{\link[=exclusion_effect]{exclusion_effect()}}; \code{NULL
 \item \code{lack_of_fit}: lack-of-fit test (see \code{\link[=lack_of_fit]{lack_of_fit()}});
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
 \item \code{result}: sample results with \code{OD} as measured (before the blank is
-subtracted), \code{conc} (dilution-corrected), its confidence interval
+subtracted), \code{OD.corrected} (after it), \code{conc} (dilution-corrected), its confidence interval
 \code{conc.lower}, \code{conc.upper} and \code{flag};
 \item \code{qc}: quality controls with nominal and measured concentration, OD as measured,
 recovery (\%) and flag (\code{NULL} if there are no QC wells).
 }
 
-The background is the geometric mean of the blank wells (type \code{blank} or
-\code{NC}, which are equivalent). Columns \code{well} and \code{id} are kept in the results
+The background is the arithmetic mean of the wells of the chosen roles
+(argument \code{background}): reagent blank, zero calibrator and negative
+control are kept apart. Columns \code{well} and \code{id} are kept in the results
 when they contain values.
 }
 \description{

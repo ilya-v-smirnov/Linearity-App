@@ -84,6 +84,8 @@ tab:
   about: "About"
 
 data:
+  type_zero: "Zero calibrator"
+  type_nc: "Negative control"
   imported: "Imported data"
   no_file: "No file loaded yet. Upload a file on the left; a template to fill in can be made in the Template step."
   plate_map: "Plate map (code and OD)"
@@ -93,9 +95,9 @@ data:
   n_standards: "standard levels × series"
   n_samples: "samples"
   n_qc: "QC levels"
-  n_blanks: "blank wells"
+  n_blanks: "background wells"
   type_standard: "Standard"
-  type_blank: "Blank"
+  type_blank: "Reagent blank"
   type_qc: "QC"
   type_sample: "Sample"
   type_empty: "Empty"
@@ -207,6 +209,8 @@ compare:
   note: "All models are fitted to the same calibration wells, whichever model is chosen; the log–log models leave out wells with OD <= blank. AIC and BIC are on the OD scale and comparable between models that use the same wells; errors are those of back-calculated standards; lack of fit compares the residuals with the scatter of replicates."
 
 col:
+  od_raw: "OD as measured"
+  od_corrected: "Corrected OD"
   n_backcalc: "Back-calculated wells"
   backcalc_reason: "Not back-calculated"
   conc: "Concentration"
@@ -332,6 +336,7 @@ summary:
   download: "Download summary (xlsx)"
 
 report:
+  background: "Background:"
   group_title: "Experiment"
   date: "Date"
   title: "Experiment title"
@@ -382,9 +387,11 @@ flag:
   nonlinear: "Dilution non-linear"
 
 note:
+  no_background: "No background is subtracted: no background wells are chosen."
+  background_nc_legacy: "The plate has no reagent blank or zero calibrator: its {n} negative control well(s) (NC) are subtracted as background, as in earlier versions of the app. Choose the background wells in Standard curve → Background."
+  background_changed: "The background subtracted now ({value}) differs from that of earlier versions of the app ({legacy}, the geometric mean of the blank and NC wells): the results of this plate may differ from an earlier analysis."
   interval: "Concentrations are calculated within the monotonic interval {lo}–{hi} set by the user."
   incomplete_backcalc: "Incomplete back-calculation of standard {level} ({conc}): {n} of {total} wells in the fit back-calculated; {wells}. The level is not accepted."
-  nc_arithmetic: "Some blank values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
   not_monotonic: "Non-monotonic within calibration range: the quadratic curve turns at {vertex}, inside {lo}–{hi}, so an OD can match two concentrations. Concentrations are not calculated; choose another model or set a monotonic interval on one side of the turning point."
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
@@ -474,6 +481,7 @@ warning:
   no_samples_sheet: "There is no Samples sheet: sample codes are used as names, dilution 1 is assumed"
 
 error:
+  background_role: "Unknown background roles: {roles} (allowed: {choices})"
   interval: "Invalid monotonic interval: enter two positive bounds, the lower one first, that overlap the standards ({lo}–{hi})."
   maps_size_mismatch: "The grid ({size}) differs in size from the grid of the type sheet ({type})"
   mandatory_column: "Mandatory {column} column is missing"
@@ -485,7 +493,7 @@ error:
   std_conc_missing: "Not all standard wells have concentrations specified"
   std_conc_positive: "All standard concentrations must be positive"
   few_standard_wells: "Insufficient number of standard wells: {n}"
-  no_background: "There are no blank wells: the background cannot be estimated"
+  no_background: "There are no background wells (reagent blank, zero calibrator or negative control): the background cannot be estimated"
   qc_conc_missing: "Not all QC wells have nominal concentrations specified"
   qc_conc_positive: "All QC nominal concentrations must be positive"
   duplicate_well: "The well occurs more than once"
@@ -505,7 +513,7 @@ error:
   template_levels: "At least 3 standard levels are required"
   template_levels_max: "No more than {max} standard levels are supported"
   template_counts: "The numbers of levels, series, samples and replicates must be non-negative numbers"
-  no_nc: "No valid OD values in the blank wells"
+  no_nc: "No valid OD values in the chosen background wells"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
   fit_failed: "The {model} model could not be fitted to the standards"
   weights_unknown: "Unknown weighting: {weights}"
@@ -574,3 +582,24 @@ backcalc:
   beyond_vertex: "OD beyond the vertex of the parabola"
   outside_asymptotes: "OD outside fitted asymptotes"
   no_solution: "no solution"
+
+bg:
+  group: "Background"
+  help: "The arithmetic mean OD of the ticked wells is subtracted from all wells. Reagent blank, zero calibrator and negative control are separate roles: combine them only if the method says so. By default the reagent blank is used; without it the zero calibrator; negative controls only when the plate has neither."
+  roles: "Wells subtracted as background"
+  section: "Background correction"
+  source: "Background wells"
+  wells: "Wells"
+  mean: "Mean OD"
+  sd: "SD"
+  subtracted: "Subtracted"
+  none: "None"
+  none_subtracted: "none subtracted"
+  n_wells: "{n} well(s)"
+  unused: "Not used: {roles}."
+  legacy_value: "Earlier versions of the app subtracted {legacy} (the geometric mean of the blank and NC wells)."
+  report: "{roles}, {n} well(s), mean OD {mean}, SD {sd}; subtracted {value}"
+  import_used: "Background by default: {roles}."
+  import_legacy: "The plate has no reagent blank: the negative controls are used, as in earlier versions."
+  import_none: "The plate has no background wells: nothing is subtracted."
+  import_hint: "The background wells can be changed in Standard curve → Background."

@@ -20,7 +20,8 @@ rows_location <- function(data, i) {
 #' Find All Problems in Input Data
 #'
 #' Checks mandatory and numeric columns, values of `type`, presence of
-#' standards, samples and background wells (NC or blank), dilution factors,
+#' standards, samples and background wells (reagent blank, zero calibrator or
+#' negative control), dilution factors,
 #' concentrations of standards and QC, the number of standard wells and
 #' duplicated wells. Unlike [check_assay()], it does not stop at the first
 #' problem.
@@ -47,7 +48,7 @@ validate_assay <- function(data) {
     if (length(acc$problems) > 0) return(acc$problems)
 
     type <- data$type
-    allowed <- c('standard', 'sample', 'NC', 'blank', 'QC')
+    allowed <- c('standard', 'sample', 'QC', background_roles())
     bad <- which(!type %in% allowed)
     if (length(bad) > 0) {
         err(rows_location(data, bad), 'error.type_not_allowed', values = unique(type[bad]))

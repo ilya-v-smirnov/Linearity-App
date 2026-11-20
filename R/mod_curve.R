@@ -17,7 +17,7 @@
 #' @return `mod_curve_server()` returns a list of reactives: `result`
 #'   (output of [calculate()]), `coef_table`, `notes` (translated warnings
 #'   without those of the samples, see [sample_warning_keys()]),
-#'   `plot_args` (axis titles), `model`, `weights` (settings),
+#'   `plot_args` (axis titles), `model`, `weights`, `background` (settings),
 #'   `exclusions` (user exclusions: `key`, `reason`) and `comparison`
 #'   (see [compare_models()]) and `effect_tables` (original and refitted
 #'   calibration after exclusions, see [exclusion_effect_tables()]; `NULL`
@@ -292,6 +292,10 @@ mod_curve_ui <- function(id, lang) {
             shiny::uiOutput(ns('save_plot_ui'))
         ),
         sidebar_group(
+            with_tooltip(t('bg.group'), t('bg.help')), 'fill-drip',
+            shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0), width = '100%')
+        ),
+        sidebar_group(
             t('curve.group_model'), 'chart-line',
             shiny::radioButtons(ns('model'), t('curve.model'),
                                 choices = stats::setNames(models, vapply(paste0('model.', models), t, '')),
@@ -349,6 +353,9 @@ mod_curve_ui <- function(id, lang) {
             shiny::div(class = 'step-view',
                        shiny::uiOutput(ns('verdict')),
                        shiny::uiOutput(ns('refit_note')),
+                       shiny::h5(t('bg.section')),
+                       shiny::tableOutput(ns('background_table')),
+                       shiny::uiOutput(ns('background_notes')),
                        shiny::h5(t('curve.section_equation')),
                        shiny::uiOutput(ns('equation')),
                        shiny::h5(t('curve.section_coefs')),
@@ -375,12 +382,18 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         ns <- session$ns
         t <- function(key, ...) tr(key, lang, ...)
         no_exclusions <- data.frame(key = character(0), reason = character(0))
+        # Roles of the background wells: the default of the plate until the user changes them
+        bg_roles <- shiny::reactiveVal(NULL)
         exclusions <- shiny::reactiveVal(no_exclusions)
         clicked <- shiny::reactiveVal(NULL)
 
         # New data: forget the exclusions; the units must be chosen again
         shiny::observeEvent(data(), {
             exclusions(no_exclusions)
+            roles <- default_background(data()$type)
+            bg_roles(roles)
+            shiny::updateCheckboxGroupInput(session, 'background', choices = background_choices(data()$type, lang),
+                                            selected = roles)
             shiny::updateSelectInput(session, 'xunits', selected = '')
             # The monotonic interval starts from the range of the standards of the new data
             conc <- data()$conc[data()$type == 'standard']
@@ -391,6 +404,10 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                 shiny::updateNumericInput(session, 'interval_to', value = max(conc))
             }
         })
+        # Unticking all roles subtracts nothing
+        shiny::observeEvent(input$background, {
+            bg_roles(if (is.null(input$background)) character(0) else input$background)
+        }, ignoreNULL = FALSE, ignoreInit = TRUE)
         units_ok <- shiny::reactive(units_chosen(input$xunits))
         output$save_plot_ui <- shiny::renderUI(export_button_ui(ns('save_plot'), t('curve.save_plot'), 'image',
                                                                 units_ok()))
@@ -400,6 +417,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shiny::req(input$model)
             quadratic <- poly_degree(input$model) == 2
             list(model = input$model,
+                 background = bg_roles(),
                  weights = if (is.null(input$weights)) 'none' else input$weights,
                  interval = if (quadratic && isTRUE(input$use_interval)) {
                      as.numeric(c(input$interval_from, input$interval_to))
@@ -412,7 +430,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             s <- settings()
             o <- options()
             with_validation(
-                calculate(d, model = s$model, weights = s$weights, interval = s$interval,
+                calculate(d, model = s$model, weights = s$weights, interval = s$interval, background = s$background,
                           exclude = exclusions(), round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,
@@ -486,6 +504,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             tab <- coef_table()
             tab[-1] <- lapply(tab[-1], as.character)
             tab
+        })
+        output$background_table <- shiny::renderTable(background_table(result()$background, lang))
+        output$background_notes <- shiny::renderUI({
+            lines <- background_notes(result()$background, lang)
+            if (length(lines) == 0) return(NULL)
+            shiny::tagList(lapply(lines, function(x) shiny::p(class = 'text-muted small', x)))
         })
         output$verdict <- shiny::renderUI(verdict_ui(result(), lang, unit = sub('^, ', '', input$xunits)))
         output$equation <- shiny::renderUI(model_equation_ui(result()$fit))
@@ -631,6 +655,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
              units_ok = units_ok,
              model = shiny::reactive(settings()$model),
              weights = shiny::reactive(settings()$weights),
+             background = shiny::reactive(settings()$background),
              exclusions = exclusions,
              comparison = comparison,
              effect_tables = effect_tables)

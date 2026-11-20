@@ -35,7 +35,7 @@ samples outside the quantification range.}
 \code{mod_curve_server()} returns a list of reactives: \code{result}
 (output of \code{\link[=calculate]{calculate()}}), \code{coef_table}, \code{notes} (translated warnings
 without those of the samples, see \code{\link[=sample_warning_keys]{sample_warning_keys()}}),
-\code{plot_args} (axis titles), \code{model}, \code{weights} (settings),
+\code{plot_args} (axis titles), \code{model}, \code{weights}, \code{background} (settings),
 \code{exclusions} (user exclusions: \code{key}, \code{reason}) and \code{comparison}
 (see \code{\link[=compare_models]{compare_models()}}) and \code{effect_tables} (original and refitted
 calibration after exclusions, see \code{\link[=exclusion_effect_tables]{exclusion_effect_tables()}}; \code{NULL}

@@ -9,7 +9,7 @@ run_data <- function(bias = c(), samples = data.frame(name = 'A', dilution = 1, 
     rows <- rbind(
         data.frame(type = 'standard', sample.name = NA, dilution = NA, conc = rep(linear_7, 2),
                    OD = rep(od_std, 2) + nc),
-        data.frame(type = 'NC', sample.name = NA, dilution = NA, conc = NA, OD = c(nc, nc)),
+        data.frame(type = 'blank', sample.name = NA, dilution = NA, conc = NA, OD = c(nc, nc)),
         data.frame(type = 'sample', sample.name = samples$name, dilution = samples$dilution, conc = NA,
                    OD = samples$od + nc)
     )
@@ -413,7 +413,8 @@ test_that('individual standard points are listed from the highest concentration'
     for (lang in supported_languages()) {
         tab <- LinearityApp:::standard_points_table(r, lang)
         expect_equal(nrow(tab), 14)
-        expect_equal(names(tab)[c(3, 7)], c(tr('col.nominal', lang), tr('col.error', lang)))
+        expect_equal(names(tab)[c(3, 4, 5, 8)], c(tr('col.nominal', lang), tr('col.od_raw', lang),
+                                                  tr('col.od_corrected', lang), tr('col.error', lang)))
     }
     tab <- LinearityApp:::standard_points_table(r, 'en')
     expect_equal(tab$Standard[1:2], c('S1', 'S1'))

@@ -153,15 +153,13 @@ test_that('dilution is applied after inverse prediction', {
     expect_equal(r$result$conc, c(10, 70))
 })
 
-test_that('background is the unrounded geometric mean of NC wells', {
+test_that('background is the unrounded arithmetic mean of the background wells', {
     bg <- background_value(c(0.0784, 0.0753))
-    expect_equal(bg$value, sqrt(0.0784 * 0.0753))
+    expect_equal(bg$value, (0.0784 + 0.0753) / 2)
     expect_length(bg$notes, 0)
-
-    bg <- background_value(c(0.01, -0.01, 0.03))
-    expect_equal(bg$value, mean(c(0.01, -0.01, 0.03)))
-    expect_match(message_text(bg$notes), 'arithmetic mean')
-
+    # the same rule with a zero or negative value
+    expect_equal(background_value(c(0.01, -0.01, 0.03))$value, mean(c(0.01, -0.01, 0.03)))
+    expect_equal(background_value(c(0, 0.02))$value, 0.01)
     expect_error(background_value(c(NA, NA)), 'No valid OD')
 })
 
@@ -204,23 +202,103 @@ test_that('plots are built for all scenarios', {
     }
 })
 
-test_that('blank and NC wells are equivalent background wells', {
+test_that('the background is the mean of the chosen background wells', {
+    # standards OD = 0.02 * conc + 0.10 as measured; reagent blanks 0.04 and 0.16
     conc <- c(1, 2, 4, 8, 16)
-    make <- function(bg_types) {
+    make <- function(bg_types, bg_od) {
         data.frame(type = c(rep('standard', 10), bg_types, 'sample'),
-                   conc = c(conc, conc, NA, NA, NA),
-                   dilution = c(rep(NA, 12), 1),
-                   OD = c(0.1 * conc + 0.04, 0.1 * conc + 0.04, 0.02, 0.08, 0.84))
+                   conc = c(conc, conc, rep(NA, length(bg_types)), NA),
+                   dilution = c(rep(NA, 10 + length(bg_types)), 1),
+                   OD = c(0.02 * conc + 0.10, 0.02 * conc + 0.10, bg_od, 0.30))
     }
-    mixed <- calculate(make(c('NC', 'blank')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
-    blank <- calculate(make(c('blank', 'blank')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
-    nc <- calculate(make(c('NC', 'NC')), 'LRM', linear = TRUE, round_fun = function(x, ...) x)
-    expect_equal(mixed$result$conc, blank$result$conc)
-    expect_equal(nc$result$conc, blank$result$conc)
-    # the background is the geometric mean of both kinds of wells
-    expect_equal(mixed$result$conc, (0.84 - 0.04) / 0.1, tolerance = 1e-8)
-    expect_equal(normalize_table(data.frame(type = c('NC', 'nc', 'Blank'), OD = 1))$type, rep('blank', 3))
-    expect_equal(LinearityApp:::classify_codes(c('NC', 'B')), c('blank', 'blank'))
+    no_round <- function(x, ...) x
+    blank <- calculate(make(c('blank', 'blank'), c(0.04, 0.16)), 'LIN', round_fun = no_round)
+    expect_equal(blank$nc_value, 0.10)
+    expect_equal(blank$background$roles, 'blank')
+    expect_equal(blank$background$n, 2)
+    expect_equal(blank$background$sd, stats::sd(c(0.04, 0.16)))
+    # the standard of 1 measured at 0.12 is corrected to 0.02; both values are kept
+    s1 <- blank$standard_data[blank$standard_data$conc == 1, ]
+    expect_equal(s1$OD.raw, c(0.12, 0.12))
+    expect_equal(s1$OD, c(0.02, 0.02))
+    expect_equal(blank$result$OD, 0.30)
+    expect_equal(blank$result$OD.corrected, 0.20)
+    expect_equal(blank$result$conc, 10, tolerance = 1e-8)
+
+    # a negative control does not change the result until it is chosen
+    with_nc <- make(c('blank', 'blank', 'NC'), c(0.04, 0.16, 0.40))
+    plain <- calculate(with_nc, 'LIN', round_fun = no_round)
+    expect_equal(plain$nc_value, 0.10)
+    expect_equal(plain$result$conc, blank$result$conc)
+    expect_equal(plain$background$unused, c(NC = 1))
+    both <- calculate(with_nc, 'LIN', round_fun = no_round, background = c('blank', 'NC'))
+    expect_equal(both$nc_value, 0.20)
+    expect_equal(both$background$n, 3)
+    nothing <- calculate(with_nc, 'LIN', round_fun = no_round, background = character(0))
+    expect_equal(nothing$nc_value, 0)
+    expect_match(message_text(nothing$notes), 'No background is subtracted', all = FALSE)
+    expect_error(calculate(with_nc, 'LIN', background = 'buffer'), 'Unknown background roles')
+
+    # without a reagent blank the zero calibrator is the default; negative controls only alone
+    expect_equal(default_background(c('standard', 'zero', 'NC')), 'zero')
+    expect_equal(default_background(c('standard', 'NC')), 'NC')
+    expect_equal(default_background('standard'), character(0))
+})
+
+test_that('files of earlier versions with NC wells are analysed visibly', {
+    expect_equal(normalize_table(data.frame(type = c('NC', 'nc', 'Blank', 'Negative control', 'zero'), OD = 1))$type,
+                 c('NC', 'NC', 'blank', 'NC', 'zero'))
+    expect_equal(LinearityApp:::classify_codes(c('NC', 'B', 'S0', 'Z', 'S1')), c('NC', 'blank', 'zero', 'zero', 'standard'))
+
+    # only NC wells: they are the background, as before, with a note
+    data <- load_sample('bca')
+    r <- calculate(data, 'LRM')
+    expect_equal(r$background$roles, 'NC')
+    expect_match(message_text(r$notes), 'its 2 negative control well(s) (NC) are subtracted as background', fixed = TRUE,
+                 all = FALSE)
+    html <- as.character(LinearityApp:::background_import_ui(data, 'en'))
+    expect_match(html, 'Background by default: Negative control (2 well(s)).', fixed = TRUE)
+    expect_match(html, 'as in earlier versions', fixed = TRUE)
+
+    # the mean differs from the geometric mean of earlier versions by more than 1 %: noticed
+    odd <- data
+    odd$OD[odd$type == 'NC'] <- c(0.02, 0.10)
+    changed <- calculate(odd, 'LRM')
+    expect_equal(changed$background$legacy, sqrt(0.02 * 0.10))
+    expect_match(message_text(changed$notes), 'differs from that of earlier versions of the app (0.04472',
+                 fixed = TRUE, all = FALSE)
+    expect_match(LinearityApp:::background_notes(changed$background, 'en'), 'Earlier versions of the app subtracted 0.04472',
+                 fixed = TRUE)
+    # a difference below 1 % is shown with the background only
+    expect_false(any(grepl('earlier versions', message_text(r$notes), fixed = TRUE) &
+                     grepl('differs', message_text(r$notes), fixed = TRUE)))
+})
+
+test_that('the background correction is shown and reported', {
+    data <- synthetic_data(function(x) 0.1 * x)
+    data <- rbind(data, data.frame(sample.name = NA, sample.date = NA, type = 'NC', dilution = NA, conc = NA,
+                                   OD = 0.3))
+    r <- calculate(data, 'LIN')
+    tab <- LinearityApp:::background_table(r$background, 'en')
+    expect_equal(names(tab), c('Background wells', 'Wells', 'Mean OD', 'SD', 'Subtracted'))
+    expect_equal(unlist(tab[1, ], use.names = FALSE),
+                 c('Reagent blank', paste0('2 (', paste(r$background$keys, collapse = ', '), ')'),
+                   '0.0500', '0.0000', '0.0500'))
+    # earlier versions mixed the NC well into the background
+    expect_equal(LinearityApp:::background_notes(r$background, 'en'),
+                 c('Not used: Negative control (1 well(s)).',
+                   sprintf('Earlier versions of the app subtracted %s (the geometric mean of the blank and NC wells).',
+                           signif(LinearityApp:::geom_mean(c(0.05, 0.05, 0.3)), 4))))
+    expect_equal(LinearityApp:::background_text(r$background, 'en'),
+                 'Reagent blank, 2 well(s), mean OD 0.0500, SD 0.0000; subtracted 0.0500')
+    pts <- LinearityApp:::standard_points_table(r, 'en')
+    expect_equal(pts[['OD as measured']][1], sprintf('%.4f', 0.1 * 32 + 0.05))
+    expect_equal(pts[['Corrected OD']][1], sprintf('%.4f', 0.1 * 32))
+    blocks <- LinearityApp:::report_blocks('short', date = '2026-11-20', title = 't', method = 'm',
+                                           background = LinearityApp:::background_text(r$background, 'en'),
+                                           model_table = get_coef_ci(r$fit), result_table = r$result)
+    lines <- Filter(function(b) b$type == 'line', blocks)
+    expect_true(any(vapply(lines, function(b) identical(b$label, 'Background:'), logical(1))))
 })
 
 test_that('residuals are plotted against the concentrations of the standard curve', {

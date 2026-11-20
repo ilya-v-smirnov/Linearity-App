@@ -13,7 +13,7 @@ background_value(od)
 A list with \code{value} and \code{notes} (list of \code{lin_message}).
 }
 \description{
-The background is the geometric mean of the background ODs. If some values
-are zero or negative, the arithmetic mean is used instead.
+The background is the arithmetic mean of the background ODs, whatever
+their sign (the same rule for every plate).
 }
 \keyword{internal}
