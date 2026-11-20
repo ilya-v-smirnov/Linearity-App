@@ -15,7 +15,8 @@ calculate(
   level = 0.95,
   criteria = qc_criteria(),
   extrapolate = character(0),
-  blank_zero = FALSE
+  blank_zero = FALSE,
+  interval = NULL
 )
 }
 \arguments{
@@ -43,12 +44,22 @@ the ULOQ). Their flags are kept.}
 
 \item{blank_zero}{If \code{TRUE}, samples with OD at or below the blank get
 concentration 0 (flag kept).}
+
+\item{interval}{For the quadratic models: the monotonic interval of
+concentrations (lower and upper bound) set by the user, or \code{NULL} for the
+range of the standards. The curve is inverted on the branch of the
+parabola that holds the interval, and the quantification range is limited
+to it. If the vertex of the parabola lies inside the interval, the
+concentrations are ambiguous and are not calculated (see \code{\link[=quad_vertex]{quad_vertex()}}).
+Ignored for the other models.}
 }
 \value{
 A list with components:
 \itemize{
 \item \code{model_direct}, \code{fit}: the fitted calibration (\code{lin_fit}, see \code{\link[=fit_curve]{fit_curve()}});
-\item \code{model}, \code{linear_scale}, \code{weights}: settings;
+\item \code{model}, \code{linear_scale}, \code{weights}, \code{interval}: settings;
+\item \code{monotonic}: \code{FALSE} if a quadratic curve turns inside its working
+interval (the concentrations are then not calculated);
 \item \code{nc_value}: background value subtracted from all ODs;
 \item \code{standard_data}: standards used in the fit (with \code{.key});
 \item \code{calibration_pool}: common set of calibration wells (with \code{.key}):

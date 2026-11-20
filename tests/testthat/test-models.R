@@ -440,7 +440,8 @@ test_that('incomplete back-calculation is reported in the notes, the points and 
     expect_equal(tab[['Not back-calculated']][tab$Model == '4PL'], '1')
     expect_equal(tab[['Not back-calculated']][tab$Model == tr('model_short.LIN', 'en')], '')
 
-    clean <- calculate(synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4), sample_od = 0.5), '4PL')
+    # every model inverts all standards of a straight line (4PL may not fit it at all)
+    clean <- calculate(synthetic_data(function(x) 0.1 * x, sample_od = 0.5), 'LIN')
     expect_false('Not back-calculated' %in% names(LinearityApp:::comparison_table(
         compare_models(clean$calibration_pool), 'en')))
     expect_false('Not back-calculated' %in% names(LinearityApp:::standard_points_table(clean, 'en')))

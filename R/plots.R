@@ -66,7 +66,8 @@ conc_axis <- function(result) {
 #' Plot Standard Curve with Fitted Model
 #'
 #' Standards used in the fit are shown as points, standards excluded by the
-#' user as red crosses. The concentration axis is logarithmic except for the
+#' user as red crosses; the bounds of a monotonic interval set for a quadratic
+#' curve as dotted lines. The concentration axis is logarithmic except for the
 #' polynomial models on the original scale; the OD axis is logarithmic for models
 #' fitted on log10 scales. With excluded points, the curve fitted on all
 #' standards can be shown as a dashed line next to the refitted curve.
@@ -129,6 +130,10 @@ plot_standard_curve <- function(result, xtitle = '', ytitle = '', show_original 
     if (nrow(excl) > 0) {
         plot <- plot + ggplot2::geom_point(data = excl, shape = 4, size = 3, stroke = 1.2,
                                            color = 'red')
+    }
+    # Bounds of the monotonic interval set for a quadratic curve
+    if (!is.null(fit$interval)) {
+        plot <- plot + ggplot2::geom_vline(xintercept = fit$interval, linetype = 'dotted', colour = 'grey35')
     }
     if (log_x) {
         plot <- plot + ggplot2::scale_x_log10(breaks = axis$breaks, labels = as.character(axis$breaks))

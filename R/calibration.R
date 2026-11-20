@@ -190,17 +190,18 @@ assign_flags <- function(od, conc, conc_range) {
 
 #' Check Monotonicity of the Calibration Curve
 #'
-#' Only the quadratic models can turn within the standard range.
+#' Only the quadratic models can turn within the working interval (the
+#' monotonic interval set by the user or the standard range, see
+#' [working_interval()]); for the log-log quadratic the vertex is found on
+#' the log10 scale of the concentration.
 #'
 #' @param fit A `lin_fit` object.
 #'
-#' @return `TRUE` if the curve is monotonic within the standard range.
+#' @return `TRUE` unless the vertex lies strictly inside the working interval.
 #' @keywords internal
 is_monotonic <- function(fit) {
-    if (poly_degree(fit$model) != 2 || fit$par[['c']] == 0) return(TRUE)
-    x_lim <- if (fit$log_scale) log10(fit$conc_range) else fit$conc_range
-    vertex <- -fit$par[['b']] / (2 * fit$par[['c']])
-    !(vertex > x_lim[1] && vertex < x_lim[2])
+    vertex <- quad_vertex(fit)
+    is.null(vertex) || vertex$side != 'inside'
 }
 
 
@@ -250,10 +251,19 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   the ULOQ). Their flags are kept.
 #' @param blank_zero If `TRUE`, samples with OD at or below the blank get
 #'   concentration 0 (flag kept).
+#' @param interval For the quadratic models: the monotonic interval of
+#'   concentrations (lower and upper bound) set by the user, or `NULL` for the
+#'   range of the standards. The curve is inverted on the branch of the
+#'   parabola that holds the interval, and the quantification range is limited
+#'   to it. If the vertex of the parabola lies inside the interval, the
+#'   concentrations are ambiguous and are not calculated (see [quad_vertex()]).
+#'   Ignored for the other models.
 #'
 #' @return A list with components:
 #'   * `model_direct`, `fit`: the fitted calibration (`lin_fit`, see [fit_curve()]);
-#'   * `model`, `linear_scale`, `weights`: settings;
+#'   * `model`, `linear_scale`, `weights`, `interval`: settings;
+#'   * `monotonic`: `FALSE` if a quadratic curve turns inside its working
+#'     interval (the concentrations are then not calculated);
 #'   * `nc_value`: background value subtracted from all ODs;
 #'   * `standard_data`: standards used in the fit (with `.key`);
 #'   * `calibration_pool`: common set of calibration wells (with `.key`):
@@ -290,7 +300,7 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
                       round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
-                      extrapolate = character(0), blank_zero = FALSE) {
+                      extrapolate = character(0), blank_zero = FALSE, interval = NULL) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
@@ -327,6 +337,14 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     # Fit OD = f(conc)
     fit <- fit_curve(standard_data, model, linear, weights)
     notes <- c(notes, fit$notes)
+    if (poly_degree(model) == 2 && !is.null(interval)) {
+        ok <- is.numeric(interval) && length(interval) == 2 && all(is.finite(interval)) && all(interval > 0) &&
+            interval[1] < interval[2] && interval[1] < fit$conc_range[2] && interval[2] > fit$conc_range[1]
+        if (!ok) lin_abort('error.interval', lo = signif(fit$conc_range[1], 3), hi = signif(fit$conc_range[2], 3))
+        fit$interval <- as.numeric(interval)
+        notes <- c(notes, list(lin_message('note.interval', lo = signif(interval[1], 3), hi = signif(interval[2], 3))))
+    }
+    monotonic <- is_monotonic(fit)
 
     # Quantification range: accepted standard levels
     # All levels of the run count, also those without points in the fit
@@ -334,7 +352,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     calibration <- calibration_acceptance(standards, criteria)
     # Levels whose fitted wells are not all back-calculated
     all_levels <- data$conc[data$type == 'standard']
-    for (i in which(standards$status == 'incomplete')) {
+    # A curve that turns inside the interval has one warning of its own (below)
+    for (i in which(standards$status == 'incomplete' & monotonic)) {
         lost <- standards$failed[[i]]
         wells <- lapply(seq_len(nrow(lost)), function(k) {
             lin_message('backcalc.well', well = lost$key[k], reason = lin_message(paste0('backcalc.', lost$reason[k])))
@@ -354,8 +373,13 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
                                                uloq = signif(conc_range[2], 3))))
         }
     }
-    if (!is_monotonic(fit)) {
-        notes <- c(notes, list(lin_message('note.not_monotonic')))
+    if (!is.null(fit$interval)) {
+        conc_range <- c(max(conc_range[1], fit$interval[1]), min(conc_range[2], fit$interval[2]))
+    }
+    if (!monotonic) {
+        x_lim <- working_interval(fit)
+        notes <- c(notes, list(lin_message('note.not_monotonic', vertex = signif(quad_vertex(fit)$conc, 3),
+                                           lo = signif(x_lim[1], 3), hi = signif(x_lim[2], 3))))
     }
     lof <- lack_of_fit(fit)
     if (!is.na(lof$p) && lof$p < 0.05) {
@@ -414,6 +438,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     if (nrow(manual) > 0) {
         all_std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale)$used
         original_fit <- tryCatch(fit_curve(all_std, model, linear, weights), error = function(e) NULL)
+        if (!is.null(original_fit)) original_fit$interval <- fit$interval
         if (!is.null(original_fit)) {
             effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels)
         }
@@ -432,6 +457,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          fit = fit,
          model = model,
          linear_scale = poly_degree(model) > 0 && !log_scale,
+         interval = fit$interval,
+         monotonic = monotonic,
          weights = weights,
          nc_value = bg$value,
          standard_data = standard_data,

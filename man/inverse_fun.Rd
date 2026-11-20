@@ -17,8 +17,10 @@ inverse_fun(fit, od, par = fit$par)
 Concentrations (\code{NA} where there is no solution or OD <= 0 on log scales).
 }
 \description{
-For the quadratic model the root on the branch of the parabola that
-contains the standards is returned. ODs outside the range of the logistic
-asymptotes have no solution.
+A quadratic curve is inverted on the branch of the parabola that holds the
+working interval (see \code{\link[=working_interval]{working_interval()}}). If the vertex lies strictly
+inside the interval, an OD can match two concentrations: there is no
+solution (no root is chosen). A zero quadratic coefficient gives a straight
+line. ODs outside the range of the logistic asymptotes have no solution.
 }
 \keyword{internal}

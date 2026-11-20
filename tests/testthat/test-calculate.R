@@ -75,6 +75,76 @@ test_that('quadratic model uses the branch that contains the standards', {
     expect_true(is_monotonic(r$fit))
 })
 
+test_that('a quadratic curve that turns within the range gives no concentration', {
+    # OD = 1 + (C - 3)^2: OD 2 matches C = 2 and C = 4
+    f <- function(x) 1 + (x - 3)^2
+    data <- synthetic_data(f, conc = c(1, 2, 3, 4, 5), sample_od = c(2, 10))
+    r <- calculate(data, 'QUAD', round_fun = no_rounding)
+    expect_equal(unname(r$fit$par), c(10, -6, 1), tolerance = 1e-8)
+    expect_false(r$monotonic)
+    expect_false(is_monotonic(r$fit))
+    expect_true(all(is.na(r$result$conc)))
+    expect_equal(r$result$flag, rep(FLAGS$no_solution, 2))
+    notes <- message_text(r$notes)
+    expect_match(notes, 'Non-monotonic within calibration range: the quadratic curve turns at 3, inside 1\u20135',
+                 fixed = TRUE, all = FALSE)
+    # one warning for the curve, not one per standard level
+    expect_false(any(grepl('Incomplete back-calculation', notes, fixed = TRUE)))
+    expect_equal(LinearityApp:::inverse_reason(r$fit, 2), 'non_monotonic')
+    expect_true(all(r$quality$standards$status == 'incomplete'))
+    expect_false(r$quality$calibration$accepted)
+    # the curve and the residuals can still be viewed
+    expect_s3_class(LinearityApp:::plot_standard_curve(r), 'ggplot')
+    expect_s3_class(LinearityApp:::plot_fitted_resid(r), 'ggplot')
+
+    # an explicit interval on one side of the vertex chooses the branch
+    left <- calculate(data, 'QUAD', round_fun = no_rounding, interval = c(1, 3))
+    expect_true(left$monotonic)
+    expect_equal(left$result$conc[1], 2, tolerance = 1e-8)
+    expect_equal(left$calibration_range, c(1, 3))
+    st <- left$quality$standards
+    expect_equal(st$status[st$conc > 3], rep('outside_interval', 2))
+    expect_match(message_text(left$notes), 'within the monotonic interval 1\u20133', fixed = TRUE, all = FALSE)
+
+    right <- calculate(data, 'QUAD', round_fun = no_rounding, interval = c(3, 5))
+    expect_equal(right$result$conc[1], 4, tolerance = 1e-8)
+    # the bounds also apply to the range check: OD 10 is C = 6 on this branch
+    expect_equal(right$result$flag, c(FLAGS$ok, FLAGS$above))
+    expect_equal(right$calibration_range, c(3, 5))
+
+    expect_error(calculate(data, 'QUAD', interval = c(3, 1)), 'monotonic interval')
+    expect_error(calculate(data, 'QUAD', interval = c(10, 20)), 'monotonic interval')
+    # the other models ignore the interval
+    expect_null(calculate(synthetic_data(function(x) 0.1 * x), 'LIN', interval = c(1, 3))$interval)
+})
+
+test_that('the log-log quadratic curve is checked on the log scale of the concentration', {
+    # log10(OD) = -0.5 + 1 * u - 1 * u^2 with u = log10(C): vertex at C = 10^0.5
+    f <- function(x) 10^(-0.5 + log10(x) - log10(x)^2)
+    data <- synthetic_data(f, conc = c(1, 2, 4, 8, 10), sample_od = f(1.5))
+    r <- calculate(data, 'QRM', round_fun = no_rounding)
+    expect_false(r$monotonic)
+    expect_equal(LinearityApp:::quad_vertex(r$fit)$conc, sqrt(10), tolerance = 1e-6)
+    expect_true(is.na(r$result$conc))
+    low <- calculate(data, 'QRM', round_fun = no_rounding, interval = c(1, sqrt(10)))
+    expect_equal(low$result$conc, 1.5, tolerance = 1e-6)
+})
+
+test_that('a quadratic coefficient of zero gives the linear inverse', {
+    std <- data.frame(conc = rep(c(1, 2, 4, 8, 16), 2), OD = rep(0.05 + 0.1 * c(1, 2, 4, 8, 16), 2))
+    fit <- fit_curve(std, 'QUAD')
+    # a tiny fitted c must not lose precision
+    expect_lt(abs(fit$par[['c']]), 1e-10)
+    expect_equal(inverse_fun(fit, 0.05 + 0.1 * c(3, 12)), c(3, 12), tolerance = 1e-8)
+    fit$par[['c']] <- 0
+    expect_true(is_monotonic(fit))
+    expect_equal(inverse_fun(fit, 0.05 + 0.1 * c(3, 12)), c(3, 12), tolerance = 1e-8)
+    # a horizontal line has no unique inverse
+    fit$par[['b']] <- 0
+    expect_true(all(is.na(inverse_fun(fit, c(0.2, 0.5)))))
+    expect_equal(LinearityApp:::inverse_reason(fit, 0.5), 'flat')
+})
+
 test_that('dilution is applied after inverse prediction', {
     f <- function(x) 0.1 * x
     data <- synthetic_data(f, sample_od = c(1, 1))

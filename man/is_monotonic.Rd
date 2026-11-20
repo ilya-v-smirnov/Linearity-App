@@ -10,9 +10,12 @@ is_monotonic(fit)
 \item{fit}{A \code{lin_fit} object.}
 }
 \value{
-\code{TRUE} if the curve is monotonic within the standard range.
+\code{TRUE} unless the vertex lies strictly inside the working interval.
 }
 \description{
-Only the quadratic models can turn within the standard range.
+Only the quadratic models can turn within the working interval (the
+monotonic interval set by the user or the standard range, see
+\code{\link[=working_interval]{working_interval()}}); for the log-log quadratic the vertex is found on
+the log10 scale of the concentration.
 }
 \keyword{internal}

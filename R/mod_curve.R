@@ -298,7 +298,22 @@ mod_curve_ui <- function(id, lang) {
                                 selected = 'LRM'),
             shiny::selectInput(ns('weights'), with_tooltip(t('curve.weights'), t('curve.weights_help')),
                                choices = stats::setNames(weights, weight_labels(weights, lang)),
-                               selected = 'none')
+                               selected = 'none'),
+            # Quadratic models only: the branch of the parabola used for quantification
+            shiny::conditionalPanel(
+                condition = "input.model == 'QUAD' || input.model == 'QRM'", ns = ns,
+                shiny::checkboxInput(ns('use_interval'), with_tooltip(t('curve.interval_use'), t('curve.interval_help')),
+                                     value = FALSE, width = '100%'),
+                shiny::conditionalPanel(
+                    condition = 'input.use_interval', ns = ns,
+                    shiny::div(class = 'crit-row',
+                               shiny::tags$label(`for` = ns('interval_from'), t('curve.interval_from')),
+                               shiny::numericInput(ns('interval_from'), NULL, value = NA, min = 0)),
+                    shiny::div(class = 'crit-row',
+                               shiny::tags$label(`for` = ns('interval_to'), t('curve.interval_to')),
+                               shiny::numericInput(ns('interval_to'), NULL, value = NA, min = 0))
+                )
+            )
         ),
         mod_criteria_ui('criteria', lang, 'standards')
     )
@@ -367,6 +382,14 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         shiny::observeEvent(data(), {
             exclusions(no_exclusions)
             shiny::updateSelectInput(session, 'xunits', selected = '')
+            # The monotonic interval starts from the range of the standards of the new data
+            conc <- data()$conc[data()$type == 'standard']
+            conc <- conc[!is.na(conc)]
+            if (length(conc) > 0) {
+                shiny::updateCheckboxInput(session, 'use_interval', value = FALSE)
+                shiny::updateNumericInput(session, 'interval_from', value = min(conc))
+                shiny::updateNumericInput(session, 'interval_to', value = max(conc))
+            }
         })
         units_ok <- shiny::reactive(units_chosen(input$xunits))
         output$save_plot_ui <- shiny::renderUI(export_button_ui(ns('save_plot'), t('curve.save_plot'), 'image',
@@ -375,8 +398,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
 
         settings <- shiny::reactive({
             shiny::req(input$model)
+            quadratic <- poly_degree(input$model) == 2
             list(model = input$model,
-                 weights = if (is.null(input$weights)) 'none' else input$weights)
+                 weights = if (is.null(input$weights)) 'none' else input$weights,
+                 interval = if (quadratic && isTRUE(input$use_interval)) {
+                     as.numeric(c(input$interval_from, input$interval_to))
+                 })
         })
 
         result <- shiny::reactive({
@@ -385,7 +412,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             s <- settings()
             o <- options()
             with_validation(
-                calculate(d, model = s$model, weights = s$weights,
+                calculate(d, model = s$model, weights = s$weights, interval = s$interval,
                           exclude = exclusions(), round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,

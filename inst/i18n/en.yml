@@ -130,6 +130,10 @@ scale:
   logistic: "OD linear, concentration log10"
 
 curve:
+  interval_use: "Set a monotonic interval"
+  interval_help: "A quadratic curve that turns within the standards gives two concentrations for one OD. Choose the side of the turning point: concentrations are calculated on the branch of this interval only, and the quantification range is limited to it."
+  interval_from: "From"
+  interval_to: "To"
   group_model: "Model"
   group_axes: "Axis titles"
   title: "Standard curve and residuals"
@@ -378,10 +382,11 @@ flag:
   nonlinear: "Dilution non-linear"
 
 note:
+  interval: "Concentrations are calculated within the monotonic interval {lo}–{hi} set by the user."
   incomplete_backcalc: "Incomplete back-calculation of standard {level} ({conc}): {n} of {total} wells in the fit back-calculated; {wells}. The level is not accepted."
   nc_arithmetic: "Some blank values are zero or negative: the arithmetic mean was used as background instead of the geometric mean."
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
-  not_monotonic: "The quadratic curve is not monotonic within the standard range: concentrations near the turning point are unreliable."
+  not_monotonic: "Non-monotonic within calibration range: the quadratic curve turns at {vertex}, inside {lo}–{hi}, so an OD can match two concentrations. Concentrations are not calculated; choose another model or set a monotonic interval on one side of the turning point."
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
   lack_of_fit: "The lack-of-fit test is significant (p = {p}): the model may not describe the standards well; see the comparison of models."
   power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
@@ -390,6 +395,7 @@ note:
   range_narrowed: "The quantification range is limited to the accepted standard levels: LLOQ = {lloq}, ULOQ = {uloq}."
 
 quality:
+  status_outside_interval: "✗ outside the interval"
   cv_unavailable: "CV unavailable"
   status_incomplete: "Incomplete back-calculation"
   status_pass_no_cv: "✓ single result"
@@ -468,6 +474,7 @@ warning:
   no_samples_sheet: "There is no Samples sheet: sample codes are used as names, dilution 1 is assumed"
 
 error:
+  interval: "Invalid monotonic interval: enter two positive bounds, the lower one first, that overlap the standards ({lo}–{hi})."
   maps_size_mismatch: "The grid ({size}) differs in size from the grid of the type sheet ({type})"
   mandatory_column: "Mandatory {column} column is missing"
   non_numeric: "Non-numeric values in {column} column"
@@ -559,6 +566,7 @@ effect:
   n_pass: "Number of standards meeting acceptance criteria"
 
 backcalc:
+  non_monotonic: "ambiguous, the curve is not monotonic"
   well: "{well}: {reason}"
   missing: "no OD"
   od_le_blank: "OD <= blank (no logarithm)"

@@ -127,7 +127,9 @@ near_edge <- function(conc, range, edge) {
 #'   excluded or without an OD); accepted by its bias, the CV is unavailable;
 #' * `pass_singlet`, `singlet`: planned as a single well; accepted by its bias
 #'   if the criteria allow singlets (`singlets`), otherwise not accepted;
-#' * `no_points`: no well of the level in the fit; not accepted.
+#' * `no_points`: no well of the level in the fit; not accepted;
+#' * `outside_interval`: the level lies outside the monotonic interval set
+#'   for a quadratic curve (`fit$interval`); not accepted.
 #'
 #' @param fit A `lin_fit` object.
 #' @param criteria See [qc_criteria()].
@@ -165,8 +167,12 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
         bias <- 100 * (calc_mean - lv) / lv
         calc_cv <- cv_percent(calc)
         within <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(calc_cv) || calc_cv <= cv_limit)
+        outside <- !is.null(fit$interval) &&
+            (lv < fit$interval[1] * (1 - 1e-9) || lv > fit$interval[2] * (1 + 1e-9))
         status <- if (n_fit == 0) {
             'no_points'
+        } else if (outside) {
+            'outside_interval'
         } else if (n_calc < n_fit) {
             'incomplete'
         } else if (!within) {

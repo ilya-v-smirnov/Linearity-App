@@ -27,7 +27,8 @@ A ggplot2 object.
 }
 \description{
 Standards used in the fit are shown as points, standards excluded by the
-user as red crosses. The concentration axis is logarithmic except for the
+user as red crosses; the bounds of a monotonic interval set for a quadratic
+curve as dotted lines. The concentration axis is logarithmic except for the
 polynomial models on the original scale; the OD axis is logarithmic for models
 fitted on log10 scales. With excluded points, the curve fitted on all
 standards can be shown as a dashed line next to the refitted curve.

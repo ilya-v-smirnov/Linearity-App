@@ -46,6 +46,8 @@ of a level (\code{status}):
 excluded or without an OD); accepted by its bias, the CV is unavailable;
 \item \code{pass_singlet}, \code{singlet}: planned as a single well; accepted by its bias
 if the criteria allow singlets (\code{singlets}), otherwise not accepted;
-\item \code{no_points}: no well of the level in the fit; not accepted.
+\item \code{no_points}: no well of the level in the fit; not accepted;
+\item \code{outside_interval}: the level lies outside the monotonic interval set
+for a quadratic curve (\code{fit$interval}); not accepted.
 }
 }

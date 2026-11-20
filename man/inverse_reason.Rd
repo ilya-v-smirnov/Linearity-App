@@ -24,6 +24,8 @@ Codes (translated with the prefix \code{backcalc.}):
 \item \code{od_le_blank}: OD <= 0 on log scales (no logarithm);
 \item \code{flat}: the line is horizontal;
 \item \code{beyond_vertex}: the OD lies beyond the vertex of the parabola;
+\item \code{non_monotonic}: the parabola turns inside the working interval, so the
+concentration is ambiguous (see \code{\link[=quad_vertex]{quad_vertex()}});
 \item \code{outside_asymptotes}: the OD lies outside the asymptotes of the logistic curve;
 \item \code{no_solution}: any other failure.
 }

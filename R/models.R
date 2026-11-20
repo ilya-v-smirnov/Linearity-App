@@ -149,11 +149,52 @@ curve_fun <- function(fit, x, par = fit$par) {
 }
 
 
+#' Working Interval of a Fit
+#'
+#' The interval of concentrations used for quantification: the monotonic
+#' interval set by the user (`fit$interval`), otherwise the range of the
+#' standards of the fit.
+#'
+#' @param fit A `lin_fit` object.
+#' @param scale If `TRUE`, on the scale of the fit (log10 for log-log models).
+#'
+#' @return Numeric vector of length 2.
+#' @keywords internal
+working_interval <- function(fit, scale = FALSE) {
+    x_lim <- if (is.null(fit$interval)) fit$conc_range else fit$interval
+    if (scale && fit$log_scale) log10(x_lim) else x_lim
+}
+
+
+#' Vertex of a Quadratic Fit
+#'
+#' @param fit A `lin_fit` object.
+#' @param par Internal parameter vector.
+#'
+#' @return A list with `u` (vertex on the scale of the fit), `conc` (its
+#'   concentration) and `side`: `"inside"` if it lies strictly inside the
+#'   working interval (see [working_interval()]), `"below"` or `"above"` the
+#'   interval; `NULL` for models other than the quadratic ones and for a zero
+#'   quadratic coefficient (a straight line).
+#' @keywords internal
+quad_vertex <- function(fit, par = fit$par) {
+    if (poly_degree(fit$model) != 2 || par[['c']] == 0) return(NULL)
+    x_lim <- working_interval(fit, scale = TRUE)
+    u <- -par[['b']] / (2 * par[['c']])
+    # The vertex on a bound (up to rounding) leaves the interval on one branch
+    tol <- 1e-6 * diff(x_lim)
+    side <- if (u <= x_lim[1] + tol) 'below' else if (u >= x_lim[2] - tol) 'above' else 'inside'
+    list(u = u, conc = if (fit$log_scale) 10^u else u, side = side)
+}
+
+
 #' Concentration for a Given OD (Inverse of the Curve)
 #'
-#' For the quadratic model the root on the branch of the parabola that
-#' contains the standards is returned. ODs outside the range of the logistic
-#' asymptotes have no solution.
+#' A quadratic curve is inverted on the branch of the parabola that holds the
+#' working interval (see [working_interval()]). If the vertex lies strictly
+#' inside the interval, an OD can match two concentrations: there is no
+#' solution (no root is chosen). A zero quadratic coefficient gives a straight
+#' line. ODs outside the range of the logistic asymptotes have no solution.
 #'
 #' @param fit A `lin_fit` object.
 #' @param od Background-subtracted OD.
@@ -168,14 +209,22 @@ inverse_fun <- function(fit, od, par = fit$par) {
         y <- if (fit$log_scale) log10(od[ok]) else od[ok]
         # q*u^2 + b*u + a = y with the quadratic coefficient q
         q <- if (poly_degree(fit$model) == 2) par[['c']] else 0
+        vertex <- quad_vertex(fit, par)
         if (q == 0) {
             u <- (y - par[['a']]) / par[['b']]
+        } else if (vertex$side == 'inside') {
+            u <- rep(NA_real_, length(y))
         } else {
-            x_lim <- if (fit$log_scale) log10(fit$conc_range) else fit$conc_range
-            disc <- par[['b']]^2 - 4 * q * (par[['a']] - y)
-            vertex <- -par[['b']] / (2 * q)
-            side <- if (mean(x_lim) >= vertex) 1 else -1
-            u <- ifelse(disc >= 0, vertex + side * sqrt(pmax(disc, 0)) / (2 * abs(q)), NA_real_)
+            # Both roots in the stable form (no cancellation when q is close to 0, where the
+            # root of the branch tends to the linear solution); the branch of the interval is
+            # the larger root when the interval lies above the vertex
+            b <- par[['b']]
+            disc <- b^2 - 4 * q * (par[['a']] - y)
+            half <- -(b + (if (b >= 0) 1 else -1) * sqrt(pmax(disc, 0))) / 2
+            r1 <- half / q
+            r2 <- ifelse(half == 0, vertex$u, (par[['a']] - y) / half)
+            u <- if (vertex$side == 'below') pmax(r1, r2) else pmin(r1, r2)
+            u[disc < 0] <- NA_real_
         }
         out[ok] <- if (fit$log_scale) 10^u else u
         # A flat line (zero slope) has no inverse
@@ -203,6 +252,8 @@ inverse_fun <- function(fit, od, par = fit$par) {
 #' * `od_le_blank`: OD <= 0 on log scales (no logarithm);
 #' * `flat`: the line is horizontal;
 #' * `beyond_vertex`: the OD lies beyond the vertex of the parabola;
+#' * `non_monotonic`: the parabola turns inside the working interval, so the
+#'   concentration is ambiguous (see [quad_vertex()]);
 #' * `outside_asymptotes`: the OD lies outside the asymptotes of the logistic curve;
 #' * `no_solution`: any other failure.
 #'
@@ -221,6 +272,8 @@ inverse_reason <- function(fit, od) {
         q <- if (degree == 2) par[['c']] else 0
         if (q == 0) {
             if (par[['b']] == 0) out[is.na(calc)] <- 'flat'
+        } else if (quad_vertex(fit)$side == 'inside') {
+            out[is.na(calc)] <- 'non_monotonic'
         } else {
             y <- suppressWarnings(fit_scale(fit, od))
             disc <- par[['b']]^2 - 4 * q * (par[['a']] - y)
@@ -371,7 +424,8 @@ logistic_vcov <- function(model, par, x, w, sigma) {
 #'   intercept, `b` the linear and `c` the quadratic coefficient), `vcov`,
 #'   `df`, `sigma`, `rss` (weighted residual sum of squares), `loglik`, `x`,
 #'   `y`, `w`, `keys` (well IDs from `.key`, `NULL` without them),
-#'   `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and, for the
+#'   `interval` (monotonic interval for the inverse of a quadratic curve,
+#'   `NULL` until [calculate()] sets it), `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and, for the
 #'   polynomial models, the underlying `lm` object in `object`.
 #' @export
 fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'none') {

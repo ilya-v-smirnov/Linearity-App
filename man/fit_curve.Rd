@@ -22,7 +22,8 @@ A \code{lin_fit} object: list with \code{model}, \code{log_scale}, \code{weights
 intercept, \code{b} the linear and \code{c} the quadratic coefficient), \code{vcov},
 \code{df}, \code{sigma}, \code{rss} (weighted residual sum of squares), \code{loglik}, \code{x},
 \code{y}, \code{w}, \code{keys} (well IDs from \code{.key}, \code{NULL} without them),
-\code{conc_range}, \code{weight_fun}, \code{w_scale}, \code{theta}, \code{notes} and, for the
+\code{interval} (monotonic interval for the inverse of a quadratic curve,
+\code{NULL} until \code{\link[=calculate]{calculate()}} sets it), \code{conc_range}, \code{weight_fun}, \code{w_scale}, \code{theta}, \code{notes} and, for the
 polynomial models, the underlying \code{lm} object in \code{object}.
 }
 \description{

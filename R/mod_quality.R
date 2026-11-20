@@ -133,7 +133,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
 standard_status <- function(status, lang = 'en') {
     keys <- c(pass = 'quality.pass', fail = 'quality.fail', incomplete = 'quality.status_incomplete',
               pass_no_cv = 'quality.status_pass_no_cv', pass_singlet = 'quality.status_pass_singlet',
-              singlet = 'quality.status_singlet', no_points = 'quality.status_no_points')
+              singlet = 'quality.status_singlet', no_points = 'quality.status_no_points',
+              outside_interval = 'quality.status_outside_interval')
     vapply(status, function(x) tr(keys[[x]], lang), '', USE.NAMES = FALSE)
 }
 
