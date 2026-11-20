@@ -289,7 +289,8 @@ test_that('single background wells are excluded from the background', {
     bg <- r$background
     expect_equal(c(bg$n, bg$n_roles), c(1, 2))
     expect_equal(LinearityApp:::background_table(bg, 'en')$Used, '1/2')
-    expect_equal(LinearityApp:::background_notes(bg, 'en'), paste0('Excluded by the user: ', keys[2], ' (Outlier).'))
+    # the excluded well is listed in the table of the wells only
+    expect_length(LinearityApp:::background_notes(bg, 'en'), 0)
     wells <- LinearityApp:::background_wells_table(bg, 'en')
     expect_equal(wells$Status, c('\u2713', 'excluded: Outlier'))
     expect_true(endsWith(LinearityApp:::background_text(bg, 'en'), paste0('; excluded by the user: ', keys[2], ' (Outlier)')))
@@ -325,10 +326,10 @@ test_that('the background correction is shown and reported', {
     expect_equal(LinearityApp:::background_text(r$background, 'en'),
                  'Reagent blank, wells used 2/2, mean OD 0.0500, SD 0.0000; subtracted 0.0500')
     wells <- LinearityApp:::background_wells_table(r$background, 'en')
-    expect_equal(names(wells), c('Role', 'Position', 'OD', 'Deviation from the subtracted value', 'Status'))
+    expect_equal(names(wells), c('Role', 'Position', 'OD', 'Deviation', 'Status'))
     expect_equal(wells$Role, c('Reagent blank', 'Reagent blank', 'Negative control'))
     expect_equal(wells$Status, c('\u2713', '\u2713', '\u2014'))
-    expect_equal(wells[['Deviation from the subtracted value']], c('+0.0000', '+0.0000', '+0.2500'))
+    expect_equal(wells$Deviation, c('+0.0000', '+0.0000', '+0.2500'))
     expect_s3_class(LinearityApp:::plot_background(r$background, lang = 'en'), 'ggplot')
     expect_null(LinearityApp:::background_wells_table(list(wells = r$background$wells[0, ]), 'en'))
     pts <- LinearityApp:::standard_points_table(r, 'en')

@@ -65,12 +65,11 @@ background_table <- function(bg, lang = 'en') {
 #'
 #' @inheritParams background_table
 #'
-#' @return Character vector: the wells excluded by the user and the roles of
-#'   the plate left out.
+#' @return Character vector: the roles of the plate left out (the wells
+#'   excluded by the user are listed in the table of the wells).
 #' @keywords internal
 background_notes <- function(bg, lang = 'en') {
-    c(if (any(bg$wells$excluded)) tr('bg.excluded', lang, wells = excluded_text(bg)),
-      if (length(bg$unused) > 0) tr('bg.unused', lang, roles = roles_text(bg$unused, lang)))
+    if (length(bg$unused) > 0) tr('bg.unused', lang, roles = roles_text(bg$unused, lang))
 }
 
 

@@ -598,6 +598,12 @@ test_that('the background has its own sub-tab, first, while the curve opens', {
     expect_equal(values[1:3], c('data-value="background"', 'data-value="curve"', 'data-value="coefs"'))
     expect_match(html, '<div class="tab-pane active[^>]*data-value="curve"')
     expect_false(grepl('<div class="tab-pane active[^>]*data-value="background"', html))
+    # the roles are chosen inside the Background sub-tab, not in the sidebar
+    pane <- regmatches(html, regexpr('<div class="tab-pane[^>]*data-value="background".*?<div class="tab-pane[^>]*data-value="curve"',
+                                     html))
+    expect_match(pane, 'id="curve-background"', fixed = TRUE)
+    sidebar <- regmatches(html, regexpr('<aside.*</aside>', html))
+    expect_false(grepl('id="curve-background"', sidebar, fixed = TRUE))
 
     # blanks 0.04 and 0.16, a negative control 0.40; three standard levels only: the curve cannot be fitted
     conc <- c(1, 2, 4)
@@ -612,7 +618,7 @@ test_that('the background has its own sub-tab, first, while the curve opens', {
         expect_error(session$returned$result())
         expect_match(output$background_table, '0.1000', fixed = TRUE)
         wells <- output$background_wells
-        expect_match(wells, 'Deviation from the subtracted value', fixed = TRUE)
+        expect_match(wells, '>\\s*Deviation\\s*<')
         expect_match(wells, '+0.3000', fixed = TRUE)
         expect_match(output$background_plot$src, '^data:image/png')
         expect_match(output$background_notes$html, 'Not used: Negative control', fixed = TRUE)

@@ -13,8 +13,8 @@ background_notes(bg, lang = "en")
 \item{lang}{Language code.}
 }
 \value{
-Character vector: the wells excluded by the user and the roles of
-the plate left out.
+Character vector: the roles of the plate left out (the wells
+excluded by the user are listed in the table of the wells).
 }
 \description{
 Notes Under the Background Table

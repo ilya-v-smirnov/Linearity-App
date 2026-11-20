@@ -293,10 +293,6 @@ mod_curve_ui <- function(id, lang) {
             shiny::uiOutput(ns('save_plot_ui'))
         ),
         sidebar_group(
-            with_tooltip(t('bg.group'), t('bg.help')), 'fill-drip',
-            shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0), width = '100%')
-        ),
-        sidebar_group(
             t('curve.group_model'), 'chart-line',
             shiny::radioButtons(ns('model'), t('curve.model'),
                                 choices = stats::setNames(models, vapply(paste0('model.', models), t, '')),
@@ -331,16 +327,18 @@ mod_curve_ui <- function(id, lang) {
         bslib::nav_panel(
             t('bg.group'), value = 'background', icon = shiny::icon('fill-drip'),
             shiny::div(class = 'step-view',
-                       shiny::h5(t('bg.section')),
+                       shiny::h5(with_tooltip(t('bg.section'), t('bg.help'))),
+                       # The roles subtracted as background; single wells are excluded on the plot below
+                       shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0), inline = TRUE),
                        shiny::tableOutput(ns('background_table')),
                        shiny::uiOutput(ns('background_notes')),
-                       shiny::h5(with_tooltip(t('bg.wells_section'), t('bg.click_hint'))),
+                       shiny::h5(with_tooltip(t('bg.plot_section'), t('bg.click_hint'))),
                        shiny::div(class = 'background-panel',
                                   shiny::plotOutput(ns('background_plot'), height = '300px',
                                                     click = ns('background_click'))),
                        shiny::uiOutput(ns('background_restore')),
-                       shiny::tableOutput(ns('background_wells')),
-                       shiny::p(class = 'text-muted small', t('bg.hint')))
+                       shiny::h5(with_tooltip(t('bg.wells_section'), t('bg.table_help'))),
+                       shiny::tableOutput(ns('background_wells')))
         ),
         bslib::nav_panel(
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
