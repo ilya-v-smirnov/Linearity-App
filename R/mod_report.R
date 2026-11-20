@@ -88,7 +88,7 @@ mod_report_server <- function(id, lang, curve, summary) {
                           operator = text_input(input$operator),
                           plate = text_input(input$plate),
                           method = tr(paste0('model.', curve$model()), lang),
-                          scale = tr(if (curve$model() %in% c('4PL', '5PL')) 'scale.logistic' else 'scale.log', lang),
+                          scale = tr(scale_key(curve$model()), lang),
                           weights = weight_labels(curve$weights(), lang),
                           model_table = curve$coef_table(),
                           result_table = localize_result(r$result, lang),

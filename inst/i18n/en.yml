@@ -101,10 +101,20 @@ data:
   type_empty: "Empty"
 
 model:
-  LRM: "Linear regression model"
-  QRM: "Quadratic regression model"
+  LIN: "Linear"
+  QUAD: "Quadratic"
+  LRM: "Power (log–log linear)"
+  QRM: "Log–log quadratic"
   4PL: "Four-parameter logistic (4PL)"
   5PL: "Five-parameter logistic (5PL)"
+
+model_short:
+  LIN: "Linear"
+  QUAD: "Quadratic"
+  LRM: "Power (log–log)"
+  QRM: "Log–log quadratic"
+  4PL: "4PL"
+  5PL: "5PL"
 
 weights:
   none: "None"
@@ -116,6 +126,7 @@ weights:
 
 scale:
   log: "log10"
+  linear: "Original (OD and concentration untransformed)"
   logistic: "OD linear, concentration log10"
 
 curve:
@@ -134,7 +145,7 @@ curve:
   unit_none: "None"
   save_plot: "Save plot"
   weights: "Weighting"
-  weights_help: "Weighting is usually not needed for LRM and QRM on log scales; for 4PL and 5PL use 1/y² or 1/y^θ."
+  weights_help: "Weighting is usually not needed for the log–log models; for Linear, Quadratic, 4PL and 5PL use 1/y² or 1/y^θ when the scatter grows with the signal."
   compare: "Comparison of models"
   exclusions: "Excluded standard points"
   click_hint: "Click a standard point on the curve to exclude it from the fit; click a red cross to restore it."

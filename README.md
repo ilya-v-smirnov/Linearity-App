@@ -15,7 +15,7 @@ The **Linearity App** is an R package with a Shiny application that calculates a
 - Simple table format with only two required columns (`type`, `OD`); old files keep working
 - Validation lists every problem in the file with the well or row where it occurs
 - Blank wells and quality controls (QC) with recovery
-- Calibration models: linear and quadratic (log-log or linear scales), four- and five-parameter logistic (4PL, 5PL)
+- Calibration models: linear and quadratic on the original scale, power (log–log linear) and log–log quadratic, four- and five-parameter logistic (4PL, 5PL)
 - Weighting: 1/y, 1/y², 1/x, 1/x² or a variance function estimated from replicates
 - Concentrations with 95 % confidence intervals (delta method)
 - Comparison of models (AIC/BIC on the OD scale, R², back-calculated standards, lack-of-fit test)
@@ -89,15 +89,19 @@ The background is the mean OD of `NC` wells, or of blank wells if there are no `
 - View the **fitted curve** and the **residuals plot**.
 - Choose the model:
 
-  | Model | Equation | Scales |
-  |-------|----------|--------|
-  | LRM | y = b·x + c | log10 conc / log10 OD, or linear ("Linear scales") |
-  | QRM | y = a·x² + b·x + c | log10 conc / log10 OD, or linear |
-  | 4PL | y = d + (a − d) / (1 + (x/c)^b) | OD linear, concentration log |
-  | 5PL | y = d + (a − d) / (1 + (x/c)^b)^g | OD linear, concentration log |
+  | Model (code) | Equation | Scales |
+  |--------------|----------|--------|
+  | Linear (`LIN`) | OD = a + b·C | original |
+  | Quadratic (`QUAD`) | OD = a + b·C + c·C² | original |
+  | Power, log–log linear (`LRM`) | log10(OD) = a + b·log10(C) | log10 conc / log10 OD |
+  | Log–log quadratic (`QRM`) | log10(OD) = a + b·log10(C) + c·[log10(C)]² | log10 conc / log10 OD |
+  | 4PL | OD = d + (a − d) / (1 + (C/c)^b) | OD linear, concentration log |
+  | 5PL | OD = d + (a − d) / (1 + (C/c)^b)^g | OD linear, concentration log |
+
+  `C` is the concentration and `OD` the background-subtracted signal. The intercept of the Linear model is estimated freely. In R, `calculate(data, "LRM", linear = TRUE)` (and the same for `QRM`) still fits on the original scale, as `LIN` and `QUAD`.
 
   In the logistic models `a` is the response at zero concentration, `d` at infinite concentration, `c` the inflection point (EC50), `b` the slope and `g` the asymmetry. They are fitted with the Levenberg-Marquardt algorithm (`minpack.lm`) from several starting points; the fits agree with the `drc` package.
-- Choose the **weighting**. On log scales (LRM, QRM) weighting is usually not needed; for 4PL/5PL `1/y²` or the variance function estimated from replicates (`1/y^θ`) is recommended.
+- Choose the **weighting**. For the log–log models weighting is usually not needed; for Linear, Quadratic, 4PL and 5PL `1/y²` or the variance function estimated from replicates (`1/y^θ`) is recommended.
 - The **comparison of models** shows, for the same standards and weighting, AIC and BIC (on the OD scale, so log-log and logistic models are comparable), R², the mean and maximum error of back-calculated standards and the lack-of-fit p-value; the model with the lowest AIC is marked.
 - **Exclude a standard point** by clicking on it and entering a reason; excluded points are shown as red crosses, listed with their reasons and reported. Click a cross to restore the point. After an exclusion the model is refitted: the curve on all standards stays on the plot as a dashed line, and a tab **Original vs refitted** appears (it is removed when all points are restored). It compares the two calibrations - the coefficients (`Coef`, `Original`, `Refitted`), the back-calculated concentration and relative error of every standard under each model, and the mean and maximum absolute relative error and the number of standards meeting the acceptance criteria. The refitted model is the one accepted: it is used for the results and its parameters go to the report, together with the comparison (detailed report).
 

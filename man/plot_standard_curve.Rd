@@ -28,7 +28,7 @@ A ggplot2 object.
 \description{
 Standards used in the fit are shown as points, standards excluded by the
 user as red crosses. The concentration axis is logarithmic except for the
-LRM and QRM fitted on linear scales; the OD axis is logarithmic for models
+polynomial models on the original scale; the OD axis is logarithmic for models
 fitted on log10 scales. With excluded points, the curve fitted on all
 standards can be shown as a dashed line next to the refitted curve.
 }

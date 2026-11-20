@@ -190,16 +190,16 @@ assign_flags <- function(od, conc, conc_range) {
 
 #' Check Monotonicity of the Calibration Curve
 #'
-#' Only the quadratic model can turn within the standard range.
+#' Only the quadratic models can turn within the standard range.
 #'
 #' @param fit A `lin_fit` object.
 #'
 #' @return `TRUE` if the curve is monotonic within the standard range.
 #' @keywords internal
 is_monotonic <- function(fit) {
-    if (fit$model != 'QRM' || fit$par[['a']] == 0) return(TRUE)
+    if (poly_degree(fit$model) != 2 || fit$par[['c']] == 0) return(TRUE)
     x_lim <- if (fit$log_scale) log10(fit$conc_range) else fit$conc_range
-    vertex <- -fit$par[['b']] / (2 * fit$par[['a']])
+    vertex <- -fit$par[['b']] / (2 * fit$par[['c']])
     !(vertex > x_lim[1] && vertex < x_lim[2])
 }
 
@@ -237,7 +237,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'
 #' @param data Validated input data (see [check_assay()]).
 #' @param model Model code (see [calibration_models()]).
-#' @param linear For LRM and QRM: fit on untransformed values instead of log10 scales.
+#' @param linear For LRM and QRM: fit on untransformed values instead of
+#'   log10 scales (as LIN and QUAD).
 #' @param weights Weighting code (see [weighting_schemes()]).
 #' @param exclude Standard points excluded by the user: a data.frame with
 #'   columns `key` (see [well_keys()]) and `reason`.
@@ -299,7 +300,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     data <- subtract_nc(data, bg$value)
 
     # Standards used for fitting
-    log_scale <- model %in% c('LRM', 'QRM') && !linear
+    log_scale <- model_log_scale(model, linear)
     std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude)
     standard_data <- std$used
     # Points excluded by the user are listed in `exclusions`; warn about the others
@@ -410,7 +411,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     list(model_direct = fit,
          fit = fit,
          model = model,
-         linear_scale = linear,
+         linear_scale = poly_degree(model) > 0 && !log_scale,
          weights = weights,
          nc_value = bg$value,
          standard_data = standard_data,

@@ -1,5 +1,5 @@
 scenarios <- expand.grid(dataset = names(sample_files),
-                         model = c('LRM', 'QRM'),
+                         model = c('LIN', 'QUAD', 'LRM', 'QRM'),
                          linear = c(FALSE, TRUE),
                          stringsAsFactors = FALSE)
 
@@ -109,10 +109,11 @@ test_that('coefficient table labels match the model terms', {
     r <- calculate(load_sample('bca'), 'QRM')
     tab <- get_coef_ci(r$model_direct)
     cf <- coef(r$fit$object)
+    # log10(OD) = a + b*log10(C) + c*log10(C)^2
     expect_equal(tab$coef, c('a', 'b', 'c'))
-    expect_equal(tab$est[tab$coef == 'c'], unname(cf['(Intercept)']))
-    expect_equal(tab$est[tab$coef == 'a'], unname(cf[grepl('^2', names(cf), fixed = TRUE)]))
+    expect_equal(tab$est[tab$coef == 'a'], unname(cf['(Intercept)']))
     expect_equal(tab$est[tab$coef == 'b'], unname(cf['u']))
+    expect_equal(tab$est[tab$coef == 'c'], unname(cf[grepl('^2', names(cf), fixed = TRUE)]))
     expect_true(all(tab$ci.lower < tab$est & tab$est < tab$ci.upper))
 })
 

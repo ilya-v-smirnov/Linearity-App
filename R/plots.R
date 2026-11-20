@@ -57,7 +57,7 @@ design_x_scale <- function(x, round_par = 3) {
 #' @keywords internal
 conc_axis <- function(result) {
     fit <- result$fit
-    log_x <- !(fit$model %in% c('LRM', 'QRM') && !fit$log_scale)
+    log_x <- !(poly_degree(fit$model) > 0 && !fit$log_scale)
     all_x <- c(result$standard_data$conc, result$exclusions$conc)
     list(log = log_x, breaks = if (log_x) design_x_scale(all_x) else NULL, range = range(all_x))
 }
@@ -67,7 +67,7 @@ conc_axis <- function(result) {
 #'
 #' Standards used in the fit are shown as points, standards excluded by the
 #' user as red crosses. The concentration axis is logarithmic except for the
-#' LRM and QRM fitted on linear scales; the OD axis is logarithmic for models
+#' polynomial models on the original scale; the OD axis is logarithmic for models
 #' fitted on log10 scales. With excluded points, the curve fitted on all
 #' standards can be shown as a dashed line next to the refitted curve.
 #'

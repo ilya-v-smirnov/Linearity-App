@@ -40,7 +40,7 @@ test_that('curve module recalculates when the model changes', {
         expect_equal(nrow(session$returned$coef_table()), 3)
         expect_match(output$curve$src, '^data:image/png')
         expect_match(output$resid$src, '^data:image/png')
-        expect_equal(nrow(session$returned$comparison()), 4)
+        expect_equal(nrow(session$returned$comparison()), length(calibration_models()))
 
         session$setInputs(model = '4PL', weights = '1/y2')
         expect_equal(session$returned$result()$model, '4PL')

@@ -10,16 +10,26 @@ calibration_models()
 Character vector of model codes.
 }
 \description{
-\itemize{
-\item \code{LRM}: linear model y = b*x + c;
-\item \code{QRM}: quadratic model y = a\emph{x^2 + b}x + c;
-both on log10 scales (x = log10 conc, y = log10 OD) unless \code{linear = TRUE};
-\item \verb{4PL}: four-parameter logistic y = d + (a - d) / (1 + (x/c)^b);
-\item \verb{5PL}: five-parameter logistic y = d + (a - d) / (1 + (x/c)^b)^g;
-both on the original OD scale.
-}
+Polynomial models (\code{C} is the concentration, \code{OD} the background-subtracted
+optical density):
 }
 \details{
+\itemize{
+\item \code{LIN}: linear OD = a + b*C;
+\item \code{QUAD}: quadratic OD = a + b\emph{C + c}C^2;
+\item \code{LRM}: power (log-log linear) log10(OD) = a + b*log10(C);
+\item \code{QRM}: log-log quadratic log10(OD) = a + b\emph{log10(C) + c}log10(C)^2.
+}
+
+\code{LRM} and \code{QRM} are fitted on the original scale (as \code{LIN} and \code{QUAD})
+when called with \code{linear = TRUE}.
+
+Logistic models on the original OD scale:
+\itemize{
+\item \verb{4PL}: four-parameter logistic OD = d + (a - d) / (1 + (C/c)^b);
+\item \verb{5PL}: five-parameter logistic OD = d + (a - d) / (1 + (C/c)^b)^g.
+}
+
 In the logistic models \code{a} is the response at zero concentration, \code{d} at
 infinite concentration, \code{c} the inflection point (EC50), \code{b} the slope and
 \code{g} the asymmetry.

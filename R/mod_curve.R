@@ -126,7 +126,7 @@ weight_labels <- function(weights, lang) {
 comparison_table <- function(cmp, lang) {
     fmt <- function(x, pattern) ifelse(is.na(x), '', sprintf(pattern, x))
     out <- data.frame(
-        model = cmp$model,
+        model = vapply(paste0('model_short.', cmp$model), tr, '', lang = lang),
         n.par = as.integer(cmp$n.par),
         AIC = fmt(cmp$AIC, '%.1f'),
         BIC = fmt(cmp$BIC, '%.1f'),
@@ -180,7 +180,7 @@ exclusions_table <- function(ex, lang) {
 #' The equation of the fitted model with the names of the coefficients of
 #' [get_coef_ci()] (`C` is the concentration, `OD` the background-subtracted
 #' optical density). LRM and QRM are on log10 scales unless fitted on
-#' untransformed values.
+#' untransformed values; LIN and QUAD on the original scale.
 #'
 #' @param fit A `lin_fit` object.
 #'
@@ -198,19 +198,17 @@ model_equation_ui <- function(fit) {
     minus <- ' \u2212 '
     conc <- v('C')
     ratio <- paste0('(', conc, ' / ', v('c'), ')<sup>', v('b'), '</sup>')
+    degree <- poly_degree(fit$model)
+    u <- if (fit$log_scale) log10(conc) else conc
+    u2 <- if (fit$log_scale) paste0('[', u, ']<sup>2</sup>') else paste0(u, '<sup>2</sup>')
     rhs <- switch(
-        fit$model,
-        'LRM' = ,
-        'QRM' = {
-            u <- if (fit$log_scale) log10(conc) else conc
-            u2 <- if (fit$log_scale) paste0('[', u, ']<sup>2</sup>') else paste0(u, '<sup>2</sup>')
-            paste0(v('c'), ' + ', v('b'), dot, u, if (fit$model == 'QRM') paste0(' + ', v('a'), dot, u2))
-        },
+        if (degree > 0) 'poly' else fit$model,
+        'poly' = paste0(v('a'), ' + ', v('b'), dot, u, if (degree == 2) paste0(' + ', v('c'), dot, u2)),
         '4PL' = paste0(v('d'), ' + ', frac(paste0(v('a'), minus, v('d')), paste0('1 + ', ratio))),
         '5PL' = paste0(v('d'), ' + ', frac(paste0(v('a'), minus, v('d')),
                                            paste0('[1 + ', ratio, ']<sup>', v('g'), '</sup>')))
     )
-    lhs <- if (fit$model %in% c('LRM', 'QRM') && fit$log_scale) log10(v('OD')) else v('OD')
+    lhs <- if (fit$log_scale) log10(v('OD')) else v('OD')
     shiny::div(class = 'model-equation', shiny::HTML(paste0(lhs, ' = ', rhs)))
 }
 

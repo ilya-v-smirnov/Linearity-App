@@ -25,6 +25,59 @@ test_that('4PL and 5PL recover known parameters and invert exactly', {
     expect_equal(inverse_fun(fit5, logistic(5, 0.05, 1.1, 10, 2.5, 0.5)), 5, tolerance = 1e-4)
 })
 
+test_that('Linear and Quadratic models are fitted on the original scale', {
+    f <- function(x) 0.08 + 0.02 * x
+    std <- make_standards(f, conc = c(1, 2, 5, 10, 20, 50))
+    fit <- fit_curve(std, 'LIN')
+    expect_false(fit$log_scale)
+    # the intercept is estimated freely
+    expect_equal(unname(fit$par), c(0.08, 0.02), tolerance = 1e-10)
+    tab <- get_coef_ci(fit)
+    expect_equal(tab$coef, c('a', 'b'))
+    expect_equal(tab$est, c(0.08, 0.02), tolerance = 1e-10)
+    expect_equal(back_calculate(fit)$calc, std$conc, tolerance = 1e-10)
+    # the former call of LRM on linear scales gives the same fit
+    expect_equal(fit_curve(std, 'LRM', linear = TRUE)$par, fit$par)
+
+    # Power is a separate log-log model
+    pow <- fit_curve(std, 'LRM')
+    expect_true(pow$log_scale)
+    expect_gt(max(abs(pow$par - fit$par)), 0.01)
+
+    # OD = a + b*C + c*C^2
+    g <- function(x) 0.05 + 0.03 * x - 2e-4 * x^2
+    std2 <- make_standards(g, conc = c(1, 2, 5, 10, 20, 50))
+    quad <- fit_curve(std2, 'QUAD')
+    expect_false(quad$log_scale)
+    expect_equal(unname(quad$par[c('a', 'b', 'c')]), c(0.05, 0.03, -2e-4), tolerance = 1e-8)
+    expect_equal(inverse_fun(quad, g(c(3, 30))), c(3, 30), tolerance = 1e-8)
+    expect_equal(get_coef_ci(quad)$coef, c('a', 'b', 'c'))
+
+    expect_equal(LinearityApp:::scale_key('LIN'), 'scale.linear')
+    expect_equal(LinearityApp:::scale_key('QRM'), 'scale.log')
+    expect_equal(LinearityApp:::scale_key('LRM', linear = TRUE), 'scale.linear')
+    expect_equal(LinearityApp:::scale_key('5PL'), 'scale.logistic')
+})
+
+test_that('calculate() inverts the Linear model and keeps standards below the blank', {
+    f <- function(x) 0.08 + 0.02 * x
+    data <- synthetic_data(f, sample_od = f(c(3, 10, 25)))
+    r <- calculate(data, 'LIN', round_fun = function(x, ...) x)
+    expect_equal(r$fit$model, 'LIN')
+    expect_true(r$linear_scale)
+    expect_equal(r$result$conc, c(3, 10, 25), tolerance = 1e-10)
+    expect_equal(r$back_calc$recovery, rep(100, 12), tolerance = 1e-8)
+
+    # a standard below the blank stays in the Linear fit, not in the Power fit
+    h <- function(x) -0.01 + 0.02 * x
+    low <- synthetic_data(h, conc = c(0.25, 1, 2, 4, 8, 16), sample_od = 0.1)
+    expect_equal(nrow(calculate(low, 'LIN')$standard_data), 12)
+    expect_equal(nrow(calculate(low, 'LRM')$standard_data), 10)
+    cmp <- compare_models(calculate(low, 'LIN')$standard_data)
+    expect_equal(cmp$model, calibration_models())
+    expect_false(any(is.na(cmp$AIC)))
+})
+
 test_that('4PL agrees with drc', {
     skip_if_not_installed('drc')
     std <- make_standards(function(x) logistic(x, 0.05, 1.2, 10, 2), conc = c(0.5, levels_7, 128, 256),
@@ -139,7 +192,10 @@ test_that('models are compared on a common scale', {
     expect_equal(cmp$model, calibration_models())
     expect_equal(sum(cmp$recommended), 1)
     expect_true(all(cmp$R2 > 0.99))
-    expect_true(all(cmp$mean.abs.error < 10))
+    # the BCA curve bends: a straight line on the original scale misses the low standards
+    curved <- cmp$model %in% c('LRM', 'QRM', '4PL', '5PL')
+    expect_true(all(cmp$mean.abs.error[curved] < 10))
+    expect_gt(cmp$mean.abs.error[cmp$model == 'LIN'], cmp$mean.abs.error[cmp$model == '4PL'])
 
     lrm <- fit_curve(std, 'LRM')
     shift <- 2 * sum(log(lrm$y * log(10)))

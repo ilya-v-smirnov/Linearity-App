@@ -398,10 +398,13 @@ test_that('the equation of each model uses the names of its coefficients', {
     eq <- function(model, linear = FALSE) {
         as.character(LinearityApp:::model_equation_ui(calculate(d, model, linear = linear)$fit))
     }
-    expect_match(eq('LRM'), 'log<sub>10</sub>(<i>OD</i>) = <i>c</i> + <i>b</i>', fixed = TRUE)
-    expect_false(grepl('<i>a</i>', eq('LRM'), fixed = TRUE))
-    expect_match(eq('QRM'), '<i>a</i>', fixed = TRUE)
-    expect_match(eq('LRM', linear = TRUE), '<i>OD</i> = <i>c</i>', fixed = TRUE)
+    expect_match(eq('LRM'), 'log<sub>10</sub>(<i>OD</i>) = <i>a</i> + <i>b</i>', fixed = TRUE)
+    expect_false(grepl('<i>c</i>', eq('LRM'), fixed = TRUE))
+    expect_match(eq('QRM'), '<i>c</i> \u00b7 [log<sub>10</sub>(<i>C</i>)]<sup>2</sup>', fixed = TRUE)
+    expect_match(eq('LRM', linear = TRUE), '<i>OD</i> = <i>a</i>', fixed = TRUE)
+    expect_match(eq('LIN'), '^<div[^>]*><i>OD</i> = <i>a</i> \\+ <i>b</i> \u00b7 <i>C</i></div>$')
+    expect_match(eq('QUAD'), '<i>OD</i> = <i>a</i> + <i>b</i> \u00b7 <i>C</i> + <i>c</i> \u00b7 <i>C</i><sup>2</sup>',
+                 fixed = TRUE)
     expect_match(eq('4PL'), 'eq-frac', fixed = TRUE)
     expect_match(eq('5PL'), ']<sup><i>g</i></sup>', fixed = TRUE)
     for (m in calibration_models()) {

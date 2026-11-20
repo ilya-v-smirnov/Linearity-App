@@ -13,6 +13,6 @@ is_monotonic(fit)
 \code{TRUE} if the curve is monotonic within the standard range.
 }
 \description{
-Only the quadratic model can turn within the standard range.
+Only the quadratic models can turn within the standard range.
 }
 \keyword{internal}

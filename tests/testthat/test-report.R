@@ -20,7 +20,7 @@ test_that('Word report is generated with a warnings section', {
     text <- make_report('en')
     expect_true('Warnings' %in% text)
     expect_true(any(grepl('OD <= blank', text, fixed = TRUE)))
-    expect_true(any(grepl('Quadratic regression model', text, fixed = TRUE)))
+    expect_true(any(grepl(tr('model.QRM', 'en'), text, fixed = TRUE)))
 })
 
 test_that('the head of the report has the date, the title, the operator and the plate', {

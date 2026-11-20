@@ -23,7 +23,8 @@ calculate(
 
 \item{model}{Model code (see \code{\link[=calibration_models]{calibration_models()}}).}
 
-\item{linear}{For LRM and QRM: fit on untransformed values instead of log10 scales.}
+\item{linear}{For LRM and QRM: fit on untransformed values instead of
+log10 scales (as LIN and QUAD).}
 
 \item{weights}{Weighting code (see \code{\link[=weighting_schemes]{weighting_schemes()}}).}
 

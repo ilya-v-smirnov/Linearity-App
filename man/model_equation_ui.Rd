@@ -16,6 +16,6 @@ A shiny tag.
 The equation of the fitted model with the names of the coefficients of
 \code{\link[=get_coef_ci]{get_coef_ci()}} (\code{C} is the concentration, \code{OD} the background-subtracted
 optical density). LRM and QRM are on log10 scales unless fitted on
-untransformed values.
+untransformed values; LIN and QUAD on the original scale.
 }
 \keyword{internal}

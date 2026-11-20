@@ -1,11 +1,20 @@
 #' Calibration Models
 #'
-#' * `LRM`: linear model y = b*x + c;
-#' * `QRM`: quadratic model y = a*x^2 + b*x + c;
-#'   both on log10 scales (x = log10 conc, y = log10 OD) unless `linear = TRUE`;
-#' * `4PL`: four-parameter logistic y = d + (a - d) / (1 + (x/c)^b);
-#' * `5PL`: five-parameter logistic y = d + (a - d) / (1 + (x/c)^b)^g;
-#'   both on the original OD scale.
+#' Polynomial models (`C` is the concentration, `OD` the background-subtracted
+#' optical density):
+#'
+#' * `LIN`: linear OD = a + b*C;
+#' * `QUAD`: quadratic OD = a + b*C + c*C^2;
+#' * `LRM`: power (log-log linear) log10(OD) = a + b*log10(C);
+#' * `QRM`: log-log quadratic log10(OD) = a + b*log10(C) + c*log10(C)^2.
+#'
+#' `LRM` and `QRM` are fitted on the original scale (as `LIN` and `QUAD`)
+#' when called with `linear = TRUE`.
+#'
+#' Logistic models on the original OD scale:
+#'
+#' * `4PL`: four-parameter logistic OD = d + (a - d) / (1 + (C/c)^b);
+#' * `5PL`: five-parameter logistic OD = d + (a - d) / (1 + (C/c)^b)^g.
 #'
 #' In the logistic models `a` is the response at zero concentration, `d` at
 #' infinite concentration, `c` the inflection point (EC50), `b` the slope and
@@ -13,7 +22,30 @@
 #'
 #' @return Character vector of model codes.
 #' @export
-calibration_models <- function() c('LRM', 'QRM', '4PL', '5PL')
+calibration_models <- function() c('LIN', 'QUAD', 'LRM', 'QRM', '4PL', '5PL')
+
+
+#' Degree of a Polynomial Model
+#'
+#' @param model Model code (see [calibration_models()]).
+#'
+#' @return 1 or 2 for the polynomial models, 0 for the logistic ones.
+#' @keywords internal
+poly_degree <- function(model) {
+    if (model %in% c('LIN', 'LRM')) return(1)
+    if (model %in% c('QUAD', 'QRM')) return(2)
+    0
+}
+
+
+#' Is a Model Fitted on log10 Scales?
+#'
+#' @param model Model code (see [calibration_models()]).
+#' @param linear For LRM and QRM: fit on untransformed values.
+#'
+#' @return `TRUE` for the log-log models (`LRM`, `QRM` unless `linear`).
+#' @keywords internal
+model_log_scale <- function(model, linear = FALSE) model %in% c('LRM', 'QRM') && !isTRUE(linear)
 
 
 #' Weighting Schemes
@@ -31,9 +63,22 @@ calibration_models <- function() c('LRM', 'QRM', '4PL', '5PL')
 weighting_schemes <- function() c('none', '1/y', '1/y2', '1/x', '1/x2', 'power')
 
 
+#' Translation Key of the Scale of a Model
+#'
+#' @param model Model code (see [calibration_models()]).
+#' @param linear For LRM and QRM: fitted on untransformed values.
+#'
+#' @return `"scale.log"`, `"scale.linear"` or `"scale.logistic"`.
+#' @keywords internal
+scale_key <- function(model, linear = FALSE) {
+    if (poly_degree(model) == 0) return('scale.logistic')
+    if (model_log_scale(model, linear)) 'scale.log' else 'scale.linear'
+}
+
+
 #' Number of Parameters of a Model
 #' @keywords internal
-n_params <- function(model) c(LRM = 2, QRM = 3, '4PL' = 4, '5PL' = 5)[[model]]
+n_params <- function(model) c(LIN = 2, QUAD = 3, LRM = 2, QRM = 3, '4PL' = 4, '5PL' = 5)[[model]]
 
 
 #' Weight Function for a Calibration
@@ -90,14 +135,13 @@ weight_function <- function(weights, x, y) {
 #' @return Predicted OD on the original scale.
 #' @keywords internal
 curve_fun <- function(fit, x, par = fit$par) {
+    if (poly_degree(fit$model) > 0) {
+        u <- if (fit$log_scale) log10(x) else x
+        quad <- if (poly_degree(fit$model) == 2) par[['c']] else 0
+        v <- par[['a']] + par[['b']] * u + quad * u^2
+        return(if (fit$log_scale) 10^v else v)
+    }
     switch(fit$model,
-           'LRM' = ,
-           'QRM' = {
-               u <- if (fit$log_scale) log10(x) else x
-               a <- if (fit$model == 'QRM') par[['a']] else 0
-               v <- a * u^2 + par[['b']] * u + par[['c']]
-               if (fit$log_scale) 10^v else v
-           },
            '4PL' = par[['d']] + (par[['a']] - par[['d']]) /
                (1 + exp(par[['b']] * (log(x) - par[['lc']]))),
            '5PL' = par[['d']] + (par[['a']] - par[['d']]) /
@@ -119,18 +163,19 @@ curve_fun <- function(fit, x, par = fit$par) {
 #' @keywords internal
 inverse_fun <- function(fit, od, par = fit$par) {
     out <- rep(NA_real_, length(od))
-    if (fit$model %in% c('LRM', 'QRM')) {
+    if (poly_degree(fit$model) > 0) {
         ok <- !is.na(od) & (!fit$log_scale | od > 0)
         y <- if (fit$log_scale) log10(od[ok]) else od[ok]
-        a <- if (fit$model == 'QRM') par[['a']] else 0
-        if (a == 0) {
-            u <- (y - par[['c']]) / par[['b']]
+        # q*u^2 + b*u + a = y with the quadratic coefficient q
+        q <- if (poly_degree(fit$model) == 2) par[['c']] else 0
+        if (q == 0) {
+            u <- (y - par[['a']]) / par[['b']]
         } else {
             x_lim <- if (fit$log_scale) log10(fit$conc_range) else fit$conc_range
-            disc <- par[['b']]^2 - 4 * a * (par[['c']] - y)
-            vertex <- -par[['b']] / (2 * a)
+            disc <- par[['b']]^2 - 4 * q * (par[['a']] - y)
+            vertex <- -par[['b']] / (2 * q)
             side <- if (mean(x_lim) >= vertex) 1 else -1
-            u <- ifelse(disc >= 0, vertex + side * sqrt(pmax(disc, 0)) / (2 * abs(a)), NA_real_)
+            u <- ifelse(disc >= 0, vertex + side * sqrt(pmax(disc, 0)) / (2 * abs(q)), NA_real_)
         }
         out[ok] <- if (fit$log_scale) 10^u else u
         # A flat line (zero slope) has no inverse
@@ -275,42 +320,39 @@ logistic_vcov <- function(model, par, x, w, sigma) {
 #'
 #' @param standard_data Background-subtracted standards with `conc` and `OD`.
 #' @param model Model code (see [calibration_models()]).
-#' @param linear For LRM and QRM: fit on untransformed values instead of log10 scales.
+#' @param linear For LRM and QRM: fit on untransformed values instead of
+#'   log10 scales (as LIN and QUAD).
 #' @param weights Weighting code (see [weighting_schemes()]).
 #'
 #' @return A `lin_fit` object: list with `model`, `log_scale`, `weights`,
-#'   `par` (internal parameters), `vcov`, `df`, `sigma`, `rss` (weighted
-#'   residual sum of squares), `loglik`, `x`, `y`, `w`, `conc_range`,
-#'   `weight_fun`, `w_scale`, `theta`, `notes` and, for LRM and QRM, the
-#'   underlying `lm` object in `object`.
+#'   `par` (internal parameters; for the polynomial models `a` is the
+#'   intercept, `b` the linear and `c` the quadratic coefficient), `vcov`,
+#'   `df`, `sigma`, `rss` (weighted residual sum of squares), `loglik`, `x`,
+#'   `y`, `w`, `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and,
+#'   for the polynomial models, the underlying `lm` object in `object`.
 #' @export
 fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'none') {
     x <- standard_data$conc
     y <- standard_data$OD
-    log_scale <- model %in% c('LRM', 'QRM') && !linear
+    log_scale <- model_log_scale(model, linear)
+    degree <- poly_degree(model)
 
     wf <- weight_function(weights, x, y)
     w_raw <- wf$fun(x, wf$level_mean)
     w_scale <- mean(w_raw)
     w <- w_raw / w_scale
 
-    if (model %in% c('LRM', 'QRM')) {
+    if (degree > 0) {
         df <- data.frame(u = if (log_scale) log10(x) else x,
                          v = if (log_scale) log10(y) else y,
                          w = w)
-        formula <- if (model == 'LRM') v ~ u else v ~ I(u^2) + u
+        formula <- if (degree == 1) v ~ u else v ~ u + I(u^2)
         object <- lm(formula, data = df, weights = w)
-        cf <- coef(object)
-        par <- c(a = if (model == 'QRM') unname(cf[2]) else 0,
-                 b = unname(cf[if (model == 'QRM') 3 else 2]), c = unname(cf[1]))
-        names_map <- if (model == 'QRM') c('c', 'a', 'b') else c('c', 'b')
+        # Intercept a, linear b and quadratic c, as in the equation of the model
+        par <- stats::setNames(unname(coef(object)), c('a', 'b', 'c')[seq_len(degree + 1)])
         # summary.lm warns about essentially perfect fits (synthetic data); the matrix is still valid
         vc <- suppressWarnings(stats::vcov(object))
-        dimnames(vc) <- list(names_map, names_map)
-        if (model == 'LRM') {
-            par <- par[c('b', 'c')]
-        }
-        vc <- vc[names(par), names(par)]
+        dimnames(vc) <- list(names(par), names(par))
         df_res <- stats::df.residual(object)
         sigma <- stats::sigma(object)
         rss <- stats::deviance(object)
@@ -521,7 +563,7 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
                             R2 = NA_real_, mean.abs.error = NA_real_, max.abs.error = NA_real_,
                             lof.p = NA_real_)
         std <- standard_data
-        if (m %in% c('LRM', 'QRM') && !linear) std <- std[std$OD > 0, ]
+        if (model_log_scale(m, linear)) std <- std[std$OD > 0, ]
         if (length(unique(std$conc)) <= n_params(m)) return(empty)
         fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) NULL)
         if (is.null(fit)) return(empty)
