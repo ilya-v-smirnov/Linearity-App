@@ -13,3 +13,4 @@
 ^\.Rprofile$
 ^codecov\.yml$
 ^data-raw$
+^R/_disable_autoload\.R$

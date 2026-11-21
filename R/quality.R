@@ -198,7 +198,9 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
         n_measured <- max(sum(measured == lv), n_fit)
         # Wells lost before the fit, with their reasons; the loss is documented when every lost well
         # was excluded by the user (a reason is required)
-        before <- if (is.null(wells)) data.frame(key = character(0), reason = character(0), comment = character(0)) else {
+        before <- if (is.null(wells)) {
+            data.frame(key = character(0), reason = character(0), comment = character(0))
+        } else {
             w <- wells[wells$conc == lv & !is.na(wells$lost), , drop = FALSE]
             data.frame(key = as.character(w$key), reason = w$lost, comment = as.character(w$comment))
         }

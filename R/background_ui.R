@@ -54,9 +54,9 @@ excluded_text <- function(bg) {
 #'   SD and the value subtracted.
 #' @keywords internal
 background_table <- function(bg, lang = 'en') {
-    num <- function(x) if (is.na(x)) '—' else sprintf('%.4f', x)
+    num <- function(x) if (is.na(x)) '\u2014' else sprintf('%.4f', x)
     source <- if (length(bg$roles) == 0) tr('bg.none', lang) else paste(role_labels(bg$roles, lang), collapse = ' + ')
-    subtracted <- if (isTRUE(bg$empty)) '—' else sprintf('%.4f', bg$value)
+    subtracted <- if (isTRUE(bg$empty)) '\u2014' else sprintf('%.4f', bg$value)
     out <- data.frame(source, paste0(bg$n, '/', bg$n_roles), num(bg$mean), num(bg$sd), subtracted)
     names(out) <- vapply(c('bg.source', 'bg.used', 'bg.mean', 'bg.sd', 'bg.subtracted'), tr, '', lang = lang)
     out
@@ -107,8 +107,8 @@ background_text <- function(bg, lang = 'en') {
     if (length(bg$roles) == 0) return(tr('bg.none_subtracted', lang))
     out <- tr('bg.report', lang, roles = paste(role_labels(bg$roles, lang), collapse = ' + '),
               n = paste0(bg$n, '/', bg$n_roles),
-              mean = if (is.na(bg$mean)) '—' else sprintf('%.4f', bg$mean),
-              sd = if (is.na(bg$sd)) '—' else sprintf('%.4f', bg$sd),
+              mean = if (is.na(bg$mean)) '\u2014' else sprintf('%.4f', bg$mean),
+              sd = if (is.na(bg$sd)) '\u2014' else sprintf('%.4f', bg$sd),
               value = sprintf('%.4f', bg$value))
     if (any(bg$wells$excluded)) out <- paste0(out, '; ', tr('bg.report_excluded', lang, wells = excluded_text(bg)))
     out
@@ -247,7 +247,8 @@ plot_background <- function(bg, standards = NULL, lang = 'en', shown = NULL) {
         ggplot2::geom_point(size = 2.8, stroke = 1) +
         ggplot2::scale_shape_manual(values = c(used = 21, unused = 21, excluded = 4, standard = 21),
                                     labels = kinds[shown], breaks = shown, name = NULL) +
-        ggplot2::scale_fill_manual(values = c(used = 'grey20', unused = 'white', excluded = 'red', standard = '#9fc5e8'),
+        ggplot2::scale_fill_manual(values = c(used = 'grey20', unused = 'white', excluded = 'red',
+                                              standard = '#9fc5e8'),
                                    labels = kinds[shown], breaks = shown, name = NULL) +
         ggplot2::scale_colour_manual(values = c(used = 'grey20', unused = 'grey20', excluded = 'red',
                                                 standard = '#3d85c6'),

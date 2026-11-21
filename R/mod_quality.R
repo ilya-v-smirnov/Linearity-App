@@ -284,7 +284,7 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     # The signal at or below the background, as for the samples and the quality controls
     at_blank <- !is.na(pts$OD) & pts$OD <= 0
     if (any(at_blank)) {
-        out$at_blank <- ifelse(at_blank, '✓', '')
+        out$at_blank <- ifelse(at_blank, '\u2713', '')
         cols <- c(cols, 'col.od_le_blank')
     }
     # The points excluded by the user in grey; why a point has no back-calculated concentration is told

@@ -44,7 +44,7 @@ localize_result <- function(result, lang = 'en') {
         result$flag <- translate_flags(result$flag, lang)
     }
     if ('OD.le.blank' %in% names(result)) {
-        result$OD.le.blank <- ifelse(result$OD.le.blank %in% TRUE, '✓', '')
+        result$OD.le.blank <- ifelse(result$OD.le.blank %in% TRUE, '\u2713', '')
     }
     result
 }

@@ -365,16 +365,16 @@ model_equation_ui <- function(fit) {
 #' @return A character string.
 #' @keywords internal
 model_equation_text <- function(fit) {
-    log10 <- function(x) paste0('log₁₀(', x, ')')
+    log10 <- function(x) paste0('log\u2081\u2080(', x, ')')
     u <- if (fit$log_scale) log10('C') else 'C'
-    u2 <- if (fit$log_scale) paste0('[', u, ']²') else paste0(u, '²')
+    u2 <- if (fit$log_scale) paste0('[', u, ']\u00b2') else paste0(u, '\u00b2')
     degree <- poly_degree(fit$model)
-    ratio <- '(C / c)ᵇ'
+    ratio <- '(C / c)\u1d47'
     rhs <- switch(
         if (degree > 0) 'poly' else fit$model,
-        'poly' = paste0('a + b · ', u, if (degree == 2) paste0(' + c · ', u2)),
-        '4PL' = paste0('d + (a − d) / (1 + ', ratio, ')'),
-        '5PL' = paste0('d + (a − d) / [1 + ', ratio, ']ᵍ')
+        'poly' = paste0('a + b \u00b7 ', u, if (degree == 2) paste0(' + c \u00b7 ', u2)),
+        '4PL' = paste0('d + (a \u2212 d) / (1 + ', ratio, ')'),
+        '5PL' = paste0('d + (a \u2212 d) / [1 + ', ratio, ']\u1d4d')
     )
     paste0(if (fit$log_scale) log10('OD') else 'OD', ' = ', rhs)
 }
@@ -437,7 +437,8 @@ mod_curve_ui <- function(id, lang) {
             # Quadratic models only: the branch of the parabola used for quantification
             shiny::conditionalPanel(
                 condition = "input.model == 'QUAD' || input.model == 'QRM'", ns = ns,
-                shiny::checkboxInput(ns('use_interval'), with_tooltip(t('curve.interval_use'), t('curve.interval_help')),
+                shiny::checkboxInput(ns('use_interval'),
+                                     with_tooltip(t('curve.interval_use'), t('curve.interval_help')),
                                      value = FALSE, width = '100%'),
                 shiny::conditionalPanel(
                     condition = 'input.use_interval', ns = ns,
@@ -636,7 +637,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             o <- options()
             with_validation(
                 calculate(d, model = s$model, weights = s$weights, interval = s$interval, background = s$background,
-                          subtract_background = s$subtract, at_blank = s$at_blank, exclude = exclusions(), exclude_background = bg_exclusions(),
+                          subtract_background = s$subtract, at_blank = s$at_blank, exclude = exclusions(),
+                          exclude_background = bg_exclusions(),
                           round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,
