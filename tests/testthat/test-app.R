@@ -675,6 +675,63 @@ test_that('the background has its own sub-tab, first, while the curve opens', {
     })
 })
 
+test_that('a double click on a row excludes or restores a well, the rows keep their order', {
+    plate <- load_sample('bca')
+    # a negative control: its role is not ticked, its row cannot be excluded
+    nc <- plate[plate$type == 'blank', ][1, ]
+    nc$type <- 'NC'
+    nc$OD <- 0.3
+    plate <- rbind(plate, nc)
+    keys <- well_keys(plate)
+    blanks <- keys[plate$type == 'blank']
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(plate), rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        rows <- function() LinearityApp:::background_wells_table(background_info(), 'en')$Position
+        before <- rows()
+        expect_equal(before, c(blanks, keys[plate$type == 'NC']))
+        # the first blank: excluded with a reason, it keeps its row
+        session$setInputs(background_dblclick = list(key = blanks[1], nonce = 1))
+        session$setInputs(reason_choice = 'outlier', reason = '', confirm_exclude = 1)
+        expect_equal(session$returned$background_exclusions()$key, blanks[1])
+        expect_equal(rows(), before)
+        expect_match(output$background_wells, 'excluded: Outlier', fixed = TRUE)
+        # a second double click restores it
+        session$setInputs(background_dblclick = list(key = blanks[1], nonce = 2))
+        session$setInputs(confirm_restore = 1)
+        expect_equal(nrow(session$returned$background_exclusions()), 0)
+        # the negative control is not used: nothing happens
+        session$setInputs(background_dblclick = list(key = keys[plate$type == 'NC'], nonce = 3))
+        session$setInputs(reason_choice = 'outlier', reason = '', confirm_exclude = 2)
+        expect_equal(nrow(session$returned$background_exclusions()), 0)
+
+        # a standard point: excluded and restored from its row, which stays in place
+        points <- function() LinearityApp:::standard_points_table(session$returned$result(), 'en')
+        order_before <- points()$Position
+        point <- order_before[3]
+        session$setInputs(points_dblclick = list(key = point, nonce = 4))
+        session$setInputs(reason_choice = 'pipetting', reason = '', confirm_exclude = 3)
+        expect_equal(session$returned$exclusions()$key, point)
+        tab <- points()
+        expect_equal(tab$Position, order_before)
+        # no column of reasons: the empty back-calculated value tells, the row is grey in the app
+        expect_false('Not back-calculated' %in% names(tab))
+        expect_equal(tab[['Back-calculated']][3], '')
+        marked <- LinearityApp:::standard_points_table(session$returned$result(), 'en', highlight = TRUE)
+        expect_equal(marked$Position[3], paste0('<span class="pt-excluded">', point, '</span>'))
+        expect_false(grepl('pt-excluded', marked$Position[2], fixed = TRUE))
+        session$setInputs(points_dblclick = list(key = point, nonce = 5))
+        session$setInputs(confirm_restore = 2)
+        expect_equal(nrow(session$returned$exclusions()), 0)
+        expect_equal(points()$Position, order_before)
+    })
+    html <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
+    expect_match(html, 'class="dblclick-table" data-input="curve-background_dblclick"', fixed = TRUE)
+    expect_match(html, 'class="dblclick-table" data-input="curve-points_dblclick"', fixed = TRUE)
+    # the button restoring the background wells under all the tables
+    expect_match(html, 'id="curve-background_wells".*id="curve-background_restore"')
+})
+
 test_that('calibrators can be hidden from the plot of the background wells', {
     html <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
     expect_match(html, '<div class="level-toggles">', fixed = TRUE)

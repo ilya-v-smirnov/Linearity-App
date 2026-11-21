@@ -150,14 +150,16 @@ background_import_ui <- function(data, lang = 'en') {
 #' @return A data.frame with translated column names: role, position, OD,
 #'   deviation from the value subtracted (empty when nothing is subtracted)
 #'   and the status of the well (used,
-#'   excluded by the user with the reason, or of a role left out); the wells
-#'   used first, then by role in the order of [background_roles()]. `NULL`
+#'   excluded by the user with the reason, or of a role left out); by role in
+#'   the order of [background_roles()], then in the order of the plate, so
+#'   that an exclusion does not move a row. `NULL`
 #'   without background wells.
 #' @keywords internal
 background_wells_table <- function(bg, lang = 'en') {
     w <- bg$wells
     if (is.null(w) || nrow(w) == 0) return(NULL)
-    w <- w[order(!w$used, match(w$role, background_roles())), , drop = FALSE]
+    # By role, then in the order of the plate: an exclusion does not move a row
+    w <- w[order(match(w$role, background_roles()), seq_len(nrow(w))), , drop = FALSE]
     num <- function(x, fmt) ifelse(is.na(x), '', sprintf(fmt, x))
     status <- ifelse(w$used, tr('bg.used_yes', lang),
                      ifelse(w$excluded, paste0(tr('bg.status_excluded', lang), ': ', w$reason), tr('bg.used_no', lang)))

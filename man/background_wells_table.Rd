@@ -16,8 +16,9 @@ background_wells_table(bg, lang = "en")
 A data.frame with translated column names: role, position, OD,
 deviation from the value subtracted (empty when nothing is subtracted)
 and the status of the well (used,
-excluded by the user with the reason, or of a role left out); the wells
-used first, then by role in the order of \code{\link[=background_roles]{background_roles()}}. \code{NULL}
+excluded by the user with the reason, or of a role left out); by role in
+the order of \code{\link[=background_roles]{background_roles()}}, then in the order of the plate, so
+that an exclusion does not move a row. \code{NULL}
 without background wells.
 }
 \description{

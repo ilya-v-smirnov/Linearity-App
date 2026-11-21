@@ -484,9 +484,12 @@ mod_curve_ui <- function(id, lang) {
                                   shiny::checkboxGroupInput(ns('bg_levels'),
                                                             with_tooltip(t('bg.levels_shown'), t('bg.levels_help')),
                                                             choices = character(0), inline = TRUE)),
-                       shiny::uiOutput(ns('background_restore')),
                        shiny::h5(with_tooltip(t('bg.wells_section'), t('bg.table_help'))),
-                       shiny::tableOutput(ns('background_wells')))
+                       # A double click on a row excludes or restores the well
+                       shiny::div(class = 'dblclick-table', `data-input` = ns('background_dblclick'),
+                                  shiny::tableOutput(ns('background_wells'))),
+                       # Under all the tables, while wells are excluded
+                       shiny::uiOutput(ns('background_restore')))
         ),
         bslib::nav_panel(
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
@@ -532,7 +535,10 @@ mod_curve_ui <- function(id, lang) {
                        # Collapsed by default
                        shiny::tags$details(class = 'std-points',
                                            shiny::tags$summary(t('quality.section_points')),
-                                           shiny::tableOutput(ns('points'))),
+                                           shiny::p(class = 'text-muted small', t('quality.points_hint')),
+                                           # A double click on a row excludes or restores the point
+                                           shiny::div(class = 'dblclick-table', `data-input` = ns('points_dblclick'),
+                                                      shiny::tableOutput(ns('points')))),
                        # The wells against the plan: only when a level deviates from it, collapsed by default
                        shiny::uiOutput(ns('wells_block')),
                        shiny::h5(t('quality.section_curve')),
@@ -810,10 +816,10 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
 
         # The same dialog excludes or restores a standard point or a background well
         store <- function(target) if (identical(target, 'background')) bg_exclusions else exclusions
-        point_dialog <- function(text, reason = NULL, codes = exclusion_reasons()) {
+        point_dialog <- function(text, reason = NULL, codes = exclusion_reasons(), section = 'curve') {
             if (!is.null(reason)) {
                 return(shiny::showModal(shiny::modalDialog(
-                    title = t('curve.restore_title'),
+                    title = t(paste0(section, '.restore_title')),
                     shiny::p(text),
                     shiny::p(t('exclusion.reason'), ': ', reason),
                     footer = shiny::tagList(shiny::modalButton(t('curve.cancel')),
@@ -821,7 +827,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                 )))
             }
             shiny::showModal(shiny::modalDialog(
-                title = t('curve.exclude_title'),
+                title = t(paste0(section, '.exclude_title')),
                 shiny::p(text),
                 shiny::radioButtons(ns('reason_choice'), t('curve.reason'),
                                     choices = stats::setNames(c(codes, 'other'),
@@ -837,36 +843,57 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             ))
         }
 
-        shiny::observeEvent(input$curve_click, {
-            r <- result()
-            points <- rbind(
+        # Standard points of the fit and those excluded by the user: a click on the curve or a double
+        # click on a row of the individual points opens the same dialog
+        standard_points <- function(r) {
+            rbind(
                 data.frame(key = r$standard_data$.key, conc = r$standard_data$conc,
-                           OD = r$standard_data$OD, excluded = FALSE),
+                           OD = r$standard_data$OD, excluded = rep(FALSE, nrow(r$standard_data))),
                 data.frame(key = r$exclusions$key, conc = r$exclusions$conc,
                            OD = r$exclusions$OD, excluded = rep(TRUE, nrow(r$exclusions)))
             )
-            near <- shiny::nearPoints(points, input$curve_click, xvar = 'conc', yvar = 'OD',
-                                      threshold = 10, maxpoints = 1)
-            if (nrow(near) == 0) return()
-            clicked(list(key = near$key, target = 'standard'))
-            point_dialog(point_text(near), if (near$excluded) exclusions()$reason[exclusions()$key == near$key])
+        }
+        open_standard <- function(p) {
+            if (is.null(p) || nrow(p) == 0) return()
+            p <- p[1, ]
+            clicked(list(key = p$key, target = 'standard'))
+            point_dialog(point_text(p), if (p$excluded) exclusions()$reason[exclusions()$key == p$key])
+        }
+        # Background wells: those subtracted and those excluded by the user, not those of a role left out
+        open_background <- function(w) {
+            if (is.null(w) || nrow(w) == 0) return()
+            w <- w[1, ]
+            clicked(list(key = w$key, target = 'background'))
+            text <- t('bg.point', well = w$key, role = role_labels(w$role, lang), od = signif(w$OD, 3))
+            point_dialog(text, if (w$kind == 'excluded') bg_exclusions()$reason[bg_exclusions()$key == w$key],
+                         codes = background_exclusion_reasons(), section = 'bg')
+        }
+        clickable_background <- function() {
+            pts <- background_points(background_info(), NULL, lang)
+            pts[pts$kind %in% c('used', 'excluded'), , drop = FALSE]
+        }
+
+        shiny::observeEvent(input$curve_click, {
+            open_standard(shiny::nearPoints(standard_points(result()), input$curve_click, xvar = 'conc',
+                                            yvar = 'OD', threshold = 10, maxpoints = 1))
+        })
+        shiny::observeEvent(input$points_dblclick, {
+            pts <- standard_points(result())
+            open_standard(pts[pts$key %in% input$points_dblclick$key, , drop = FALSE])
         })
 
-        # Background wells: those subtracted and those excluded by the user can be clicked
         shiny::observeEvent(input$background_click, {
-            bg <- background_info()
-            pts <- background_points(bg, NULL, lang)
-            pts <- pts[pts$kind %in% c('used', 'excluded'), , drop = FALSE]
-            near <- shiny::nearPoints(pts, input$background_click, xvar = 'x', yvar = 'OD', threshold = 10,
-                                      maxpoints = 1)
-            if (nrow(near) == 0) return()
-            clicked(list(key = near$key, target = 'background'))
-            text <- t('bg.point', well = near$key, role = role_labels(near$role, lang), od = signif(near$OD, 3))
-            point_dialog(text, if (near$kind == 'excluded') bg_exclusions()$reason[bg_exclusions()$key == near$key],
-                         codes = background_exclusion_reasons())
+            open_background(shiny::nearPoints(clickable_background(), input$background_click, xvar = 'x',
+                                              yvar = 'OD', threshold = 10, maxpoints = 1))
+        })
+        shiny::observeEvent(input$background_dblclick, {
+            pts <- clickable_background()
+            open_background(pts[pts$key %in% input$background_dblclick$key, , drop = FALSE])
         })
 
+        # The dialog acts on the well it was opened for; that well is forgotten once it is done
         shiny::observeEvent(input$confirm_exclude, {
+            shiny::req(clicked())
             choice <- if (is.null(input$reason_choice)) '' else input$reason_choice
             reason <- if (choice %in% exclusion_reasons()) {
                 exclusion_reasons(lang)[[choice]]
@@ -881,13 +908,16 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             ex <- target()
             target(rbind(ex[ex$key != clicked()$key, ],
                          data.frame(key = clicked()$key, reason = reason)))
+            clicked(NULL)
             shiny::removeModal()
         })
 
         shiny::observeEvent(input$confirm_restore, {
+            shiny::req(clicked())
             target <- store(clicked()$target)
             ex <- target()
             target(ex[ex$key != clicked()$key, , drop = FALSE])
+            clicked(NULL)
             shiny::removeModal()
         })
 

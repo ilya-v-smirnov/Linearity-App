@@ -117,7 +117,8 @@ recovery (\%), flag and \code{OD.le.blank} as for the samples (\code{NULL} if th
 are no QC wells);
 \item \code{at_blank}: the rule for a signal at or below the background (see
 \code{\link[=blank_rules]{blank_rules()}}); \code{increasing}: whether the curve increases with the
-concentration (see \code{\link[=curve_increasing]{curve_increasing()}}).
+concentration (see \code{\link[=curve_increasing]{curve_increasing()}});
+\item \code{standard_keys}: the keys of all standard wells in the order of the plate.
 }
 
 The background is the arithmetic mean of the wells of the chosen roles

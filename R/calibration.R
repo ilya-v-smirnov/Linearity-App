@@ -584,7 +584,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'     are no QC wells);
 #'   * `at_blank`: the rule for a signal at or below the background (see
 #'     [blank_rules()]); `increasing`: whether the curve increases with the
-#'     concentration (see [curve_increasing()]).
+#'     concentration (see [curve_increasing()]);
+#'   * `standard_keys`: the keys of all standard wells in the order of the plate.
 #'
 #' The background is the arithmetic mean of the wells of the chosen roles
 #' (argument `background`): reagent blank, zero calibrator and negative
@@ -837,7 +838,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          result = sample_data,
          qc = qc,
          at_blank = at_blank,
-         increasing = increasing)
+         increasing = increasing,
+         standard_keys = as.character(data$.key[data$type == 'standard']))
 }
 
 

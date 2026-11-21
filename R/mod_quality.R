@@ -223,9 +223,13 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #' Individual Standard Points for Display
 #'
 #' The standards used in the fit with their back-calculated concentrations,
-#' sorted by decreasing concentration. A point deviates from the acceptance
-#' criteria if its bias exceeds `std_bias` (`std_bias_edge` at the lowest and
-#' highest level of the fit, see [qc_criteria()]).
+#' and in their places the points excluded by the user (without a
+#' back-calculated concentration, in grey for tables rendered as HTML; the
+#' reason is in the wells deviating from the plan), sorted by decreasing
+#' concentration, then in the order of the plate: an exclusion does not move a
+#' row. A point deviates from the acceptance criteria if its bias exceeds
+#' `std_bias` (`std_bias_edge` at the lowest and highest level of the fit, see
+#' [qc_criteria()]).
 #'
 #' @param result Output of [calculate()].
 #' @param lang Language code.
@@ -236,43 +240,49 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #'   nominal concentration, OD as measured and after the background
 #'   correction, back-calculated concentration, bias (%) and
 #'   absolute error (back-calculated minus nominal); when some points have a
-#'   signal at or below the background, a column marking them; when some
-#'   points have no back-calculated concentration, a last column with the
-#'   reason (see [inverse_reason()]).
+#'   signal at or below the background, a column marking them.
 #' @keywords internal
 standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     std <- result$standard_data
+    ex <- result$exclusions
+    if (is.null(ex)) ex <- data.frame(key = character(0), conc = numeric(0), OD = numeric(0), reason = character(0))
     # Three significant digits without scientific notation (small errors near 0)
     num <- function(x) ifelse(is.na(x), '', trimws(formatC(x, digits = 3, format = 'fg')))
-    calc <- inverse_fun(result$fit, std$OD)
-    reason <- inverse_reason(result$fit, std$OD)
-    levels <- c(std$conc, result$exclusions$conc)
-    bias <- 100 * (calc - std$conc) / std$conc
+    raw <- if ('OD.raw' %in% names(std)) std$OD.raw else std$OD + result$nc_value
+    # The points of the fit, then those excluded by the user; sorted below
+    pts <- data.frame(key = c(as.character(std$.key), as.character(ex$key)), conc = c(std$conc, ex$conc),
+                      OD = c(std$OD, ex$OD), raw = c(raw, ex$OD + result$nc_value),
+                      excluded = c(rep(FALSE, nrow(std)), rep(TRUE, nrow(ex))),
+                      comment = c(rep(NA_character_, nrow(std)), as.character(ex$reason)))
+    calc <- ifelse(pts$excluded, NA_real_, inverse_fun(result$fit, pts$OD))
+    bias <- 100 * (calc - pts$conc) / pts$conc
     criteria <- if (is.null(result$quality$criteria)) qc_criteria() else result$quality$criteria
-    limit <- ifelse(std$conc %in% range(std$conc), criteria$std_bias_edge, criteria$std_bias)
+    limit <- ifelse(pts$conc %in% range(std$conc), criteria$std_bias_edge, criteria$std_bias)
     bias_text <- ifelse(is.na(bias), '', sprintf('%.1f', bias))
     if (highlight) {
-        failed <- is.na(bias) | abs(bias) > limit
+        failed <- !pts$excluded & (is.na(bias) | abs(bias) > limit)
         bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)
     }
-    raw <- if ('OD.raw' %in% names(std)) std$OD.raw else std$OD + result$nc_value
-    out <- data.frame(standard = standard_names(std$conc, levels), key = std$.key, conc = num(std$conc),
-                      raw = sprintf('%.4f', raw), OD = sprintf('%.4f', std$OD), calc = num(calc), bias = bias_text,
-                      error = num(calc - std$conc))
+    out <- data.frame(standard = standard_names(pts$conc, pts$conc), key = pts$key, conc = num(pts$conc),
+                      raw = sprintf('%.4f', pts$raw), OD = sprintf('%.4f', pts$OD), calc = num(calc),
+                      bias = bias_text, error = num(calc - pts$conc))
     cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'col.od_raw', 'col.od_corrected', 'col.calc',
               'col.bias', 'col.error')
     # The signal at or below the background, as for the samples and the quality controls
-    at_blank <- !is.na(std$OD) & std$OD <= 0
+    at_blank <- !is.na(pts$OD) & pts$OD <= 0
     if (any(at_blank)) {
         out$at_blank <- ifelse(at_blank, '✓', '')
         cols <- c(cols, 'col.od_le_blank')
     }
-    if (any(!is.na(reason))) {
-        out$reason <- ifelse(is.na(reason), '', vapply(paste0('backcalc.', reason), tr, '', lang = lang))
-        if (highlight) out$reason <- ifelse(is.na(reason), '', paste0('<span class="crit-fail">', out$reason, '</span>'))
-        cols <- c(cols, 'col.backcalc_reason')
+    # The points excluded by the user in grey; why a point has no back-calculated concentration is told
+    # in the wells deviating from the plan
+    if (highlight && any(pts$excluded)) {
+        grey <- function(x) ifelse(pts$excluded & nzchar(x), paste0('<span class="pt-excluded">', x, '</span>'), x)
+        out[] <- lapply(out, grey)
     }
-    out <- out[order(std$conc, decreasing = TRUE), , drop = FALSE]
+    # By decreasing concentration, then in the order of the plate
+    plate <- match(pts$key, result$standard_keys)
+    out <- out[order(-pts$conc, plate, seq_len(nrow(pts))), , drop = FALSE]
     rownames(out) <- NULL
     names(out) <- vapply(cols, tr, '', lang = lang)
     out

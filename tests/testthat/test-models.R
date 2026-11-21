@@ -462,7 +462,8 @@ test_that('incomplete back-calculation is reported in the notes, the points and 
                  paste0('S1 (32): 1 of 2 wells in the fit back-calculated; ', key, ': OD outside fitted asymptotes'),
                  fixed = TRUE, all = FALSE)
     pts <- LinearityApp:::standard_points_table(r, 'en')
-    expect_equal(pts[['Not back-calculated']][pts$Position == key], 'OD outside fitted asymptotes')
+    # the reason is in the wells deviating from the plan, not repeated in the points
+    expect_false('Not back-calculated' %in% names(pts))
     expect_equal(pts[['Back-calculated']][pts$Position == key], '')
 
     # the errors of the comparison use the back-calculated standards; the failures are counted

@@ -218,7 +218,6 @@ col:
   n_fitted: "Fitted"
   n_calc: "Back-calculated"
   lost: "Lost wells"
-  backcalc_reason: "Not back-calculated"
   conc: "Concentration"
   count: "n"
   od_mean: "Mean OD"
@@ -447,6 +446,7 @@ quality:
   levels: "Accepted standard levels: {n} of {total} ({needed} required)"
   section_standards: "Standards (level means)"
   section_points: "Individual standard points"
+  points_hint: "Double-click a row to exclude or restore the point (a reason is required to exclude it)."
   section_wells: "Wells deviating from the plan"
   section_bias: "Bias of the back-calculated standards"
   bias_help: "Where the curve over- or underestimates the concentration. Grey points: the signed bias (back-calculated minus nominal, % of nominal) of each well of the fit. Diamonds: the mean bias of each level, green if the level is accepted, red if not. Dashed lines: the allowed bias applied to each level, wider at the lowest and highest level. Wells without a back-calculated concentration are not shown (see the wells deviating from the plan). A trend along the concentration points to a model that does not fit, e.g. near the plateau, where the residuals in OD are small."
@@ -628,9 +628,11 @@ blank:
 
 bg:
   plot_section: "Background wells and calibrators"
+  exclude_title: "Exclude background well"
+  restore_title: "Restore background well"
   levels_shown: "Calibrators on the plot"
   levels_help: "Untick a level to hide it from the plot: the OD axis is rescaled to the points left, so that the scatter of the blanks can be seen next to strong calibrators. The view only: the background and the calculation do not change."
-  table_help: "Deviation: OD of the well minus the value subtracted. Status: ✓ the well is in the background; — its role is not ticked; excluded: the well was excluded by the user, with the reason."
+  table_help: "Deviation: OD of the well minus the value subtracted. Status: ✓ the well is in the background; — its role is not ticked; excluded: the well was excluded by the user, with the reason. Double-click a row to exclude or restore the well (wells of a role not ticked cannot be excluded)."
   report_excluded: "excluded by the user: {wells}"
   used: "Used"
   status: "Status"

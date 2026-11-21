@@ -144,6 +144,12 @@
 .well-blank    { background: #e3e3e3; }
 .background-panel { max-width: 720px; }
 
+/* Tables of wells: a double click on a row excludes or restores the well */
+.dblclick-table tbody tr { cursor: pointer; user-select: none; }
+.dblclick-table tbody tr:hover td { background-color: #eef4fb; }
+/* Standard points excluded by the user */
+.pt-excluded { color: #9e9e9e; }
+
 /* Standard levels shown on the plot of the background wells: toggle buttons */
 .level-toggles { margin: 0.2rem 0 0.8rem; }
 .level-toggles .control-label { font-size: 0.9rem; margin-bottom: 0.25rem; }

@@ -19,14 +19,16 @@ A data.frame with translated column names: level name, position,
 nominal concentration, OD as measured and after the background
 correction, back-calculated concentration, bias (\%) and
 absolute error (back-calculated minus nominal); when some points have a
-signal at or below the background, a column marking them; when some
-points have no back-calculated concentration, a last column with the
-reason (see \code{\link[=inverse_reason]{inverse_reason()}}).
+signal at or below the background, a column marking them.
 }
 \description{
 The standards used in the fit with their back-calculated concentrations,
-sorted by decreasing concentration. A point deviates from the acceptance
-criteria if its bias exceeds \code{std_bias} (\code{std_bias_edge} at the lowest and
-highest level of the fit, see \code{\link[=qc_criteria]{qc_criteria()}}).
+and in their places the points excluded by the user (without a
+back-calculated concentration, in grey for tables rendered as HTML; the
+reason is in the wells deviating from the plan), sorted by decreasing
+concentration, then in the order of the plate: an exclusion does not move a
+row. A point deviates from the acceptance criteria if its bias exceeds
+\code{std_bias} (\code{std_bias_edge} at the lowest and highest level of the fit, see
+\code{\link[=qc_criteria]{qc_criteria()}}).
 }
 \keyword{internal}
