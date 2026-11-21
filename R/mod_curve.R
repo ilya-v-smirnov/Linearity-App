@@ -534,7 +534,8 @@ mod_curve_ui <- function(id, lang) {
                                   shiny::div(class = 'bias-panel', shiny::plotOutput(ns('bias'), height = 'auto'))),
                        # Collapsed by default
                        shiny::tags$details(class = 'std-points',
-                                           shiny::tags$summary(t('quality.section_points')),
+                                           shiny::tags$summary(with_tooltip(t('quality.section_points'),
+                                                                            t('quality.points_criteria'))),
                                            shiny::p(class = 'text-muted small', t('quality.points_hint')),
                                            # A double click on a row excludes or restores the point
                                            shiny::div(class = 'dblclick-table', `data-input` = ns('points_dblclick'),

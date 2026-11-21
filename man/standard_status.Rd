@@ -4,16 +4,20 @@
 \alias{standard_status}
 \title{Status of a Standard Level for Display}
 \usage{
-standard_status(status, lang = "en")
+standard_status(status, lang = "en", bias_failed = NULL, cv_failed = NULL)
 }
 \arguments{
 \item{status}{Codes from \code{\link[=assess_standards]{assess_standards()}}.}
 
 \item{lang}{Language code.}
+
+\item{bias_failed, cv_failed}{Logical vectors along \code{status}: the mean bias
+or the CV of the level exceeds its limit. A failed level (\code{"fail"}) is
+marked with the criterion it fails; without them, with the mark alone.}
 }
 \value{
-Character vector: the marks of accepted and failed levels, a short
-text for the other statuses.
+Character vector: the mark of accepted levels, the mark and the
+failed criterion of failed levels, a short text for the other statuses.
 }
 \description{
 Status of a Standard Level for Display

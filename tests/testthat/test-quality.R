@@ -562,6 +562,56 @@ test_that('the CV criterion of the standards uses back-calculated concentrations
     tab <- quality_tables(list(standards = st), 'en')$standards
     expect_true('CV of back-calculated, %' %in% names(tab))
     expect_false(any(grepl('OD, %', names(tab), fixed = TRUE)))
+    # a level failing by its CV alone says so (the replicates of the Griess standards differ)
+    strict <- assess_standards(calculate(load_sample('griess'), 'LRM')$fit, qc_criteria(cv = 5, cv_edge = 5))
+    by_cv <- strict$status == 'fail' & abs(strict$bias) <= strict$bias.limit
+    expect_true(any(by_cv))
+    tab <- quality_tables(list(standards = strict), 'en')$standards
+    # the table runs from the highest concentration
+    expect_equal(tab$Accepted[rev(by_cv)], rep('✗ CV', sum(by_cv)))
+    ru <- quality_tables(list(standards = strict), 'ru')$standards
+    expect_equal(ru[[tr('col.pass', 'ru')]][rev(by_cv)], rep('✗ CV', sum(by_cv)))
+})
+
+test_that('a failed level is marked with the criterion it fails', {
+    status <- LinearityApp:::standard_status
+    s <- c('fail', 'fail', 'fail', 'pass', 'replicate_lost')
+    b <- c(TRUE, FALSE, TRUE, FALSE, FALSE)
+    cv <- c(FALSE, TRUE, TRUE, FALSE, TRUE)
+    expect_equal(status(s, 'en', b, cv), c('✗ bias', '✗ CV', '✗ bias, CV', '✓',
+                                           '✗ replicate lost'))
+    expect_equal(status(s, 'ru', b, cv)[c(1, 3)], c('✗ смещение', '✗ смещение, CV'))
+    # without the criteria, the mark alone
+    expect_equal(status('fail', 'en'), '✗')
+    # a level reading 40 % high fails by its bias
+    r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    tab <- quality_tables(r$quality, 'en')$standards
+    expect_equal(tab$Accepted[tab$Concentration == '8'], '✗ bias')
+})
+
+test_that('the bias plot tells a level failing by its CV from one failing by its bias', {
+    fit_r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    b <- ggplot2::ggplot_build(LinearityApp:::plot_bias(fit_r))
+    means <- b$data[[5]]
+    # the level of 8 fails by its bias: a red diamond; both of its wells are circled
+    expect_equal(sum(means$fill == '#c62828'), 1)
+    expect_false('white' %in% means$fill)
+    st <- fit_r$quality$standards
+    beyond <- b$data[[6]]
+    expect_equal(nrow(beyond), 2)
+    expect_equal(nrow(b$data[[7]]), 0)
+
+    # a strict CV on the Griess standards: levels fail by their CV alone, as white diamonds marked CV
+    r <- calculate(load_sample('griess'), 'LRM', criteria = qc_criteria(cv = 5, cv_edge = 5))
+    st <- r$quality$standards
+    by_cv <- st$status == 'fail' & abs(st$bias) <= st$bias.limit
+    expect_true(any(by_cv))
+    b <- ggplot2::ggplot_build(LinearityApp:::plot_bias(r))
+    means <- b$data[[5]]
+    expect_equal(sum(means$fill == 'white'), sum(by_cv))
+    expect_true(all(means$colour[means$fill == 'white'] == '#c62828'))
+    expect_equal(nrow(b$data[[7]]), sum(st$status == 'fail' & st$calc.cv > st$cv.limit, na.rm = TRUE))
+    expect_true(all(b$data[[7]]$label == 'CV'))
 })
 
 test_that('standards are sorted by decreasing concentration and failures are highlighted', {

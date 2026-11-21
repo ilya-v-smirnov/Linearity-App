@@ -18,10 +18,13 @@ A ggplot2 object, or \code{NULL} without back-calculated wells.
 }
 \description{
 Where the curve over- or underestimates: the signed bias (\%) of every
-well of the fit with a back-calculated concentration (grey points), the
-mean bias of each level (diamonds: green when the level is accepted, red
-otherwise) and the limits applied to the levels (dashed: the allowed bias,
-wider at the boundary calibrators). The concentration axis is the same as
-on the standard curve (see \code{\link[=conc_axis]{conc_axis()}}).
+well of the fit with a back-calculated concentration (grey points, circled
+in red beyond the limit of their level), the mean bias of each level
+(diamonds: green when the level is accepted, red when its mean bias exceeds
+the limit, white with a red outline when it is rejected for another reason;
+"CV" above a rejected level whose CV exceeds the limit) and the limits
+applied to the levels (dashed: the allowed bias, wider at the boundary
+calibrators). The concentration axis is the same as on the standard curve
+(see \code{\link[=conc_axis]{conc_axis()}}).
 }
 \keyword{internal}

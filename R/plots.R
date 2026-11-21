@@ -189,11 +189,14 @@ plot_fitted_resid <- function(result, xtitle = '', lang = 'en') {
 #' Bias of the Back-Calculated Standards vs. Concentration
 #'
 #' Where the curve over- or underestimates: the signed bias (%) of every
-#' well of the fit with a back-calculated concentration (grey points), the
-#' mean bias of each level (diamonds: green when the level is accepted, red
-#' otherwise) and the limits applied to the levels (dashed: the allowed bias,
-#' wider at the boundary calibrators). The concentration axis is the same as
-#' on the standard curve (see [conc_axis()]).
+#' well of the fit with a back-calculated concentration (grey points, circled
+#' in red beyond the limit of their level), the mean bias of each level
+#' (diamonds: green when the level is accepted, red when its mean bias exceeds
+#' the limit, white with a red outline when it is rejected for another reason;
+#' "CV" above a rejected level whose CV exceeds the limit) and the limits
+#' applied to the levels (dashed: the allowed bias, wider at the boundary
+#' calibrators). The concentration axis is the same as on the standard curve
+#' (see [conc_axis()]).
 #'
 #' @param result Output of [calculate()].
 #' @param xtitle Title of the concentration axis.
@@ -210,8 +213,12 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
     st <- st[st$n > 0, , drop = FALSE]
     st <- st[order(st$conc), , drop = FALSE]
     means <- st[!is.na(st$bias), , drop = FALSE]
-    means$state <- ifelse(means$pass, 'pass', 'fail')
+    # Red where the mean bias is the failure; a white diamond where the level fails by another criterion
+    means$state <- ifelse(means$pass, 'pass', ifelse(abs(means$bias) > means$bias.limit, 'fail', 'other'))
+    cv_failed <- means[!means$pass & !is.na(means$calc.cv) & means$calc.cv > means$cv.limit, , drop = FALSE]
     limits <- data.frame(conc = st$conc, upper = st$bias.limit, lower = -st$bias.limit)
+    # Wells beyond the limit of their level, as in the table of individual points
+    beyond <- wells[(abs(wells$bias) > st$bias.limit[match(wells$conc, st$conc)]) %in% TRUE, , drop = FALSE]
     axis <- conc_axis(result)
 
     plot <-
@@ -222,9 +229,14 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
         ggplot2::geom_step(data = limits, ggplot2::aes(.data$conc, .data$lower), direction = 'mid',
                            linetype = 'dashed', colour = 'grey30') +
         ggplot2::geom_point(size = 1.8, alpha = 0.5, colour = 'grey20') +
-        ggplot2::geom_point(data = means, ggplot2::aes(.data$conc, .data$bias, fill = .data$state), shape = 23,
-                            size = 3.2, colour = 'black') +
-        ggplot2::scale_fill_manual(values = c(pass = '#1b5e20', fail = '#c62828'), guide = 'none') +
+        ggplot2::geom_point(data = means, ggplot2::aes(.data$conc, .data$bias, fill = .data$state,
+                                                       colour = .data$state),
+                            shape = 23, size = 3.2, stroke = 0.8) +
+        ggplot2::geom_point(data = beyond, shape = 1, size = 3.4, stroke = 0.8, colour = '#c62828') +
+        ggplot2::geom_text(data = cv_failed, ggplot2::aes(.data$conc, .data$bias), label = 'CV', vjust = -1.3,
+                           size = 3, colour = '#c62828') +
+        ggplot2::scale_fill_manual(values = c(pass = '#1b5e20', fail = '#c62828', other = 'white'), guide = 'none') +
+        ggplot2::scale_colour_manual(values = c(pass = 'black', fail = 'black', other = '#c62828'), guide = 'none') +
         ggplot2::labs(x = xtitle, y = tr('plot.bias', lang)) +
         lin_theme()
     if (axis$log) {

@@ -76,7 +76,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
         standards <- name(data.frame(num(st$conc), dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
                                      fail(dash(cv_text), cv_failed), fail(dash(pct(st$bias)), bias_failed),
-                                     sprintf('%g', st$bias.limit), fail(standard_status(st$status, lang), !st$pass)),
+                                     sprintf('%g', st$bias.limit),
+                                     fail(standard_status(st$status, lang, bias_failed, cv_failed), !st$pass)),
                           c('col.conc', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias', 'col.limit',
                             'col.pass'))
         # The wells of the levels against the plan, apart: only when a level has fewer back-calculated
@@ -171,17 +172,29 @@ lost_wells_text <- function(lost, lang = 'en') {
 #'
 #' @param status Codes from [assess_standards()].
 #' @param lang Language code.
+#' @param bias_failed,cv_failed Logical vectors along `status`: the mean bias
+#'   or the CV of the level exceeds its limit. A failed level (`"fail"`) is
+#'   marked with the criterion it fails; without them, with the mark alone.
 #'
-#' @return Character vector: the marks of accepted and failed levels, a short
-#'   text for the other statuses.
+#' @return Character vector: the mark of accepted levels, the mark and the
+#'   failed criterion of failed levels, a short text for the other statuses.
 #' @keywords internal
-standard_status <- function(status, lang = 'en') {
+standard_status <- function(status, lang = 'en', bias_failed = NULL, cv_failed = NULL) {
     keys <- c(pass = 'quality.pass', fail = 'quality.fail', incomplete = 'quality.status_incomplete',
               pass_no_cv = 'quality.status_pass_no_cv', pass_singlet = 'quality.status_pass_singlet',
               singlet = 'quality.status_singlet', replicate_lost = 'quality.status_replicate_lost',
               no_points = 'quality.status_no_points',
               outside_interval = 'quality.status_outside_interval')
-    vapply(status, function(x) tr(keys[[x]], lang), '', USE.NAMES = FALSE)
+    out <- vapply(status, function(x) tr(keys[[x]], lang), '', USE.NAMES = FALSE)
+    if (!is.null(bias_failed) && !is.null(cv_failed)) {
+        by_bias <- status == 'fail' & bias_failed & !cv_failed
+        by_cv <- status == 'fail' & cv_failed & !bias_failed
+        by_both <- status == 'fail' & bias_failed & cv_failed
+        out[by_bias] <- tr('quality.status_fail_bias', lang)
+        out[by_cv] <- tr('quality.status_fail_cv', lang)
+        out[by_both] <- tr('quality.status_fail_both', lang)
+    }
+    out
 }
 
 
