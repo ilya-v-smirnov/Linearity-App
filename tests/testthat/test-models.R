@@ -205,9 +205,39 @@ test_that('models are compared on a common scale', {
     cmp <- compare_models(few)
     expect_true(is.na(cmp$AIC[cmp$model == '5PL']))
     expect_false(is.na(cmp$AIC[cmp$model == '4PL']))
+    # a model that cannot be fitted says why, with the same requirement as the calibration
+    five <- cmp[cmp$model == '5PL', ]
+    expect_equal(c(five$status, five$n.levels, five$n.levels.required), c('too_few_levels', '5', '6'))
+    expect_equal(cmp$status[cmp$model == '4PL'], 'ok')
+    tab <- LinearityApp:::comparison_table(cmp, 'en')
+    expect_equal(names(tab)[ncol(tab)], 'Note')
+    expect_equal(tab$Note[cmp$model == '5PL'], 'Insufficient levels: 5 available, 6 required')
+    expect_equal(tab$Note[cmp$model == '4PL'], '')
+    expect_equal(LinearityApp:::comparison_status(data.frame(status = 'fit_failed', n.levels = 7,
+                                                             n.levels.required = 6), 'ru'),
+                 'Подгонка не сошлась')
 
     tab <- LinearityApp:::comparison_table(compare_models(std), 'ru')
     expect_equal(names(tab)[1], tr('compare.model', 'ru'))
+    # every model fitted: no column of notes
+    expect_false(tr('compare.note_column', 'ru') %in% names(tab))
+    expect_true(tr('compare.lowest_aic', 'ru') %in% names(tab))
+})
+
+test_that('the common set of wells does not depend on the model', {
+    data <- load_sample('bca')
+    keys <- well_keys(data)[data$type == 'standard']
+    excl <- data.frame(key = keys[1], reason = 'Outlier')
+    r <- calculate(data, 'LIN', exclude = excl, at_blank = 'exclude')
+    pool <- LinearityApp:::calibration_pool(data, r$nc_value, excl, 'exclude')
+    expect_equal(pool, r$calibration_pool)
+    expect_false(keys[1] %in% pool$.key)
+    # the pool is there even when the chosen model cannot be fitted
+    few <- data[!(data$type == 'standard' & data$conc %in% c(0.031, 0.063)), ]
+    expect_error(calculate(few, '5PL'), 'At least 6')
+    cmp <- compare_models(LinearityApp:::calibration_pool(few, calculate(few, 'LRM')$nc_value))
+    expect_equal(cmp$status[cmp$model == '5PL'], 'too_few_levels')
+    expect_false(is.na(cmp$AIC[cmp$model == '4PL']))
 })
 
 test_that('standard points can be excluded with a reason', {

@@ -192,7 +192,8 @@ weight_labels <- function(weights, lang) {
 #' (the errors are those of the back-calculated standards). Otherwise it gets a column with the wells
 #' used (`15/16`: wells in the fit / wells of the common set) instead of the
 #' mark, and the attribute `note` explains the difference (see
-#' [comparison_note()]).
+#' [comparison_note()]). When a model cannot be fitted, a last column says
+#' why (see [comparison_status()]).
 #'
 #' @param cmp Output of [compare_models()].
 #' @param lang Language code.
@@ -213,18 +214,42 @@ comparison_table <- function(cmp, lang) {
         mean = fmt(cmp$mean.abs.error, '%.1f'),
         max = fmt(cmp$max.abs.error, '%.1f'),
         lof = ifelse(is.na(cmp$lof.p), '', format(signif(cmp$lof.p, 2))),
-        rec = ifelse(cmp$lowest.aic, tr('compare.mark', lang), '')
+        rec = ifelse(cmp$lowest.aic, tr('compare.mark', lang), ''),
+        note = comparison_status(cmp, lang)
     )
-    keys <- c('compare.model', 'compare.n_par', 'compare.wells_used', 'compare.n_failed', 'compare.aic',
-              'compare.bic', 'compare.r2', 'compare.mean_error', 'compare.max_error', 'compare.lof',
-              'compare.lowest_aic')
-    names(out) <- vapply(keys, tr, '', lang = lang)
-    # Optional columns: the wells used when they differ, failed inversions when there are any
-    drop <- c(if (same) 3 else ncol(out), if (all(out[[4]] == '')) 4)
-    out <- out[, -drop]
+    # Optional columns: the wells used when they differ (instead of the mark), failed inversions and
+    # the reasons why a model is not fitted when there are any
+    drop <- c(if (same) 'wells' else 'rec', if (all(out$failed == '')) 'failed', if (all(out$note == '')) 'note')
+    keys <- c(model = 'compare.model', n.par = 'compare.n_par', wells = 'compare.wells_used',
+              failed = 'compare.n_failed', AIC = 'compare.aic', BIC = 'compare.bic', R2 = 'compare.r2',
+              mean = 'compare.mean_error', max = 'compare.max_error', lof = 'compare.lof',
+              rec = 'compare.lowest_aic', note = 'compare.note_column')
+    out <- out[, setdiff(names(out), drop), drop = FALSE]
+    names(out) <- vapply(keys[names(out)], tr, '', lang = lang)
     rownames(out) <- NULL
     attr(out, 'note') <- comparison_note(cmp, lang)
     out
+}
+
+
+#' Why a Compared Model Is Not Fitted
+#'
+#' @param cmp Output of [compare_models()].
+#' @param lang Language code.
+#'
+#' @return Character vector, one text per model: empty for the fitted
+#'   models, otherwise the reason (too few standard levels, with the numbers
+#'   available and required, or a fit that failed).
+#' @keywords internal
+comparison_status <- function(cmp, lang) {
+    if (is.null(cmp$status)) return(rep('', nrow(cmp)))
+    vapply(seq_len(nrow(cmp)), function(i) {
+        switch(cmp$status[i],
+               too_few_levels = tr('compare.too_few_levels', lang, n = cmp$n.levels[i],
+                                   needed = cmp$n.levels.required[i]),
+               fit_failed = tr('compare.fit_failed', lang),
+               '')
+    }, '')
 }
 
 
@@ -585,10 +610,19 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             get_coef_ci(result()$fit, round_fun = r$fun, round_par = r$par)
         })
 
-        # All models on the common set of wells: the choice of the model does not change it
+        # Common set of calibration wells: the data, the background, the exclusions by the user and the
+        # rule for a signal at the background, not the model, so that it is there even when the chosen
+        # model cannot be fitted (the same as calibration_pool of calculate())
+        pool <- shiny::reactive({
+            bg <- background_info()
+            at_blank <- if (is.null(input$at_blank)) 'range' else input$at_blank
+            calibration_pool(data(), bg$value, exclusions(), at_blank)
+        })
+        # All models on the common set of wells: the choice of the model does not change it. Without the
+        # background chosen the comparison of the OD as measured would point to a model fitted to wrong data
         comparison <- shiny::reactive({
-            s <- settings()
-            compare_models(result()$calibration_pool, weights = s$weights)
+            shiny::validate(shiny::need(!isTRUE(background_info()$empty), t('compare.no_background')))
+            compare_models(pool(), weights = if (is.null(input$weights)) 'none' else input$weights)
         })
 
         # Original (all standards) and refitted (without the excluded points) calibrations
@@ -691,13 +725,16 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
+        # Without the background the table alone says why there is no comparison
         output$compare_note <- shiny::renderUI({
+            shiny::req(!isTRUE(background_info()$empty))
             note <- comparison_note(comparison(), lang)
             if (is.null(note)) return(NULL)
             shiny::div(class = 'alert alert-warning compare-note', shiny::icon('triangle-exclamation'), ' ', note)
         })
         # The row of the chosen model is shaded (renderTable gives no classes to the rows)
         output$compare_mark <- shiny::renderUI({
+            shiny::req(!isTRUE(background_info()$empty))
             row <- match(settings()$model, comparison()$model)
             if (is.na(row)) return(NULL)
             shiny::tags$style(sprintf('#%s tbody tr:nth-child(%d) td { background-color: #e9ecef; }',

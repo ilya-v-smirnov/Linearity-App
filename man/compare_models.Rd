@@ -18,7 +18,10 @@ otherwise the rows are numbered. Wells with a missing OD are not counted.}
 A data.frame with one row per model; models that cannot be fitted
 have \code{NA} statistics. Besides the statistics: \code{n.used} (wells in the
 fit), \code{n.failed} (wells of the fit without a back-calculated
-concentration), \code{n.available} (wells of the common set), the list columns \code{wells}
+concentration), \code{n.available} (wells of the common set), \code{status}
+(\code{"ok"}, \code{"too_few_levels"} or \code{"fit_failed"}), \code{n.levels} (standard
+levels the model can use) and \code{n.levels.required} (the number of
+parameters plus one, as for the calibration), the list columns \code{wells}
 (IDs of the wells used; \code{NULL} if not fitted) and \code{dropped} (IDs left
 out by the restrictions of the model) and \code{lowest.aic}.
 }

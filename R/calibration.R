@@ -239,6 +239,34 @@ subtract_nc <- function(data, nc_value = NULL) {
 
 ##################### STANDARDS ################################################
 
+#' Common Set of Calibration Wells
+#'
+#' The standards after the background subtraction, the exclusions by the user
+#' and the rule of the method for a signal at or below the background, before
+#' the restrictions of any model. It does not depend on the model chosen, so
+#' that the models can be compared (see [compare_models()]) even when the
+#' chosen one cannot be fitted.
+#'
+#' @param data Input data (with or without `.key`, see [well_keys()]).
+#' @param nc_value Background value subtracted from all ODs.
+#' @param exclude Standard points excluded by the user: a data.frame with
+#'   `key` and `reason`, or `NULL`.
+#' @param at_blank Rule for a signal at or below the background (see
+#'   [blank_rules()]).
+#'
+#' @return The standard rows with `.key` and the background-subtracted `OD`.
+#' @keywords internal
+calibration_pool <- function(data, nc_value = 0, exclude = NULL, at_blank = 'range') {
+    if (!'.key' %in% names(data)) data$.key <- well_keys(data)
+    data <- subtract_nc(data, nc_value)
+    pool <- split_standards(data[data$type %in% 'standard', , drop = FALSE], log_scale = FALSE, exclude,
+                            at_blank)$used
+    pool$.od_raw <- NULL
+    rownames(pool) <- NULL
+    pool
+}
+
+
 #' Keys of Wells
 #'
 #' Well names when available, otherwise spreadsheet rows (`"row 5"`).
@@ -573,6 +601,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         notes <- c(notes, list(lin_message('note.background_changed', value = signif(bg$value, 4),
                                            legacy = signif(bg$legacy, 4))))
     }
+    # Common set of calibration wells for the comparison of models (the same in the app)
+    pool <- calibration_pool(data, bg$value, exclude, at_blank)
     data$.od_raw <- data$OD
     data <- subtract_nc(data, bg$value)
 
@@ -580,13 +610,6 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     log_scale <- model_log_scale(model, linear)
     std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude, at_blank)
     standard_data <- std$used
-    # Common set of calibration wells for the comparison of models: after the exclusions
-    # by the user and the rule of the method for a signal at the background, before the
-    # restrictions of the chosen model
-    pool <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale = FALSE, exclude,
-                            at_blank)$used
-    rownames(pool) <- NULL
-    pool$.od_raw <- NULL
     # Points excluded by the user are listed in `exclusions`; warn about the others
     automatic <- std$excluded$reason[std$excluded$reason != FLAGS$excluded]
     if (length(automatic) > 0) {

@@ -49,6 +49,27 @@ test_that('curve module recalculates when the model changes', {
     })
 })
 
+test_that('the comparison of models stays when the chosen model cannot be fitted', {
+    data <- load_sample('bca')
+    few <- data[!(data$type == 'standard' & data$conc %in% c(0.031, 0.063)), ]
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(few), rounding = rounding_3()), {
+        session$setInputs(model = '5PL', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+        expect_error(session$returned$result(), 'At least 6')
+        cmp <- session$returned$comparison()
+        expect_equal(cmp$status[cmp$model == '5PL'], 'too_few_levels')
+        expect_match(output$compare, 'Insufficient levels: 5 available, 6 required', fixed = TRUE)
+        # the same common set as the calculation with a model that can be fitted
+        session$setInputs(model = 'LRM')
+        expect_equal(session$returned$comparison()$AIC,
+                     compare_models(calculate(few, 'LRM')$calibration_pool)$AIC)
+        expect_equal(session$returned$comparison()$n.available[1], sum(few$type == 'standard'))
+        # without a usable background there is no comparison
+        session$setInputs(background = character(0))
+        expect_error(session$returned$comparison(), 'Comparison unavailable')
+    })
+})
+
 test_that('curve module shows calculation errors as validation messages', {
     few <- synthetic_data(function(x) 0.1 * x, conc = c(1, 2, 4))
     shiny::testServer(LinearityApp:::mod_curve_server,

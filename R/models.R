@@ -670,7 +670,10 @@ information_criteria <- function(fit) {
 #' @return A data.frame with one row per model; models that cannot be fitted
 #'   have `NA` statistics. Besides the statistics: `n.used` (wells in the
 #'   fit), `n.failed` (wells of the fit without a back-calculated
-#'   concentration), `n.available` (wells of the common set), the list columns `wells`
+#'   concentration), `n.available` (wells of the common set), `status`
+#'   (`"ok"`, `"too_few_levels"` or `"fit_failed"`), `n.levels` (standard
+#'   levels the model can use) and `n.levels.required` (the number of
+#'   parameters plus one, as for the calibration), the list columns `wells`
 #'   (IDs of the wells used; `NULL` if not fitted) and `dropped` (IDs left
 #'   out by the restrictions of the model) and `lowest.aic`.
 #' @export
@@ -678,16 +681,23 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
     pool <- standard_data[!is.na(standard_data$OD), , drop = FALSE]
     keys <- if ('.key' %in% names(pool)) as.character(pool$.key) else as.character(seq_len(nrow(pool)))
     rows <- lapply(calibration_models(), function(m) {
+        usable <- if (model_log_scale(m, linear)) pool$OD > 0 else rep(TRUE, nrow(pool))
+        std <- pool[usable, , drop = FALSE]
+        # The same requirement as for the calibration (see calculate())
+        n_levels <- length(unique(std$conc))
         stats <- data.frame(model = m, n.par = n_params(m), n.used = NA_integer_, n.failed = NA_integer_,
-                            n.available = nrow(pool),
+                            n.available = nrow(pool), status = 'too_few_levels',
+                            n.levels = n_levels, n.levels.required = n_params(m) + 1,
                             AIC = NA_real_, BIC = NA_real_, R2 = NA_real_, mean.abs.error = NA_real_,
                             max.abs.error = NA_real_, lof.p = NA_real_)
-        usable <- if (model_log_scale(m, linear)) pool$OD > 0 else rep(TRUE, nrow(pool))
         row <- list(stats = stats, wells = NULL, dropped = keys[!usable])
-        std <- pool[usable, , drop = FALSE]
-        if (length(unique(std$conc)) <= n_params(m)) return(row)
+        if (n_levels < n_params(m) + 1) return(row)
         fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) NULL)
-        if (is.null(fit)) return(row)
+        if (is.null(fit)) {
+            row$stats$status <- 'fit_failed'
+            return(row)
+        }
+        stats$status <- 'ok'
         ic <- information_criteria(fit)
         res <- fit$y - curve_fun(fit, fit$x)
         bc <- back_calculate(fit)

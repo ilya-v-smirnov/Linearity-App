@@ -21,6 +21,7 @@ without a back-calculated concentration appears when a model has some
 (the errors are those of the back-calculated standards). Otherwise it gets a column with the wells
 used (\code{15/16}: wells in the fit / wells of the common set) instead of the
 mark, and the attribute \code{note} explains the difference (see
-\code{\link[=comparison_note]{comparison_note()}}).
+\code{\link[=comparison_note]{comparison_note()}}). When a model cannot be fitted, a last column says
+why (see \code{\link[=comparison_status]{comparison_status()}}).
 }
 \keyword{internal}
