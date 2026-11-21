@@ -20,9 +20,13 @@ verdict of the dilutions (limits from \code{quality$criteria}, by default
 those of \code{\link[=qc_criteria]{qc_criteria()}}).}
 }
 \value{
-A named list of data.frames (\code{standards}, \code{qc}, \code{samples},
-\code{dilution}, \code{curve}); absent parts are \code{NULL}. The standards are sorted
-by decreasing concentration.
+A named list of data.frames (\code{standards}, \code{wells},
+\code{wells_deviating}, \code{qc}, \code{samples}, \code{dilution}, \code{curve}); absent parts
+are \code{NULL}. The standards are sorted by decreasing concentration.
+\code{wells} has the wells of every standard level against the plan (planned,
+fitted, back-calculated and the lost wells with their reasons) and
+\code{wells_deviating} only its levels with fewer back-calculated wells than
+planned; both are \code{NULL} when no level deviates from the plan.
 }
 \description{
 Formats the parts of a quality assessment (see \code{\link[=assess_run]{assess_run()}}) as tables

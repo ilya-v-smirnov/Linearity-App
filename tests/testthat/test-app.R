@@ -70,6 +70,24 @@ test_that('the comparison of models stays when the chosen model cannot be fitted
     })
 })
 
+test_that('the wells against the plan are shown in a collapsed block only when a level deviates', {
+    for (case in list(list(name = 'elisa', shown = TRUE), list(name = 'bca', shown = FALSE))) {
+        shiny::testServer(LinearityApp:::mod_curve_server,
+                          args = list(lang = 'en', data = shiny::reactive(load_sample(case$name)),
+                                      rounding = rounding_3()), {
+            session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
+            block <- output$wells_block
+            if (case$shown) {
+                expect_match(block$html, '<details class="std-points std-wells">', fixed = TRUE)
+                expect_match(block$html, 'Wells deviating from the plan', fixed = TRUE)
+                expect_match(output$wells, 'no OD', fixed = TRUE)
+            } else {
+                expect_null(block)
+            }
+        })
+    }
+})
+
 test_that('curve module shows calculation errors as validation messages', {
     few <- synthetic_data(function(x) 0.1 * x, conc = c(1, 2, 4))
     shiny::testServer(LinearityApp:::mod_curve_server,

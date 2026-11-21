@@ -70,7 +70,7 @@ test_that('all standard levels of the run count for the acceptance of the calibr
     # duplicates left with one well are accepted by their bias, not as plain passes
     expect_equal(st$status, rep(c('pass_no_cv', 'no_points'), length.out = 7))
     tab <- quality_tables(r$quality, 'en')$standards
-    empty <- tab[['Wells: planned · fitted · back-calculated']] == '2 · 0 · 0'
+    empty <- quality_tables(r$quality, 'en')$wells$Fitted == 0
     expect_equal(sum(empty), 3)
     expect_equal(tab[['Bias, %']][empty], rep('—', 3))
     expect_equal(tab[['CV of back-calculated, %']][empty], rep('—', 3))
@@ -412,12 +412,42 @@ test_that('a planned singlet is told apart from a replicate left alone', {
     row <- function(conc) tab[tab$Concentration == conc, ]
     expect_equal(row('16')[['CV of back-calculated, %']], '\u2014')
     expect_equal(row('8')[['CV of back-calculated, %']], 'CV unavailable')
-    expect_equal(row('16')[['Wells: planned \u00b7 fitted \u00b7 back-calculated']], '1 \u00b7 1 \u00b7 1')
-    expect_equal(row('8')[['Wells: planned \u00b7 fitted \u00b7 back-calculated']], '2 \u00b7 1 \u00b7 1')
     expect_equal(row('16')$Accepted, '\u2713 singlet')
     expect_equal(row('8')$Accepted, '\u2713 single result')
-    expect_equal(row('8')[['Lost wells']], paste0(exclude$key, ': excluded \u2014 bubble'))
-    expect_equal(row('16')[['Lost wells']], '')
+    expect_equal(names(tab), c('Concentration', 'Mean OD', 'Back-calculated', 'CV of back-calculated, %', 'Bias, %',
+                               'Limit, \u00b1%', 'Accepted'))
+    # the wells against the plan: all levels in the app and the detailed report, the deviating ones in the short report
+    tabs <- quality_tables(r$quality, 'en')
+    expect_equal(names(tabs$wells), c('Concentration', 'Planned', 'Fitted', 'Back-calculated', 'Lost wells'))
+    expect_equal(nrow(tabs$wells), nrow(tab))
+    w <- function(conc) tabs$wells[tabs$wells$Concentration == conc, ]
+    expect_equal(unlist(w('16')[2:4], use.names = FALSE), c(1, 1, 1))
+    expect_equal(unlist(w('8')[2:4], use.names = FALSE), c(2, 1, 1))
+    expect_equal(w('8')[['Lost wells']], paste0(exclude$key, ': excluded \u2014 bubble'))
+    expect_equal(w('16')[['Lost wells']], '')
+    expect_equal(tabs$wells_deviating$Concentration, '8')
+    # no deviation from the plan: no table
+    plain <- quality_tables(calculate(run_data(), 'LIN')$quality, 'en')
+    expect_null(plain$wells)
+    expect_null(plain$wells_deviating)
+
+    # the reports: the deviating levels in the short one, all levels in the detailed one
+    blocks <- function(type) {
+        LinearityApp:::report_blocks(type, date = '2026-11-21', title = 't', method = 'm',
+                                     model_table = get_coef_ci(r$fit), result_table = r$result,
+                                     quality = list(summary = LinearityApp:::quality_summary(r, 'en'), tables = tabs))
+    }
+    wells_table <- function(b) {
+        i <- which(vapply(b, function(x) identical(x$text, 'Wells deviating from the plan'), logical(1)))
+        if (length(i) == 0) NULL else b[[i + 1]]$data
+    }
+    expect_equal(nrow(wells_table(blocks('short'))), 1)
+    expect_equal(nrow(wells_table(blocks('detailed'))), nrow(tab))
+    none <- LinearityApp:::report_blocks('detailed', date = '2026-11-21', title = 't', method = 'm',
+                                         model_table = get_coef_ci(r$fit), result_table = r$result,
+                                         quality = list(summary = LinearityApp:::quality_summary(r, 'en'),
+                                                        tables = plain))
+    expect_null(wells_table(none))
 
     # singlets concern the plan only; the replicate left alone follows its own rule
     strict <- calculate(data, 'LIN', exclude = exclude, criteria = qc_criteria(singlets = FALSE))
@@ -443,13 +473,14 @@ test_that('a standard level that lost a replicate follows an explicit rule', {
     expect_false(strict$quality$standards$pass[strict$quality$standards$conc == 8])
     tab <- quality_tables(strict$quality, 'en')$standards
     expect_equal(tab$Accepted[tab$Concentration == '8'], '\u2717 replicate lost')
-    expect_equal(tab[['Wells: planned \u00b7 fitted \u00b7 back-calculated']][tab$Concentration == '8'], '2 \u00b7 1 \u00b7 1')
+    wells <- quality_tables(strict$quality, 'en')$wells
+    expect_equal(unlist(wells[wells$Concentration == '8', 2:4], use.names = FALSE), c(2, 1, 1))
     # no OD: not a documented loss, whatever the rule
     missing <- data
     missing$OD[keys == eight[1]] <- NA
     r <- calculate(missing, 'LIN')
     expect_equal(status(r), 'replicate_lost')
-    tab <- quality_tables(r$quality, 'en')$standards
+    tab <- quality_tables(r$quality, 'en')$wells
     expect_equal(tab[['Lost wells']][tab$Concentration == '8'], paste0(eight[1], ': no OD'))
     expect_equal(status(calculate(missing, 'LIN', criteria = reject)), 'replicate_lost')
     # OD <= blank left out automatically (log-log): not a documented loss either
@@ -457,7 +488,7 @@ test_that('a standard level that lost a replicate follows an explicit rule', {
     low$OD[keys == eight[1]] <- 0.01
     r <- calculate(low, 'LRM')
     expect_equal(status(r), 'replicate_lost')
-    tab <- quality_tables(r$quality, 'ru')$standards
+    tab <- quality_tables(r$quality, 'ru')$wells
     expect_match(tab[[tr('col.lost', 'ru')]][tab[[1]] == '8'], 'OD \u2264 \u0431\u043b\u0430\u043d\u043a\u0430, \u0438\u0441\u043a\u043b\u044e\u0447\u0435\u043d\u0430 \u0438\u0437 \u043f\u043e\u0434\u0433\u043e\u043d\u043a\u0438', fixed = TRUE)
     # both replicates kept: the rule does not apply
     expect_equal(status(calculate(data, 'LIN', criteria = reject)), 'pass')

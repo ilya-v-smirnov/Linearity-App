@@ -82,11 +82,13 @@ The report is a list of blocks; the same blocks are written to Word
 \details{
 \itemize{
 \item \code{short}: the standard curve (plots, model and its parameters), the
-sample results and the means;
+standard levels that deviate from the plan of the wells (when there are
+any), the sample results and the means;
 \item \code{detailed}: the analysis parameters, the standard curve with the
 comparison of models, the excluded points and their effect on the
-calibration, the full quality assessment, the results with the quality
-controls and the means, and the warnings.
+calibration, the full quality assessment (with the wells of all standard
+levels against the plan when a level deviates from it), the results with
+the quality controls and the means, and the warnings.
 }
 
 With excluded points, the model and its parameters are those of the

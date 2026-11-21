@@ -435,12 +435,16 @@ test_that('a duplicate with one failed inversion is an incomplete back-calculati
 
     tab <- quality_tables(list(standards = st), 'en')$standards
     row <- tab[tab$Concentration == '10', ]
-    expect_equal(row[['Wells: planned · fitted · back-calculated']], '2 · 2 · 1')
     expect_equal(row[['CV of back-calculated, %']], 'CV unavailable')
     expect_equal(row[['Bias, %']], '1.0')
     expect_equal(row$Accepted, 'Incomplete back-calculation')
-    expect_equal(row[['Lost wells']], 'C6: OD outside fitted asymptotes')
-    expect_equal(tab[['Wells: planned · fitted · back-calculated']][tab$Concentration == '4'], '2 · 2 · 2')
+    # the wells against the plan are in a table of their own
+    expect_false('Lost wells' %in% names(tab))
+    wells <- quality_tables(list(standards = st), 'en')$wells
+    w <- wells[wells$Concentration == '10', ]
+    expect_equal(c(w$Planned, w$Fitted, w[['Back-calculated']]), c(2, 2, 1))
+    expect_equal(w[['Lost wells']], 'C6: OD outside fitted asymptotes')
+    expect_equal(wells[['Back-calculated']][wells$Concentration == '4'], 2)
 })
 
 test_that('incomplete back-calculation is reported in the notes, the points and the comparison', {

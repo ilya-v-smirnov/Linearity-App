@@ -499,6 +499,8 @@ mod_curve_ui <- function(id, lang) {
                        shiny::tags$details(class = 'std-points',
                                            shiny::tags$summary(t('quality.section_points')),
                                            shiny::tableOutput(ns('points'))),
+                       # The wells against the plan: only when a level deviates from it, collapsed by default
+                       shiny::uiOutput(ns('wells_block')),
                        shiny::h5(t('quality.section_curve')),
                        shiny::tableOutput(ns('curve_quality')))
         )
@@ -721,8 +723,16 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                                                sanitize.text.function = function(x) x)
         output$points <- shiny::renderTable(standard_points_table(result(), lang, highlight = TRUE), na = '',
                                             sanitize.text.function = function(x) x)
+        output$wells_block <- shiny::renderUI({
+            if (is.null(quality_marked()$wells)) return(NULL)
+            shiny::tags$details(class = 'std-points std-wells',
+                                shiny::tags$summary(t('quality.section_wells')),
+                                shiny::tableOutput(ns('wells')))
+        })
+        output$wells <- shiny::renderTable(quality_marked()$wells, na = '', sanitize.text.function = function(x) x)
         # Rendered while the details are collapsed, so that they open at once
         shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
+        shiny::outputOptions(output, 'wells', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
         output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
         # Without the background the table alone says why there is no comparison

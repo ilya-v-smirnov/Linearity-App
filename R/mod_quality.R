@@ -28,9 +28,13 @@ html_escape <- function(x) {
 #'   verdict of the dilutions (limits from `quality$criteria`, by default
 #'   those of [qc_criteria()]).
 #'
-#' @return A named list of data.frames (`standards`, `qc`, `samples`,
-#'   `dilution`, `curve`); absent parts are `NULL`. The standards are sorted
-#'   by decreasing concentration.
+#' @return A named list of data.frames (`standards`, `wells`,
+#'   `wells_deviating`, `qc`, `samples`, `dilution`, `curve`); absent parts
+#'   are `NULL`. The standards are sorted by decreasing concentration.
+#'   `wells` has the wells of every standard level against the plan (planned,
+#'   fitted, back-calculated and the lost wells with their reasons) and
+#'   `wells_deviating` only its levels with fewer back-calculated wells than
+#'   planned; both are `NULL` when no level deviates from the plan.
 #' @export
 quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     t <- function(key) tr(key, lang)
@@ -58,6 +62,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     criteria <- if (is.null(quality$criteria)) qc_criteria() else quality$criteria
 
     standards <- NULL
+    wells <- NULL
+    wells_deviating <- NULL
     st <- quality$standards
     if (!is.null(st)) {
         st <- st[order(st$conc, decreasing = TRUE), , drop = FALSE]
@@ -68,16 +74,22 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         # A level planned in replicate without two back-calculated results: the CV is unavailable
         cv_text <- pct(st$calc.cv)
         cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
-        standards <- name(data.frame(num(st$conc), paste(st$n.planned, st$n, st$n.calc, sep = ' · '),
-                                     dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
+        standards <- name(data.frame(num(st$conc), dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
                                      fail(dash(cv_text), cv_failed), fail(dash(pct(st$bias)), bias_failed),
                                      sprintf('%g', st$bias.limit), fail(standard_status(st$status, lang), !st$pass)),
-                          c('col.conc', 'col.n_wells', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
-                            'col.limit', 'col.pass'))
-        # The wells lost before the fit or by the inverse, with the reason, when there are any
-        if (!is.null(st$lost)) {
-            lost <- vapply(st$lost, lost_wells_text, '', lang = lang)
-            if (any(nzchar(lost))) standards[[t('col.lost')]] <- if (highlight) html_escape(lost) else lost
+                          c('col.conc', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias', 'col.limit',
+                            'col.pass'))
+        # The wells of the levels against the plan, apart: only when a level has fewer back-calculated
+        # wells than planned
+        deviates <- st$n.calc < st$n.planned
+        if (any(deviates)) {
+            lost <- if (is.null(st$lost)) rep('', nrow(st)) else vapply(st$lost, lost_wells_text, '', lang = lang)
+            wells <- name(data.frame(num(st$conc), st$n.planned, st$n, st$n.calc,
+                                     if (highlight) html_escape(lost) else lost),
+                          c('col.conc', 'col.n_planned', 'col.n_fitted', 'col.n_calc', 'col.lost'))
+            rownames(wells) <- NULL
+            wells_deviating <- wells[deviates, , drop = FALSE]
+            rownames(wells_deviating) <- NULL
         }
     }
 
@@ -123,7 +135,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
                       c('quality.parameter', 'quality.value'))
     }
 
-    list(standards = standards, qc = qc, samples = samples, dilution = dilution, curve = curve)
+    list(standards = standards, wells = wells, wells_deviating = wells_deviating, qc = qc, samples = samples,
+         dilution = dilution, curve = curve)
 }
 
 

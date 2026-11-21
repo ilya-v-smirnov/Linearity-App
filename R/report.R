@@ -4,11 +4,13 @@
 #' ([write_report()]) and shown as a preview in the app ([report_preview()]).
 #'
 #' * `short`: the standard curve (plots, model and its parameters), the
-#'   sample results and the means;
+#'   standard levels that deviate from the plan of the wells (when there are
+#'   any), the sample results and the means;
 #' * `detailed`: the analysis parameters, the standard curve with the
 #'   comparison of models, the excluded points and their effect on the
-#'   calibration, the full quality assessment, the results with the quality
-#'   controls and the means, and the warnings.
+#'   calibration, the full quality assessment (with the wells of all standard
+#'   levels against the plan when a level deviates from it), the results with
+#'   the quality controls and the means, and the warnings.
 #'
 #' With excluded points, the model and its parameters are those of the
 #' calibration refitted without them, as accepted by the user; a line says so.
@@ -54,6 +56,10 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                  list(b('heading', text = t('report.section_curve')), b('plot')),
                  method_lines,
                  table(model_table),
+                 # Only the levels that deviate from the plan, when there are any
+                 if (has_rows(quality$tables$wells_deviating)) {
+                     c(list(b('subheading', text = t('quality.section_wells'))), table(quality$tables$wells_deviating))
+                 },
                  list(b('heading', text = t('report.section_result'))), table(result_table),
                  if (has_rows(means_table)) c(list(b('heading', text = t('report.section_means'))),
                                               table(means_table))))
@@ -67,6 +73,8 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                                b('strong', text = s$title)),
                           lapply(c(s$range, s$levels, s$reasons, s$warnings), function(x) b('text', text = x)),
                           sub('quality.section_standards', quality$tables$standards),
+                          # All levels against the plan, when a level deviates from it
+                          sub('quality.section_wells', quality$tables$wells),
                           sub('quality.section_curve', quality$tables$curve),
                           sub('quality.section_qc', quality$tables$qc),
                           sub('quality.section_samples', quality$tables$samples),
