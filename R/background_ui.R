@@ -180,11 +180,11 @@ background_wells_table <- function(bg, lang = 'en') {
 #' points of a group are spread around its position.
 #'
 #' @inheritParams background_table
-#' @param standards Standard wells as measured: a data.frame with `conc` and
-#'   `OD`, or `NULL`.
+#' @param standards All standard wells of the plan as measured: a data.frame
+#'   with `conc` and `OD` (`NA` where it is missing), or `NULL`.
 #' @param shown Concentrations of the standard levels shown (as character,
-#'   see `as.character()`), or `NULL` for all; the names of the levels (S1,
-#'   S2, ...) are those of all levels.
+#'   see `as.character()`), or `NULL` for all; the IDs of the levels (S1,
+#'   S2, ...) are those of the whole plan (see [standard_level_map()]).
 #'
 #' @return A data.frame with `x`, `OD`, `group` (index of the group), `kind`
 #'   (`"used"`, `"unused"`, `"excluded"` or `"standard"`), `key` and
@@ -199,15 +199,16 @@ background_points <- function(bg, standards = NULL, lang = 'en', shown = NULL) {
     pts <- data.frame(group = match(w$role, roles), OD = w$OD, kind = kind, key = w$key, role = w$role)
     labels <- sub(' ', '\n', role_labels(roles, lang))
     if (!is.null(standards)) {
+        # The IDs of the levels come from the whole plan, before the wells without an OD or the hidden
+        # levels are left out
+        level_map <- standard_level_map(standards$conc)
         standards <- standards[!is.na(standards$OD) & !is.na(standards$conc), , drop = FALSE]
-        # The names of the levels come from all of them, before some are hidden
-        all_conc <- standards$conc
         if (!is.null(shown)) standards <- standards[as.character(standards$conc) %in% shown, , drop = FALSE]
         levels <- sort(unique(standards$conc))
         if (length(levels) > 0) {
             pts <- rbind(pts, data.frame(group = length(roles) + match(standards$conc, levels), OD = standards$OD,
                                          kind = 'standard', key = NA_character_, role = 'standard'))
-            labels <- c(labels, paste0(standard_names(levels, all_conc), '\n', signif(levels, 3)))
+            labels <- c(labels, paste0(standard_names(levels, level_map), '\n', signif(levels, 3)))
         }
     }
     # The points of a group side by side, centred on its position

@@ -590,7 +590,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shown_levels(as.character(levels))
             shiny::updateCheckboxGroupInput(session, 'bg_levels',
                                             choices = stats::setNames(as.character(levels),
-                                                                      standard_names(levels, conc)),
+                                                                      standard_names(levels, standard_level_map(conc))),
                                             selected = as.character(levels), inline = TRUE)
             if (length(conc) > 0) {
                 shiny::updateCheckboxInput(session, 'use_interval', value = FALSE)

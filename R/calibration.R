@@ -155,7 +155,9 @@ legacy_background <- function(data) {
 #'
 #' @param od ODs of the background wells used.
 #' @param value Value subtracted.
-#' @param standards Standard wells as measured, with `conc` and `OD`.
+#' @param standards All standard wells of the plan as measured, with `conc`
+#'   and `OD` (`NA` where it is missing: the IDs of the levels come from all
+#'   of them).
 #'
 #' @return A list with `range` (`NA` with a single well), `conc` and `level`
 #'   (concentration and name of the lowest standard level, see
@@ -165,6 +167,8 @@ legacy_background <- function(data) {
 #'   `NULL` without background wells or without standards.
 #' @keywords internal
 blank_scatter <- function(od, value, standards) {
+    # The IDs of the levels come from the whole plan, before the wells without an OD are left out
+    level_map <- standard_level_map(standards$conc)
     standards <- standards[!is.na(standards$conc) & !is.na(standards$OD), , drop = FALSE]
     if (length(od) == 0 || nrow(standards) == 0) return(NULL)
     lowest <- min(standards$conc)
@@ -183,7 +187,7 @@ blank_scatter <- function(od, value, standards) {
             reason <- 'range_exceeds_signal'
         }
     }
-    list(range = spread, conc = lowest, level = standard_names(lowest, standards$conc), signal = signal,
+    list(range = spread, conc = lowest, level = standard_names(lowest, level_map), signal = signal,
          direction = direction, reason = reason, warn = !is.null(reason))
 }
 
@@ -314,19 +318,40 @@ well_keys <- function(data) {
 }
 
 
+#' IDs of the Standard Levels of the Plate Plan
+#'
+#' The standard levels of the plan are named `S1`, `S2`, ... from the highest
+#' to the lowest concentration. The map is made from every standard well of
+#' the plan, whether it has an OD, is excluded or is in the fit, so that a
+#' level keeps its ID in every table, plot and message when other levels
+#' are lost.
+#'
+#' @param conc Nominal concentrations of all standard wells of the plan (`NA`
+#'   are ignored).
+#'
+#' @return A data.frame with `conc` (each level once, from the highest) and
+#'   `id`.
+#' @keywords internal
+standard_level_map <- function(conc) {
+    levels <- sort(unique(conc[!is.na(conc)]), decreasing = TRUE)
+    data.frame(conc = levels, id = paste0('S', seq_along(levels)))
+}
+
+
 #' Names of Standard Levels
 #'
-#' Standard levels are named `S1`, `S2`, ... from the highest to the lowest
-#' concentration.
+#' The IDs of [standard_level_map()].
 #'
 #' @param conc Concentrations of the standards to name.
-#' @param levels Concentrations of all standards of the run.
+#' @param levels Concentrations of all standard wells of the plan, or the
+#'   output of [standard_level_map()].
 #'
 #' @return Character vector.
 #' @keywords internal
 standard_names <- function(conc, levels = conc) {
     if (length(conc) == 0) return(character(0))
-    paste0('S', match(conc, sort(unique(levels), decreasing = TRUE)))
+    map <- if (is.data.frame(levels)) levels else standard_level_map(levels)
+    map$id[match(conc, map$conc)]
 }
 
 
@@ -585,7 +610,9 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `at_blank`: the rule for a signal at or below the background (see
 #'     [blank_rules()]); `increasing`: whether the curve increases with the
 #'     concentration (see [curve_increasing()]);
-#'   * `standard_keys`: the keys of all standard wells in the order of the plate.
+#'   * `standard_keys`: the keys of all standard wells in the order of the plate;
+#'   * `standard_levels`: the IDs of the standard levels of the plan (see
+#'     [standard_level_map()]), used by every table, plot and message.
 #'
 #' The background is the arithmetic mean of the wells of the chosen roles
 #' (argument `background`): reagent blank, zero calibrator and negative
@@ -683,8 +710,9 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
                                            conc = signif(standards$conc[i], 3), bias = standards$bias.limit[i],
                                            cv = standards$cv.limit[i])))
     }
+    # The IDs of the standard levels, once, from the whole plan of the plate
+    level_map <- standard_level_map(data$conc[data$type == 'standard'])
     # Levels whose fitted wells are not all back-calculated
-    all_levels <- data$conc[data$type == 'standard']
     # A curve that turns inside the interval has one warning of its own (below)
     for (i in which(standards$status == 'incomplete' & monotonic)) {
         lost <- standards$failed[[i]]
@@ -692,7 +720,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
             lin_message('backcalc.well', well = lost$key[k], reason = lin_message(paste0('backcalc.', lost$reason[k])))
         })
         notes <- c(notes, list(lin_message('note.incomplete_backcalc',
-                                           level = standard_names(standards$conc[i], all_levels),
+                                           level = standard_names(standards$conc[i], level_map),
                                            conc = signif(standards$conc[i], 3), n = standards$n.calc[i],
                                            total = standards$n[i], wells = wells)))
     }
@@ -791,8 +819,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     }
 
     manual <- std$excluded[std$excluded$reason == FLAGS$excluded, , drop = FALSE]
-    all_levels <- data$conc[data$type == 'standard']
-    exclusions <- data.frame(standard = standard_names(manual$conc, all_levels), key = manual$.key,
+    exclusions <- data.frame(standard = standard_names(manual$conc, level_map), key = manual$.key,
                              conc = manual$conc, OD = round(manual$OD, 4), reason = manual$comment)
 
     # With points excluded by the user, the fit on all standards is kept for comparison
@@ -804,7 +831,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         if (!is.null(original_fit)) original_fit$interval <- fit$interval
         if (!is.null(original_fit)) {
             # The levels accepted after the exclusions are those of the standards table
-            effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels,
+            effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = level_map,
                                        wells = std_wells, assessed = standards)
         }
     }
@@ -848,7 +875,8 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          qc = qc,
          at_blank = at_blank,
          increasing = increasing,
-         standard_keys = as.character(data$.key[data$type == 'standard']))
+         standard_keys = as.character(data$.key[data$type == 'standard']),
+         standard_levels = level_map)
 }
 
 

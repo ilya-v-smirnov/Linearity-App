@@ -9,13 +9,13 @@ standard_names(conc, levels = conc)
 \arguments{
 \item{conc}{Concentrations of the standards to name.}
 
-\item{levels}{Concentrations of all standards of the run.}
+\item{levels}{Concentrations of all standard wells of the plan, or the
+output of \code{\link[=standard_level_map]{standard_level_map()}}.}
 }
 \value{
 Character vector.
 }
 \description{
-Standard levels are named \code{S1}, \code{S2}, ... from the highest to the lowest
-concentration.
+The IDs of \code{\link[=standard_level_map]{standard_level_map()}}.
 }
 \keyword{internal}

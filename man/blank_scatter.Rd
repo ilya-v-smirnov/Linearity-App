@@ -11,7 +11,9 @@ blank_scatter(od, value, standards)
 
 \item{value}{Value subtracted.}
 
-\item{standards}{Standard wells as measured, with \code{conc} and \code{OD}.}
+\item{standards}{All standard wells of the plan as measured, with \code{conc}
+and \code{OD} (\code{NA} where it is missing: the IDs of the levels come from all
+of them).}
 }
 \value{
 A list with \code{range} (\code{NA} with a single well), \code{conc} and \code{level}

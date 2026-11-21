@@ -118,7 +118,9 @@ are no QC wells);
 \item \code{at_blank}: the rule for a signal at or below the background (see
 \code{\link[=blank_rules]{blank_rules()}}); \code{increasing}: whether the curve increases with the
 concentration (see \code{\link[=curve_increasing]{curve_increasing()}});
-\item \code{standard_keys}: the keys of all standard wells in the order of the plate.
+\item \code{standard_keys}: the keys of all standard wells in the order of the plate;
+\item \code{standard_levels}: the IDs of the standard levels of the plan (see
+\code{\link[=standard_level_map]{standard_level_map()}}), used by every table, plot and message.
 }
 
 The background is the arithmetic mean of the wells of the chosen roles

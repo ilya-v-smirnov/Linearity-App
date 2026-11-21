@@ -10,14 +10,14 @@ plot_background(bg, standards = NULL, lang = "en", shown = NULL)
 \item{bg}{The \code{background} element of \code{\link[=calculate]{calculate()}} (see
 \code{\link[=background_summary]{background_summary()}}).}
 
-\item{standards}{Standard wells as measured: a data.frame with \code{conc} and
-\code{OD}, or \code{NULL}.}
+\item{standards}{All standard wells of the plan as measured: a data.frame
+with \code{conc} and \code{OD} (\code{NA} where it is missing), or \code{NULL}.}
 
 \item{lang}{Language code.}
 
 \item{shown}{Concentrations of the standard levels shown (as character,
-see \code{as.character()}), or \code{NULL} for all; the names of the levels (S1,
-S2, ...) are those of all levels.}
+see \code{as.character()}), or \code{NULL} for all; the IDs of the levels (S1,
+S2, ...) are those of the whole plan (see \code{\link[=standard_level_map]{standard_level_map()}}).}
 }
 \value{
 A ggplot2 object, or \code{NULL} without background wells.

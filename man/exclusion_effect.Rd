@@ -27,8 +27,9 @@ exclusion_effect(
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
 
-\item{levels}{Concentrations of all standards of the run, for the level
-names (see \code{\link[=standard_names]{standard_names()}}).}
+\item{levels}{The IDs of the standard levels of the plan (see
+\code{\link[=standard_level_map]{standard_level_map()}}), or the concentrations of all standard wells of
+the plan.}
 
 \item{wells}{All standard wells of the run, as \code{wells} of
 \code{\link[=assess_standards]{assess_standards()}} (with \code{lost = "excluded"} for the points excluded by

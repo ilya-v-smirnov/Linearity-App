@@ -405,6 +405,43 @@ test_that('the effect of the exclusions tells the wells within their limits from
     expect_equal(row('Accepted calibrator levels'), rep('6 / 7 (6 required)', 2))
 })
 
+test_that('a standard level keeps its ID when another level is lost', {
+    data <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
+    keys <- well_keys(data)
+    std <- data$type == 'standard'
+    expect_equal(sort(unique(data$conc[std]), decreasing = TRUE)[1:2], c(2, 1))
+    # no OD in any well of S1 (2); a well of S2 (1) excluded by the user
+    data$OD[std & data$conc == 2] <- NA
+    s2 <- keys[std & data$conc == 1]
+    r <- calculate(data, 'QRM', exclude = data.frame(key = s2[1], reason = 'bubble'))
+
+    # one map from the whole plan
+    expect_equal(r$standard_levels$id[r$standard_levels$conc == 1], 'S2')
+    expect_equal(r$standard_levels$id[r$standard_levels$conc == 2], 'S1')
+    expect_equal(nrow(r$standard_levels), 7)
+    # the individual points, the exclusions and the effect of the exclusions
+    pts <- LinearityApp:::standard_points_table(r, 'en')
+    expect_equal(unique(pts$Standard[pts$Nominal == '1']), 'S2')
+    expect_equal(unique(pts$Standard[pts$Nominal == '0.031']), 'S7')
+    expect_false('S1' %in% pts$Standard)
+    expect_equal(r$exclusions$standard, 'S2')
+    bc <- r$exclusion_effect$back_calc
+    expect_equal(unique(bc$standard[bc$conc == 1]), 'S2')
+    # the background step: the labels of the plot and the lowest level of the finding on the blanks
+    raw <- data[std, c('conc', 'OD')]
+    roles <- intersect(background_roles(), unique(data$type))
+    expect_true(length(roles) > 0)
+    bg <- LinearityApp:::background_summary(data, roles)
+    labels <- attr(LinearityApp:::background_points(bg, raw, 'en'), 'labels')
+    expect_true('S2\n1' %in% labels)
+    expect_false(any(grepl('^S1\n', labels)))
+    expect_equal(bg$scatter$level, 'S7')
+    expect_equal(LinearityApp:::blank_scatter(bg$od, bg$value, raw)$level, 'S7')
+    # the names of a run without losses are the same
+    full <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), 'QRM')
+    expect_equal(full$standard_levels, r$standard_levels)
+})
+
 test_that('a standard meets the criteria when its error is within the limit of its level', {
     std <- data.frame(.key = paste0('w', 1:4), conc = c(1, 2, 4, 8), OD = c(1, 2, 4, 8))
     fit <- fit_curve(std, 'LRM', linear = TRUE)

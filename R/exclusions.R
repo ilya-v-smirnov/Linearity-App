@@ -25,8 +25,9 @@
 #'   `.key`, `conc` and `OD`.
 #' @param excluded Keys of the points excluded by the user.
 #' @param criteria See [qc_criteria()].
-#' @param levels Concentrations of all standards of the run, for the level
-#'   names (see [standard_names()]).
+#' @param levels The IDs of the standard levels of the plan (see
+#'   [standard_level_map()]), or the concentrations of all standard wells of
+#'   the plan.
 #' @param wells All standard wells of the run, as `wells` of
 #'   [assess_standards()] (with `lost = "excluded"` for the points excluded by
 #'   the user); by default the wells of `standards`. The original model is

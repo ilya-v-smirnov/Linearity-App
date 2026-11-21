@@ -282,7 +282,9 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
         failed <- !pts$excluded & (is.na(bias) | abs(bias) > limit)
         bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)
     }
-    out <- data.frame(standard = standard_names(pts$conc, pts$conc), key = pts$key, conc = num(pts$conc),
+    # The IDs of the levels of the whole plan, as in every other table
+    level_map <- if (is.null(result$standard_levels)) pts$conc else result$standard_levels
+    out <- data.frame(standard = standard_names(pts$conc, level_map), key = pts$key, conc = num(pts$conc),
                       raw = sprintf('%.4f', pts$raw), OD = sprintf('%.4f', pts$OD), calc = num(calc),
                       bias = bias_text, error = num(calc - pts$conc))
     cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'col.od_raw', 'col.od_corrected', 'col.calc',
