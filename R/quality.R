@@ -28,6 +28,12 @@
 #' @param singlets Are standard levels planned as single wells accepted (by
 #'   their bias, the CV cannot be assessed)? Only the plan counts: a level
 #'   planned in replicate that keeps one result follows `replicate_loss`.
+#' @param edge_levels Which standard levels are the boundary calibrators that
+#'   use the `_edge` limits of the standards: `"plan"` (the lowest and highest
+#'   level of the plate plan, whatever wells are lost or excluded: a level
+#'   keeps its limits when the fit gets narrower) or `"fit"` (the lowest and
+#'   highest level with wells in the fit, after the exclusions: a rule the
+#'   method has to state). The presets use `"plan"`.
 #' @param replicate_loss A standard level planned in replicate with a single
 #'   back-calculated result: `"documented"` accepts it (by its bias, the CV
 #'   cannot be assessed) only if every well lost before the fit was excluded
@@ -45,21 +51,24 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
                         min_fraction = 0.75, min_levels = 6, sample_cv = cv, sample_cv_edge = cv_edge,
                         qc_bias = 20, qc_bias_edge = 25, qc_fraction = 2 / 3, qc_level_fraction = 0.5,
                         dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25,
-                        singlets = TRUE, replicate_loss = 'documented') {
+                        singlets = TRUE, replicate_loss = 'documented', edge_levels = 'plan') {
     out <- list(std_bias = std_bias, std_bias_edge = std_bias_edge, cv = cv, cv_edge = cv_edge,
                 min_fraction = min_fraction, min_levels = min_levels,
                 sample_cv = sample_cv, sample_cv_edge = sample_cv_edge,
                 qc_bias = qc_bias, qc_bias_edge = qc_bias_edge, qc_fraction = qc_fraction,
                 qc_level_fraction = qc_level_fraction, dilution_bias = dilution_bias,
                 dilution_cv = dilution_cv, range = range, edge = edge, singlets = singlets,
-                replicate_loss = replicate_loss)
+                replicate_loss = replicate_loss, edge_levels = edge_levels)
     if (!(is.logical(singlets) && length(singlets) == 1 && !is.na(singlets))) {
         lin_abort('error.criteria', names = 'singlets')
     }
     if (!(length(replicate_loss) == 1 && replicate_loss %in% replicate_loss_rules())) {
         lin_abort('error.criteria', names = 'replicate_loss')
     }
-    numeric <- setdiff(names(out), c('range', 'singlets', 'replicate_loss'))
+    if (!(length(edge_levels) == 1 && edge_levels %in% edge_level_rules())) {
+        lin_abort('error.criteria', names = 'edge_levels')
+    }
+    numeric <- setdiff(names(out), c('range', 'singlets', 'replicate_loss', 'edge_levels'))
     bad <- numeric[!vapply(out[numeric], function(v) is.numeric(v) && length(v) == 1 && !is.na(v) && v >= 0,
                            logical(1))]
     if (length(bad) > 0) lin_abort('error.criteria', names = bad)
@@ -75,6 +84,15 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
 #' @return Character vector of rule codes.
 #' @export
 replicate_loss_rules <- function() c('documented', 'reject')
+
+
+#' Rules for the Boundary Calibrators
+#'
+#' See `edge_levels` of [qc_criteria()].
+#'
+#' @return Character vector of rule codes.
+#' @export
+edge_level_rules <- function() c('plan', 'fit')
 
 
 #' Presets of the Acceptance Criteria
@@ -131,8 +149,11 @@ near_edge <- function(conc, range, edge) {
 #'
 #' Back-calculates the standards used in the fit and checks, for each level,
 #' the bias of the mean back-calculated concentration and the CV of the
-#' back-calculated concentrations of the replicates. The lowest and highest
-#' levels of the fit (boundary calibrators) use the `_edge` limits.
+#' back-calculated concentrations of the replicates. The boundary calibrators
+#' use the `_edge` limits: by default the lowest and highest level of the
+#' plate plan, which keep their limits, as the inner levels keep theirs, when
+#' wells are excluded or lost; with `edge_levels = "fit"` (see
+#' [qc_criteria()]) the lowest and highest level with wells in the fit.
 #'
 #' Each level counts its wells: planned (in the layout), measured (with an
 #' OD), fitted (used in the fit) and back-calculated (with a concentration
@@ -168,8 +189,10 @@ near_edge <- function(conc, range, edge) {
 #'   given by the user). Without `lost`, a well without an OD is `"missing"`
 #'   and the other wells left out of the fit have no known reason.
 #'
-#' @return A data.frame with one row per level: `conc`, `n` (wells in the
-#'   fit), `n.planned`, `n.measured`, `n.calc` (back-calculated), `od.mean`,
+#' @return A data.frame with one row per level: `conc`, `role` (in the plate
+#'   plan: `"lowest"`, `"highest"` or `"inner"` level), `position` (in the
+#'   range of the fit: the same codes, `"none"` without wells in the fit), `n`
+#'   (wells in the fit), `n.planned`, `n.measured`, `n.calc` (back-calculated), `od.mean`,
 #'   `od.cv`, `calc.mean`, `calc.cv` (%), `bias` (%), `bias.limit`,
 #'   `cv.limit`, `status`, `pass`, `failed` (wells of the fit without a
 #'   back-calculated concentration: a data.frame with `key` and `reason` for
@@ -191,6 +214,11 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
     planned <- planned[!is.na(planned)]
     measured <- if (!is.null(wells)) wells$conc[!is.na(wells$OD)] else planned
     all_levels <- sort(unique(c(bc$conc, planned)))
+    # The role of a level in the plate plan and its position in the range of the fit are kept apart;
+    # the rule of the criteria says which of them makes a boundary calibrator
+    plan_ends <- range(all_levels)
+    edge_rule <- if (is.null(criteria$edge_levels)) 'plan' else criteria$edge_levels
+    end_of <- function(lv, ends) if (lv <= ends[1]) 'lowest' else if (lv >= ends[2]) 'highest' else 'inner'
     rows <- lapply(all_levels, function(lv) {
         b <- bc[bc$conc == lv, ]
         n_fit <- nrow(b)
@@ -208,7 +236,9 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
         documented <- n_lost > 0 && nrow(before) == n_lost && all(before$reason == 'excluded')
         calc <- b$calc[!is.na(b$calc)]
         n_calc <- length(calc)
-        edge <- lv <= ends[1] || lv >= ends[2]
+        role <- end_of(lv, plan_ends)
+        position <- if (n_fit == 0) 'none' else end_of(lv, ends)
+        edge <- if (edge_rule == 'plan') role != 'inner' else lv <= ends[1] || lv >= ends[2]
         bias_limit <- if (edge) criteria$std_bias_edge else criteria$std_bias
         cv_limit <- if (edge) criteria$cv_edge else criteria$cv
         calc_mean <- if (n_calc > 0) mean(calc) else NA_real_
@@ -237,7 +267,8 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
         } else {
             'pass_singlet'
         }
-        out <- data.frame(conc = lv, n = n_fit, n.planned = n_planned, n.measured = n_measured, n.calc = n_calc,
+        out <- data.frame(conc = lv, role = role, position = position,
+                          n = n_fit, n.planned = n_planned, n.measured = n_measured, n.calc = n_calc,
                           od.mean = if (n_fit > 0) mean(b$OD) else NA_real_,
                           od.cv = if (n_fit > 0) cv_percent(b$OD) else NA_real_,
                           calc.mean = calc_mean, calc.cv = calc_cv, bias = bias, bias.limit = bias_limit,

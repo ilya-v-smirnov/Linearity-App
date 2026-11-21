@@ -27,8 +27,8 @@ and in their places the points excluded by the user (without a
 back-calculated concentration, in grey for tables rendered as HTML; the
 reason is in the wells deviating from the plan), sorted by decreasing
 concentration, then in the order of the plate: an exclusion does not move a
-row. A point deviates from the acceptance criteria if its bias exceeds
-\code{std_bias} (\code{std_bias_edge} at the lowest and highest level of the fit, see
-\code{\link[=qc_criteria]{qc_criteria()}}).
+row. A point deviates from the acceptance criteria if its bias exceeds the
+bias limit of its level in the standards table (\code{std_bias}, \code{std_bias_edge}
+at the boundary calibrators, see \code{\link[=assess_standards]{assess_standards()}}).
 }
 \keyword{internal}

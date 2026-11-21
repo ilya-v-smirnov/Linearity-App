@@ -313,6 +313,84 @@ test_that('fixed presets of the criteria of the standards ignore the inputs', {
     expect_match(ui, 'Colorimetric assay', fixed = TRUE)
     expect_match(ui, 'Bias at boundary calibrators', fixed = TRUE)
     expect_false(grepl('LLOQ', ui, fixed = TRUE))
+    expect_match(ui, 'Lowest and highest level in the fit', fixed = TRUE)
+})
+
+test_that('the boundary calibrators of the fit are a choice of the custom criteria only', {
+    expect_equal(qc_criteria()$edge_levels, 'plan')
+    expect_error(qc_criteria(edge_levels = 'range'), 'edge_levels')
+    shiny::testServer(LinearityApp:::mod_criteria_server, args = list(lang = 'en'), {
+        session$setInputs(edge_levels = 'fit')
+        expect_equal(session$returned()$edge_levels, 'plan')     # ICH M10 by default
+        session$setInputs(preset = 'colorimetric')
+        expect_equal(session$returned()$edge_levels, 'plan')
+        session$setInputs(preset = 'custom')
+        expect_equal(session$returned()$edge_levels, 'fit')
+        session$setInputs(edge_levels = 'plan')
+        expect_equal(session$returned()$edge_levels, 'plan')
+    })
+})
+
+test_that('a boundary calibrator of the plate plan keeps its limits when the fit gets narrower', {
+    # Levels 1-64; both wells of 1 are excluded; level 2 reads about 23 % high
+    f <- function(x) 0.01 * x
+    conc <- c(1, 2, 4, 8, 16, 32, 64)
+    data <- synthetic_data(f, conc = conc)
+    two <- which(data$type == 'standard' & data$conc == 2)
+    data$OD[two] <- f(2 * 1.325) + 0.05
+    keys <- well_keys(data)
+    exclude <- data.frame(key = keys[data$type == 'standard' & data$conc == 1], reason = 'bubble')
+    level <- function(st, lv) st[st$conc == lv, ]
+
+    r <- calculate(data, 'LIN', exclude = exclude)
+    st <- r$quality$standards
+    expect_gt(level(st, 2)$bias, 20)
+    expect_lt(level(st, 2)$bias, 25)
+    # the role in the plan and the position in the fit are kept apart
+    expect_equal(unlist(level(st, 1)[c('role', 'position')], use.names = FALSE), c('lowest', 'none'))
+    expect_equal(unlist(level(st, 2)[c('role', 'position')], use.names = FALSE), c('inner', 'lowest'))
+    expect_equal(unlist(level(st, 64)[c('role', 'position')], use.names = FALSE), c('highest', 'highest'))
+    # level 2 keeps the limits of an inner calibrator, level 1 those of the boundary
+    expect_equal(c(level(st, 2)$bias.limit, level(st, 2)$cv.limit), c(20, 20))
+    expect_equal(level(st, 1)$bias.limit, 25)
+    expect_equal(level(st, 2)$status, 'fail')
+    expect_match(message_text(r$notes),
+                 'The fit begins at 2: .* keeps the limits of an inner calibrator of the plan \\(bias ±20 %, CV 20 %\\)',
+                 all = FALSE)
+
+    # the same limit in the table, the plot, the individual points and the effect of the exclusions
+    tab <- quality_tables(r$quality, 'en')$standards
+    expect_equal(tab[['Limit, ±%']][tab$Concentration == '2'], '20')
+    expect_equal(tab$Accepted[tab$Concentration == '2'], '✗ bias')
+    p <- LinearityApp:::plot_bias(r)
+    limits <- p$layers[[2]]$data
+    expect_equal(limits$upper[limits$conc == 2], 20)
+    pts <- LinearityApp:::standard_points_table(r, 'en', highlight = TRUE)
+    expect_true(all(grepl('crit-fail', pts[['Bias, %']][pts$Nominal == '2'], fixed = TRUE)))
+    e <- r$exclusion_effect
+    bc <- e$back_calc
+    limit <- ifelse(bc$conc %in% c(1, 64), 25, 20)
+    within <- function(err, used) sum(abs(err[used]) <= limit[used])
+    s <- e$summary
+    expect_equal(s$refitted[s$statistic == 'n_wells_within'], within(bc$error.refitted, !bc$excluded))
+    expect_equal(s$original[s$statistic == 'n_wells_within'], within(bc$error.original, rep(TRUE, nrow(bc))))
+    expect_false(any(abs(bc$error.refitted[bc$conc == 2]) <= 20))
+
+    # the rule of the fit, when the method states it: level 2 is a boundary calibrator of the fit
+    loose <- calculate(data, 'LIN', exclude = exclude, criteria = qc_criteria(edge_levels = 'fit'))
+    st <- loose$quality$standards
+    expect_equal(unlist(level(st, 2)[c('role', 'position')], use.names = FALSE), c('inner', 'lowest'))
+    expect_equal(level(st, 2)$bias.limit, 25)
+    expect_equal(level(st, 2)$status, 'pass')
+    expect_match(message_text(loose$notes), 'judged as a boundary calibrator \\(bias ±25 %, CV 25 %\\)', all = FALSE)
+    expect_true(any(grepl('пограничный',
+                          message_text(loose$notes, 'ru'), fixed = TRUE)))
+
+    # without exclusions the plan and the fit agree: no note
+    plain <- calculate(data, 'LIN')
+    expect_false(any(grepl('The fit begins at', message_text(plain$notes), fixed = TRUE)))
+    st <- plain$quality$standards
+    expect_equal(st$role, st$position)
 })
 
 test_that('the criteria of the samples have their own presets that follow the standards', {

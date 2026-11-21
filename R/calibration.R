@@ -676,6 +676,13 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     std_wells$comment <- std$excluded$comment[idx]
     standards <- assess_standards(fit, criteria, wells = std_wells)
     calibration <- calibration_acceptance(standards, criteria)
+    # A fit narrower than the plate plan: say which limits its new ends keep
+    edge_rule <- if (is.null(criteria$edge_levels)) 'plan' else criteria$edge_levels
+    for (i in which(standards$role == 'inner' & standards$position %in% c('lowest', 'highest'))) {
+        notes <- c(notes, list(lin_message(paste0('note.edge_', edge_rule, '_', standards$position[i]),
+                                           conc = signif(standards$conc[i], 3), bias = standards$bias.limit[i],
+                                           cv = standards$cv.limit[i])))
+    }
     # Levels whose fitted wells are not all back-calculated
     all_levels <- data$conc[data$type == 'standard']
     # A curve that turns inside the interval has one warning of its own (below)
@@ -798,7 +805,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         if (!is.null(original_fit)) {
             # The levels accepted after the exclusions are those of the standards table
             effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels,
-                                       wells = std_wells, calibration = calibration)
+                                       wells = std_wells, assessed = standards)
         }
     }
 

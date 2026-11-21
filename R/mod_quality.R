@@ -240,9 +240,9 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #' back-calculated concentration, in grey for tables rendered as HTML; the
 #' reason is in the wells deviating from the plan), sorted by decreasing
 #' concentration, then in the order of the plate: an exclusion does not move a
-#' row. A point deviates from the acceptance criteria if its bias exceeds
-#' `std_bias` (`std_bias_edge` at the lowest and highest level of the fit, see
-#' [qc_criteria()]).
+#' row. A point deviates from the acceptance criteria if its bias exceeds the
+#' bias limit of its level in the standards table (`std_bias`, `std_bias_edge`
+#' at the boundary calibrators, see [assess_standards()]).
 #'
 #' @param result Output of [calculate()].
 #' @param lang Language code.
@@ -269,8 +269,14 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
                       comment = c(rep(NA_character_, nrow(std)), as.character(ex$reason)))
     calc <- ifelse(pts$excluded, NA_real_, inverse_fun(result$fit, pts$OD))
     bias <- 100 * (calc - pts$conc) / pts$conc
+    # The limit of the level, as in the standards table (see assess_standards())
     criteria <- if (is.null(result$quality$criteria)) qc_criteria() else result$quality$criteria
-    limit <- ifelse(pts$conc %in% range(std$conc), criteria$std_bias_edge, criteria$std_bias)
+    st <- result$quality$standards
+    limit <- if (is.null(st)) {
+        ifelse(pts$conc %in% range(std$conc), criteria$std_bias_edge, criteria$std_bias)
+    } else {
+        st$bias.limit[match(pts$conc, st$conc)]
+    }
     bias_text <- ifelse(is.na(bias), '', sprintf('%.1f', bias))
     if (highlight) {
         failed <- !pts$excluded & (is.na(bias) | abs(bias) > limit)
@@ -484,6 +490,15 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
         return(sidebar_group(
             title('crit.title_standards', 'crit.note_standards'), 'vial',
             preset_panels('preset', function(rows) rows('standards')),
+            # The presets keep the boundary calibrators of the plate plan; a method may set those of the fit
+            shiny::conditionalPanel(
+                "input.preset == 'custom'", ns = ns,
+                shiny::radioButtons(ns('edge_levels'), with_tooltip(t('crit.edge_levels'), t('crit.edge_levels_help')),
+                                    choices = stats::setNames(edge_level_rules(),
+                                                              vapply(paste0('crit.edge_levels_', edge_level_rules()),
+                                                                     t, '')),
+                                    selected = 'plan', width = '100%')
+            ),
             shiny::checkboxInput(ns('singlets'), with_tooltip(t('crit.singlets'), t('crit.singlets_help')),
                                  value = TRUE, width = '100%'),
             # A level planned in replicate that keeps one result: a rule of its own, not a singlet
@@ -527,6 +542,7 @@ mod_criteria_server <- function(id, lang) {
             shiny::updateRadioButtons(session, 'range', selected = 'accepted')
             shiny::updateCheckboxInput(session, 'singlets', value = TRUE)
             shiny::updateRadioButtons(session, 'replicate_loss', selected = 'documented')
+            shiny::updateRadioButtons(session, 'edge_levels', selected = 'plan')
         })
         shiny::observeEvent(input$reset_samples, reset('samples'))
         # The criteria of the samples follow the choice of the standards; they can be changed after it
@@ -550,6 +566,9 @@ mod_criteria_server <- function(id, lang) {
             values$range <- if (is.null(input$range)) 'accepted' else input$range
             values$singlets <- if (is.null(input$singlets)) TRUE else isTRUE(input$singlets)
             values$replicate_loss <- if (is.null(input$replicate_loss)) 'documented' else input$replicate_loss
+            # The rule of the fit only in the custom criteria, when chosen
+            custom <- identical(input$preset, 'custom')
+            values$edge_levels <- if (custom && !is.null(input$edge_levels)) input$edge_levels else 'plan'
             with_validation(do.call(qc_criteria, values), 'common.calc_error', lang)
         })
     })

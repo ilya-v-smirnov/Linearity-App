@@ -7,10 +7,12 @@
 #'
 #' The summary tells the wells from the levels. A well is within its
 #' individual bias limit if the relative error of its back-calculated
-#' concentration is within `std_bias` (`std_bias_edge` at the lowest and
-#' highest level used in the fit); the errors and this count use the wells
-#' of each fit: all standards for the original model, the kept ones for the
-#' refitted model. A calibrator level is accepted by the rules of the
+#' concentration is within the bias limit of its level in the standards table
+#' (`std_bias`, `std_bias_edge` at the boundary calibrators, see
+#' [assess_standards()]: by default the limits of the plate plan, the same for
+#' both models); the errors and this count use the wells of each fit: all
+#' standards for the original model, the kept ones for the refitted model. A
+#' calibrator level is accepted by the rules of the
 #' standards table (the bias of its mean and the CV of its replicates, see
 #' [assess_standards()]), and the levels are counted against the number
 #' required for the calibration (see [calibration_acceptance()]): an
@@ -29,9 +31,9 @@
 #'   [assess_standards()] (with `lost = "excluded"` for the points excluded by
 #'   the user); by default the wells of `standards`. The original model is
 #'   assessed on them without the exclusions by the user.
-#' @param calibration Acceptance of the refitted calibration (output of
-#'   [calibration_acceptance()]), so that the count is that of the standards
-#'   table; by default assessed on `wells`.
+#' @param assessed The standards table of the refitted calibration (output of
+#'   [assess_standards()]), so that its limits and its levels accepted are
+#'   those shown; by default assessed on `wells`.
 #'
 #' @return A list with `coefs` (`coef`, `original`, `refitted`),
 #'   `back_calc` (`standard`: level name, `key`: position, `conc`, `OD`,
@@ -43,7 +45,7 @@
 #'   required).
 #' @export
 exclusion_effect <- function(original, refit, standards, excluded, criteria = qc_criteria(),
-                             levels = standards$conc, wells = NULL, calibration = NULL) {
+                             levels = standards$conc, wells = NULL, assessed = NULL) {
     co <- coef_table_fit(original)
     cr <- coef_table_fit(refit)
     coefs <- data.frame(coef = co$coef, original = co$est, refitted = cr$est[match(co$coef, cr$coef)])
@@ -57,30 +59,31 @@ exclusion_effect <- function(original, refit, standards, excluded, criteria = qc
     bc$error.refitted <- error(bc$calc.refitted)
     rownames(bc) <- NULL
 
-    stats <- function(err, used) {
-        e <- abs(err[used])
-        levels <- standards$conc[used]
-        limit <- ifelse(levels %in% range(levels), criteria$std_bias_edge, criteria$std_bias)
-        c(mean_error = if (all(is.na(e))) NA_real_ else mean(e, na.rm = TRUE),
-          max_error = if (all(is.na(e))) NA_real_ else max(e, na.rm = TRUE),
-          n_within = sum(!is.na(e) & e <= limit),
-          n_total = sum(used))
-    }
-    s_orig <- stats(bc$error.original, rep(TRUE, nrow(bc)))
-    s_refit <- stats(bc$error.refitted, !bc$excluded)
-
-    # The levels accepted by the rules of the standards table
+    # The levels by the rules of the standards table: their limits and their acceptance
     if (is.null(wells)) {
         wells <- data.frame(conc = standards$conc, OD = standards$OD, key = as.character(standards$.key),
                             lost = ifelse(standards$.key %in% excluded, 'excluded', NA_character_))
     }
-    accepted <- function(fit, wells) calibration_acceptance(assess_standards(fit, criteria, wells = wells), criteria)
     # The original model has no exclusions by the user; the other losses (no OD, OD <= blank) remain
     all_wells <- wells
     if (!is.null(all_wells$lost)) all_wells$lost[all_wells$lost %in% 'excluded'] <- NA_character_
     if (!is.null(all_wells$comment)) all_wells$comment[is.na(all_wells$lost)] <- NA_character_
-    cal_orig <- accepted(original, all_wells)
-    cal_refit <- if (is.null(calibration)) accepted(refit, wells) else calibration
+    st_orig <- assess_standards(original, criteria, wells = all_wells)
+    st_refit <- if (is.null(assessed)) assess_standards(refit, criteria, wells = wells) else assessed
+    cal_orig <- calibration_acceptance(st_orig, criteria)
+    cal_refit <- calibration_acceptance(st_refit, criteria)
+
+    # Each well against the bias limit of its level
+    stats <- function(err, used, st) {
+        e <- abs(err[used])
+        limit <- st$bias.limit[match(standards$conc[used], st$conc)]
+        c(mean_error = if (all(is.na(e))) NA_real_ else mean(e, na.rm = TRUE),
+          max_error = if (all(is.na(e))) NA_real_ else max(e, na.rm = TRUE),
+          n_within = sum(!is.na(e) & e <= limit, na.rm = TRUE),
+          n_total = sum(used))
+    }
+    s_orig <- stats(bc$error.original, rep(TRUE, nrow(bc)), st_orig)
+    s_refit <- stats(bc$error.refitted, !bc$excluded, st_refit)
 
     summary <- data.frame(statistic = c('mean_error', 'max_error', 'n_wells_within', 'n_levels_accepted'),
                           original = c(unname(s_orig[1:3]), cal_orig$n_pass),

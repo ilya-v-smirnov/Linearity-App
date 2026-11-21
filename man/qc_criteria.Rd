@@ -22,7 +22,8 @@ qc_criteria(
   range = "accepted",
   edge = 1.25,
   singlets = TRUE,
-  replicate_loss = "documented"
+  replicate_loss = "documented",
+  edge_levels = "plan"
 )
 }
 \arguments{
@@ -64,6 +65,13 @@ by the user, who gives a reason; \code{"reject"} requires at least two
 back-calculated results whatever the reason of the loss. A well without
 an OD or left out automatically (OD <= blank) is not a documented loss
 (see \code{\link[=assess_standards]{assess_standards()}}).}
+
+\item{edge_levels}{Which standard levels are the boundary calibrators that
+use the \verb{_edge} limits of the standards: \code{"plan"} (the lowest and highest
+level of the plate plan, whatever wells are lost or excluded: a level
+keeps its limits when the fit gets narrower) or \code{"fit"} (the lowest and
+highest level with wells in the fit, after the exclusions: a rule the
+method has to state). The presets use \code{"plan"}.}
 }
 \value{
 A list of class \code{lin_criteria}.

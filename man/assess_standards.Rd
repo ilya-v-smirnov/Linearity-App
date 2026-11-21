@@ -23,8 +23,10 @@ given by the user). Without \code{lost}, a well without an OD is \code{"missing"
 and the other wells left out of the fit have no known reason.}
 }
 \value{
-A data.frame with one row per level: \code{conc}, \code{n} (wells in the
-fit), \code{n.planned}, \code{n.measured}, \code{n.calc} (back-calculated), \code{od.mean},
+A data.frame with one row per level: \code{conc}, \code{role} (in the plate
+plan: \code{"lowest"}, \code{"highest"} or \code{"inner"} level), \code{position} (in the
+range of the fit: the same codes, \code{"none"} without wells in the fit), \code{n}
+(wells in the fit), \code{n.planned}, \code{n.measured}, \code{n.calc} (back-calculated), \code{od.mean},
 \code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%), \code{bias.limit},
 \code{cv.limit}, \code{status}, \code{pass}, \code{failed} (wells of the fit without a
 back-calculated concentration: a data.frame with \code{key} and \code{reason} for
@@ -35,8 +37,11 @@ inverse: a data.frame with \code{key}, \code{reason} and \code{comment} for each
 \description{
 Back-calculates the standards used in the fit and checks, for each level,
 the bias of the mean back-calculated concentration and the CV of the
-back-calculated concentrations of the replicates. The lowest and highest
-levels of the fit (boundary calibrators) use the \verb{_edge} limits.
+back-calculated concentrations of the replicates. The boundary calibrators
+use the \verb{_edge} limits: by default the lowest and highest level of the
+plate plan, which keep their limits, as the inner levels keep theirs, when
+wells are excluded or lost; with \code{edge_levels = "fit"} (see
+\code{\link[=qc_criteria]{qc_criteria()}}) the lowest and highest level with wells in the fit.
 }
 \details{
 Each level counts its wells: planned (in the layout), measured (with an

@@ -12,7 +12,7 @@ exclusion_effect(
   criteria = qc_criteria(),
   levels = standards$conc,
   wells = NULL,
-  calibration = NULL
+  assessed = NULL
 )
 }
 \arguments{
@@ -35,9 +35,9 @@ names (see \code{\link[=standard_names]{standard_names()}}).}
 the user); by default the wells of \code{standards}. The original model is
 assessed on them without the exclusions by the user.}
 
-\item{calibration}{Acceptance of the refitted calibration (output of
-\code{\link[=calibration_acceptance]{calibration_acceptance()}}), so that the count is that of the standards
-table; by default assessed on \code{wells}.}
+\item{assessed}{The standards table of the refitted calibration (output of
+\code{\link[=assess_standards]{assess_standards()}}), so that its limits and its levels accepted are
+those shown; by default assessed on \code{wells}.}
 }
 \value{
 A list with \code{coefs} (\code{coef}, \code{original}, \code{refitted}),
@@ -58,10 +58,12 @@ errors of back-calculation.
 \details{
 The summary tells the wells from the levels. A well is within its
 individual bias limit if the relative error of its back-calculated
-concentration is within \code{std_bias} (\code{std_bias_edge} at the lowest and
-highest level used in the fit); the errors and this count use the wells
-of each fit: all standards for the original model, the kept ones for the
-refitted model. A calibrator level is accepted by the rules of the
+concentration is within the bias limit of its level in the standards table
+(\code{std_bias}, \code{std_bias_edge} at the boundary calibrators, see
+\code{\link[=assess_standards]{assess_standards()}}: by default the limits of the plate plan, the same for
+both models); the errors and this count use the wells of each fit: all
+standards for the original model, the kept ones for the refitted model. A
+calibrator level is accepted by the rules of the
 standards table (the bias of its mean and the CV of its replicates, see
 \code{\link[=assess_standards]{assess_standards()}}), and the levels are counted against the number
 required for the calibration (see \code{\link[=calibration_acceptance]{calibration_acceptance()}}): an
