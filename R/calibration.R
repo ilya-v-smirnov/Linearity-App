@@ -663,7 +663,15 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
 
     # Quantification range: accepted standard levels
     # All levels of the run count, also those without points in the fit
-    standards <- assess_standards(fit, criteria, wells = data[data$type == 'standard', c('conc', 'OD')])
+    # Every standard well with the reason why it is not in the fit, for the rule of a lost replicate
+    std_wells <- data[data$type == 'standard', c('conc', 'OD', '.key'), drop = FALSE]
+    names(std_wells)[3] <- 'key'
+    idx <- match(std_wells$key, std$excluded$.key)
+    codes <- c(stats::setNames('excluded', FLAGS$excluded), stats::setNames('missing', FLAGS$missing),
+               stats::setNames('od_le_blank', FLAGS$od_le_nc))
+    std_wells$lost <- unname(codes[std$excluded$reason[idx]])
+    std_wells$comment <- std$excluded$comment[idx]
+    standards <- assess_standards(fit, criteria, wells = std_wells)
     calibration <- calibration_acceptance(standards, criteria)
     # Levels whose fitted wells are not all back-calculated
     all_levels <- data$conc[data$type == 'standard']

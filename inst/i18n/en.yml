@@ -217,7 +217,8 @@ col:
   od_raw: "OD as measured"
   od_corrected: "Corrected OD"
   od_le_blank: "OD ≤ blank"
-  n_backcalc: "Back-calculated wells"
+  n_wells: "Wells: planned · fitted · back-calculated"
+  lost: "Lost wells"
   backcalc_reason: "Not back-calculated"
   conc: "Concentration"
   count: "n"
@@ -243,8 +244,12 @@ col:
   error: "Abs. error"
 
 crit:
-  singlets: "Accept single-well standard levels"
-  singlets_help: "For methods that plan some standard levels as single wells: such a level is accepted by its bias, its CV cannot be assessed. A level planned in replicate that keeps one result is not a singlet."
+  singlets: "Accept standard levels planned as single wells"
+  singlets_help: "For methods that plan some standard levels as single wells: such a level is accepted by its bias, its CV cannot be assessed. Only the plan counts: a level planned in replicate that keeps one result follows the rule below."
+  replicate_loss: "Level planned in replicate with one result left"
+  replicate_loss_help: "A level planned in two or more wells that keeps a single back-calculated result. Accept if the lost well was excluded with a reason: accepted by its bias (the CV cannot be assessed) only when every lost well was excluded by the user, who gives a reason; a well without an OD or left out as OD ≤ blank is not a documented loss. Do not accept: at least two back-calculated results are required, whatever the reason of the loss. A loss by the inverse of the curve always makes the level incomplete."
+  replicate_loss_documented: "Accept if the lost well was excluded with a reason"
+  replicate_loss_reject: "Do not accept"
   title_standards: "Acceptance criteria"
   note_standards: "ICH M10 – LBA: ICH M10 (2022) requirements for ligand binding assays. Colorimetric assay: tighter limits for BCA, Griess and similar assays. Custom: editable values, starting from those of ICH M10. Boundary calibrators are the lowest and the highest standard level."
   preset: "Criteria set"
@@ -421,8 +426,9 @@ quality:
   status_pass_no_cv: "✓ single result"
   status_pass_singlet: "✓ singlet"
   status_singlet: "✗ singlet"
+  status_replicate_lost: "✗ replicate lost"
   status_no_points: "✗ no wells in the fit"
-  backcalc_legend: "Back-calculated wells: wells with a concentration from the curve / wells with an OD. The wells that were not back-calculated are listed in the warnings and in the individual points. CV unavailable: fewer than two back-calculated results of a level planned in replicate; such a level is accepted by its bias only if the other wells are excluded or have no OD."
+  backcalc_legend: "Wells: planned in the layout · used in the fit · with a concentration from the curve. Lost wells: why a well has no back-calculated concentration. CV unavailable: fewer than two back-calculated results of a level planned in replicate; such a level follows the rule for a level with one result left (acceptance criteria of the standards)."
   accepted: "Run accepted"
   rejected: "Run rejected"
   range: "Quantification range (LLOQ – ULOQ): {lloq} – {uloq}"
@@ -594,6 +600,12 @@ effect:
   mean_error: "Mean absolute relative error, %"
   max_error: "Maximum absolute relative error, %"
   n_pass: "Number of standards meeting acceptance criteria"
+
+lost:
+  excluded: "excluded — {reason}"
+  excluded_plain: "excluded"
+  missing: "no OD"
+  od_le_blank: "OD ≤ blank, left out of the fit"
 
 backcalc:
   non_monotonic: "ambiguous, the curve is not monotonic"

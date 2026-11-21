@@ -16,15 +16,21 @@ per well, so that the planned replicates are counted); by default the
 wells of the fit. Not used with \code{wells}.}
 
 \item{wells}{All standard wells of the run with \code{conc} and \code{OD} (\code{NA}
-where the OD is missing).}
+where the OD is missing); optionally \code{key} (well ID), \code{lost} (why a
+well is not in the fit: \code{"excluded"} by the user, \code{"missing"} OD or
+\code{"od_le_blank"}; \code{NA} for the wells of the fit) and \code{comment} (the reason
+given by the user). Without \code{lost}, a well without an OD is \code{"missing"}
+and the other wells left out of the fit have no known reason.}
 }
 \value{
 A data.frame with one row per level: \code{conc}, \code{n} (wells in the
 fit), \code{n.planned}, \code{n.measured}, \code{n.calc} (back-calculated), \code{od.mean},
 \code{od.cv}, \code{calc.mean}, \code{calc.cv} (\%), \code{bias} (\%), \code{bias.limit},
-\code{cv.limit}, \code{status}, \code{pass} and \code{failed} (wells of the fit without a
+\code{cv.limit}, \code{status}, \code{pass}, \code{failed} (wells of the fit without a
 back-calculated concentration: a data.frame with \code{key} and \code{reason} for
-each level, see \code{\link[=inverse_reason]{inverse_reason()}}).
+each level, see \code{\link[=inverse_reason]{inverse_reason()}}) and \code{lost} (all wells of the level
+without a back-calculated concentration, lost before the fit or by the
+inverse: a data.frame with \code{key}, \code{reason} and \code{comment} for each level).
 }
 \description{
 Back-calculates the standards used in the fit and checks, for each level,
@@ -42,8 +48,13 @@ of a level (\code{status}):
 \item \code{pass}, \code{fail}: the bias and the CV against their limits;
 \item \code{incomplete}: some fitted wells have no back-calculated concentration
 (e.g. the OD lies outside the asymptotes); not accepted;
-\item \code{pass_no_cv}: planned in replicate, but one result is left (the others
-excluded or without an OD); accepted by its bias, the CV is unavailable;
+\item \code{pass_no_cv}: planned in replicate, one result is left and every well
+lost before the fit was excluded by the user (with a reason), as the rule
+\code{replicate_loss = "documented"} allows; accepted by its bias, the CV is
+unavailable;
+\item \code{replicate_lost}: planned in replicate, one result is left, and the rule
+requires two results (\code{replicate_loss = "reject"}) or a well was lost
+without a documented reason (no OD, OD <= blank, ...); not accepted;
 \item \code{pass_singlet}, \code{singlet}: planned as a single well; accepted by its bias
 if the criteria allow singlets (\code{singlets}), otherwise not accepted;
 \item \code{no_points}: no well of the level in the fit; not accepted;

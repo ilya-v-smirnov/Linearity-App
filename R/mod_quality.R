@@ -68,12 +68,17 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         # A level planned in replicate without two back-calculated results: the CV is unavailable
         cv_text <- pct(st$calc.cv)
         cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
-        standards <- name(data.frame(num(st$conc), paste0(st$n.calc, '/', st$n.measured),
+        standards <- name(data.frame(num(st$conc), paste(st$n.planned, st$n, st$n.calc, sep = ' · '),
                                      dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
                                      fail(dash(cv_text), cv_failed), fail(dash(pct(st$bias)), bias_failed),
                                      sprintf('%g', st$bias.limit), fail(standard_status(st$status, lang), !st$pass)),
-                          c('col.conc', 'col.n_backcalc', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
+                          c('col.conc', 'col.n_wells', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias',
                             'col.limit', 'col.pass'))
+        # The wells lost before the fit or by the inverse, with the reason, when there are any
+        if (!is.null(st$lost)) {
+            lost <- vapply(st$lost, lost_wells_text, '', lang = lang)
+            if (any(nzchar(lost))) standards[[t('col.lost')]] <- if (highlight) html_escape(lost) else lost
+        }
     }
 
     qc <- NULL
@@ -122,6 +127,33 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
 }
 
 
+#' Lost Wells of a Standard Level as Text
+#'
+#' @param lost The wells of a level without a back-calculated concentration
+#'   (an element of `lost` of [assess_standards()]).
+#' @param lang Language code.
+#'
+#' @return One string: `well: reason` for each well, joined by semicolons
+#'   (the reason given by the user for an exclusion, the codes of
+#'   [inverse_reason()] for a failed inverse); empty without lost wells.
+#' @keywords internal
+lost_wells_text <- function(lost, lang = 'en') {
+    if (is.null(lost) || nrow(lost) == 0) return('')
+    reason <- vapply(seq_len(nrow(lost)), function(i) {
+        r <- lost$reason[i]
+        if (identical(r, 'excluded')) {
+            comment <- lost$comment[i]
+            return(if (is.na(comment) || !nzchar(comment)) tr('lost.excluded_plain', lang) else
+                tr('lost.excluded', lang, reason = comment))
+        }
+        if (r %in% c('missing', 'od_le_blank')) return(tr(paste0('lost.', r), lang))
+        tr(paste0('backcalc.', r), lang)
+    }, '')
+    key <- as.character(lost$key)
+    paste(ifelse(is.na(key), reason, paste0(key, ': ', reason)), collapse = '; ')
+}
+
+
 #' Status of a Standard Level for Display
 #'
 #' @param status Codes from [assess_standards()].
@@ -133,7 +165,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
 standard_status <- function(status, lang = 'en') {
     keys <- c(pass = 'quality.pass', fail = 'quality.fail', incomplete = 'quality.status_incomplete',
               pass_no_cv = 'quality.status_pass_no_cv', pass_singlet = 'quality.status_pass_singlet',
-              singlet = 'quality.status_singlet', no_points = 'quality.status_no_points',
+              singlet = 'quality.status_singlet', replicate_lost = 'quality.status_replicate_lost',
+              no_points = 'quality.status_no_points',
               outside_interval = 'quality.status_outside_interval')
     vapply(status, function(x) tr(keys[[x]], lang), '', USE.NAMES = FALSE)
 }
@@ -417,6 +450,13 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
             preset_panels('preset', function(rows) rows('standards')),
             shiny::checkboxInput(ns('singlets'), with_tooltip(t('crit.singlets'), t('crit.singlets_help')),
                                  value = TRUE, width = '100%'),
+            # A level planned in replicate that keeps one result: a rule of its own, not a singlet
+            shiny::radioButtons(ns('replicate_loss'), with_tooltip(t('crit.replicate_loss'),
+                                                                    t('crit.replicate_loss_help')),
+                                choices = stats::setNames(replicate_loss_rules(),
+                                                          vapply(paste0('crit.replicate_loss_', replicate_loss_rules()),
+                                                                 t, '')),
+                                selected = 'documented', width = '100%'),
             shiny::radioButtons(ns('range'), t('crit.range'),
                                 choices = stats::setNames(c('accepted', 'all'),
                                                           c(t('crit.range_accepted'), t('crit.range_all'))),
@@ -450,6 +490,7 @@ mod_criteria_server <- function(id, lang) {
             reset('standards')
             shiny::updateRadioButtons(session, 'range', selected = 'accepted')
             shiny::updateCheckboxInput(session, 'singlets', value = TRUE)
+            shiny::updateRadioButtons(session, 'replicate_loss', selected = 'documented')
         })
         shiny::observeEvent(input$reset_samples, reset('samples'))
         # The criteria of the samples follow the choice of the standards; they can be changed after it
@@ -472,6 +513,7 @@ mod_criteria_server <- function(id, lang) {
             }
             values$range <- if (is.null(input$range)) 'accepted' else input$range
             values$singlets <- if (is.null(input$singlets)) TRUE else isTRUE(input$singlets)
+            values$replicate_loss <- if (is.null(input$replicate_loss)) 'documented' else input$replicate_loss
             with_validation(do.call(qc_criteria, values), 'common.calc_error', lang)
         })
     })

@@ -70,7 +70,7 @@ test_that('all standard levels of the run count for the acceptance of the calibr
     # duplicates left with one well are accepted by their bias, not as plain passes
     expect_equal(st$status, rep(c('pass_no_cv', 'no_points'), length.out = 7))
     tab <- quality_tables(r$quality, 'en')$standards
-    empty <- tab[['Back-calculated wells']] == '0/2'
+    empty <- tab[['Wells: planned · fitted · back-calculated']] == '2 · 0 · 0'
     expect_equal(sum(empty), 3)
     expect_equal(tab[['Bias, %']][empty], rep('—', 3))
     expect_equal(tab[['CV of back-calculated, %']][empty], rep('—', 3))
@@ -412,18 +412,59 @@ test_that('a planned singlet is told apart from a replicate left alone', {
     row <- function(conc) tab[tab$Concentration == conc, ]
     expect_equal(row('16')[['CV of back-calculated, %']], '\u2014')
     expect_equal(row('8')[['CV of back-calculated, %']], 'CV unavailable')
-    expect_equal(row('16')[['Back-calculated wells']], '1/1')
-    expect_equal(row('8')[['Back-calculated wells']], '1/2')
+    expect_equal(row('16')[['Wells: planned \u00b7 fitted \u00b7 back-calculated']], '1 \u00b7 1 \u00b7 1')
+    expect_equal(row('8')[['Wells: planned \u00b7 fitted \u00b7 back-calculated']], '2 \u00b7 1 \u00b7 1')
     expect_equal(row('16')$Accepted, '\u2713 singlet')
     expect_equal(row('8')$Accepted, '\u2713 single result')
+    expect_equal(row('8')[['Lost wells']], paste0(exclude$key, ': excluded \u2014 bubble'))
+    expect_equal(row('16')[['Lost wells']], '')
 
-    # the method may not allow singlets; a replicate left alone is not a singlet
+    # singlets concern the plan only; the replicate left alone follows its own rule
     strict <- calculate(data, 'LIN', exclude = exclude, criteria = qc_criteria(singlets = FALSE))
     st <- strict$quality$standards
     expect_equal(st$status[st$conc == 16], 'singlet')
     expect_false(st$pass[st$conc == 16])
     expect_equal(st$status[st$conc == 8], 'pass_no_cv')
     expect_error(qc_criteria(singlets = NA), 'singlets')
+    expect_error(qc_criteria(replicate_loss = 'allow'), 'replicate_loss')
+})
+
+test_that('a standard level that lost a replicate follows an explicit rule', {
+    data <- run_data()
+    keys <- well_keys(data)
+    eight <- keys[data$type == 'standard' & data$conc == 8]
+    status <- function(r) r$quality$standards$status[r$quality$standards$conc == 8]
+    reject <- qc_criteria(replicate_loss = 'reject')
+    # excluded by the user with a reason: accepted by default, not with the strict rule
+    excl <- data.frame(key = eight[1], reason = 'Outlier')
+    expect_equal(status(calculate(data, 'LIN', exclude = excl)), 'pass_no_cv')
+    strict <- calculate(data, 'LIN', exclude = excl, criteria = reject)
+    expect_equal(status(strict), 'replicate_lost')
+    expect_false(strict$quality$standards$pass[strict$quality$standards$conc == 8])
+    tab <- quality_tables(strict$quality, 'en')$standards
+    expect_equal(tab$Accepted[tab$Concentration == '8'], '\u2717 replicate lost')
+    expect_equal(tab[['Wells: planned \u00b7 fitted \u00b7 back-calculated']][tab$Concentration == '8'], '2 \u00b7 1 \u00b7 1')
+    # no OD: not a documented loss, whatever the rule
+    missing <- data
+    missing$OD[keys == eight[1]] <- NA
+    r <- calculate(missing, 'LIN')
+    expect_equal(status(r), 'replicate_lost')
+    tab <- quality_tables(r$quality, 'en')$standards
+    expect_equal(tab[['Lost wells']][tab$Concentration == '8'], paste0(eight[1], ': no OD'))
+    expect_equal(status(calculate(missing, 'LIN', criteria = reject)), 'replicate_lost')
+    # OD <= blank left out automatically (log-log): not a documented loss either
+    low <- data
+    low$OD[keys == eight[1]] <- 0.01
+    r <- calculate(low, 'LRM')
+    expect_equal(status(r), 'replicate_lost')
+    tab <- quality_tables(r$quality, 'ru')$standards
+    expect_match(tab[[tr('col.lost', 'ru')]][tab[[1]] == '8'], 'OD \u2264 \u0431\u043b\u0430\u043d\u043a\u0430, \u0438\u0441\u043a\u043b\u044e\u0447\u0435\u043d\u0430 \u0438\u0437 \u043f\u043e\u0434\u0433\u043e\u043d\u043a\u0438', fixed = TRUE)
+    # both replicates kept: the rule does not apply
+    expect_equal(status(calculate(data, 'LIN', criteria = reject)), 'pass')
+    # with the same data a planned singlet and a replicate left alone are told apart by the rules, not silently
+    single <- data[-which(keys == eight[1]), ]
+    expect_equal(status(calculate(single, 'LIN', criteria = qc_criteria(singlets = FALSE))), 'singlet')
+    expect_equal(status(calculate(missing, 'LIN', criteria = qc_criteria(singlets = FALSE))), 'replicate_lost')
 })
 
 test_that('the CV criterion of the standards uses back-calculated concentrations', {

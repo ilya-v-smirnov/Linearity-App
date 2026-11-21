@@ -21,7 +21,8 @@ qc_criteria(
   dilution_cv = 20,
   range = "accepted",
   edge = 1.25,
-  singlets = TRUE
+  singlets = TRUE,
+  replicate_loss = "documented"
 )
 }
 \arguments{
@@ -53,8 +54,16 @@ highest accepted standard level) or \code{"all"} (all standards used in the fit)
 use the \verb{_edge} limits.}
 
 \item{singlets}{Are standard levels planned as single wells accepted (by
-their bias, the CV cannot be assessed)? A level planned in replicate
-that keeps one result is not a singlet (see \code{\link[=assess_standards]{assess_standards()}}).}
+their bias, the CV cannot be assessed)? Only the plan counts: a level
+planned in replicate that keeps one result follows \code{replicate_loss}.}
+
+\item{replicate_loss}{A standard level planned in replicate with a single
+back-calculated result: \code{"documented"} accepts it (by its bias, the CV
+cannot be assessed) only if every well lost before the fit was excluded
+by the user, who gives a reason; \code{"reject"} requires at least two
+back-calculated results whatever the reason of the loss. A well without
+an OD or left out automatically (OD <= blank) is not a documented loss
+(see \code{\link[=assess_standards]{assess_standards()}}).}
 }
 \value{
 A list of class \code{lin_criteria}.

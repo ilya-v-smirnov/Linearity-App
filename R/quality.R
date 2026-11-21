@@ -26,8 +26,15 @@
 #'   (the lowest and highest level of the quantification range, LLOQ and ULOQ)
 #'   use the `_edge` limits.
 #' @param singlets Are standard levels planned as single wells accepted (by
-#'   their bias, the CV cannot be assessed)? A level planned in replicate
-#'   that keeps one result is not a singlet (see [assess_standards()]).
+#'   their bias, the CV cannot be assessed)? Only the plan counts: a level
+#'   planned in replicate that keeps one result follows `replicate_loss`.
+#' @param replicate_loss A standard level planned in replicate with a single
+#'   back-calculated result: `"documented"` accepts it (by its bias, the CV
+#'   cannot be assessed) only if every well lost before the fit was excluded
+#'   by the user, who gives a reason; `"reject"` requires at least two
+#'   back-calculated results whatever the reason of the loss. A well without
+#'   an OD or left out automatically (OD <= blank) is not a documented loss
+#'   (see [assess_standards()]).
 #'
 #' @return A list of class `lin_criteria`.
 #' @export
@@ -38,23 +45,36 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
                         min_fraction = 0.75, min_levels = 6, sample_cv = cv, sample_cv_edge = cv_edge,
                         qc_bias = 20, qc_bias_edge = 25, qc_fraction = 2 / 3, qc_level_fraction = 0.5,
                         dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25,
-                        singlets = TRUE) {
+                        singlets = TRUE, replicate_loss = 'documented') {
     out <- list(std_bias = std_bias, std_bias_edge = std_bias_edge, cv = cv, cv_edge = cv_edge,
                 min_fraction = min_fraction, min_levels = min_levels,
                 sample_cv = sample_cv, sample_cv_edge = sample_cv_edge,
                 qc_bias = qc_bias, qc_bias_edge = qc_bias_edge, qc_fraction = qc_fraction,
                 qc_level_fraction = qc_level_fraction, dilution_bias = dilution_bias,
-                dilution_cv = dilution_cv, range = range, edge = edge, singlets = singlets)
+                dilution_cv = dilution_cv, range = range, edge = edge, singlets = singlets,
+                replicate_loss = replicate_loss)
     if (!(is.logical(singlets) && length(singlets) == 1 && !is.na(singlets))) {
         lin_abort('error.criteria', names = 'singlets')
     }
-    numeric <- setdiff(names(out), c('range', 'singlets'))
+    if (!(length(replicate_loss) == 1 && replicate_loss %in% replicate_loss_rules())) {
+        lin_abort('error.criteria', names = 'replicate_loss')
+    }
+    numeric <- setdiff(names(out), c('range', 'singlets', 'replicate_loss'))
     bad <- numeric[!vapply(out[numeric], function(v) is.numeric(v) && length(v) == 1 && !is.na(v) && v >= 0,
                            logical(1))]
     if (length(bad) > 0) lin_abort('error.criteria', names = bad)
     if (!range %in% c('accepted', 'all')) lin_abort('error.criteria', names = 'range')
     structure(out, class = 'lin_criteria')
 }
+
+
+#' Rules for a Standard Level That Lost a Replicate
+#'
+#' See `replicate_loss` of [qc_criteria()].
+#'
+#' @return Character vector of rule codes.
+#' @export
+replicate_loss_rules <- function() c('documented', 'reject')
 
 
 #' Presets of the Acceptance Criteria
@@ -123,8 +143,13 @@ near_edge <- function(conc, range, edge) {
 #' * `pass`, `fail`: the bias and the CV against their limits;
 #' * `incomplete`: some fitted wells have no back-calculated concentration
 #'   (e.g. the OD lies outside the asymptotes); not accepted;
-#' * `pass_no_cv`: planned in replicate, but one result is left (the others
-#'   excluded or without an OD); accepted by its bias, the CV is unavailable;
+#' * `pass_no_cv`: planned in replicate, one result is left and every well
+#'   lost before the fit was excluded by the user (with a reason), as the rule
+#'   `replicate_loss = "documented"` allows; accepted by its bias, the CV is
+#'   unavailable;
+#' * `replicate_lost`: planned in replicate, one result is left, and the rule
+#'   requires two results (`replicate_loss = "reject"`) or a well was lost
+#'   without a documented reason (no OD, OD <= blank, ...); not accepted;
 #' * `pass_singlet`, `singlet`: planned as a single well; accepted by its bias
 #'   if the criteria allow singlets (`singlets`), otherwise not accepted;
 #' * `no_points`: no well of the level in the fit; not accepted;
@@ -137,27 +162,48 @@ near_edge <- function(conc, range, edge) {
 #'   per well, so that the planned replicates are counted); by default the
 #'   wells of the fit. Not used with `wells`.
 #' @param wells All standard wells of the run with `conc` and `OD` (`NA`
-#'   where the OD is missing).
+#'   where the OD is missing); optionally `key` (well ID), `lost` (why a
+#'   well is not in the fit: `"excluded"` by the user, `"missing"` OD or
+#'   `"od_le_blank"`; `NA` for the wells of the fit) and `comment` (the reason
+#'   given by the user). Without `lost`, a well without an OD is `"missing"`
+#'   and the other wells left out of the fit have no known reason.
 #'
 #' @return A data.frame with one row per level: `conc`, `n` (wells in the
 #'   fit), `n.planned`, `n.measured`, `n.calc` (back-calculated), `od.mean`,
 #'   `od.cv`, `calc.mean`, `calc.cv` (%), `bias` (%), `bias.limit`,
-#'   `cv.limit`, `status`, `pass` and `failed` (wells of the fit without a
+#'   `cv.limit`, `status`, `pass`, `failed` (wells of the fit without a
 #'   back-calculated concentration: a data.frame with `key` and `reason` for
-#'   each level, see [inverse_reason()]).
+#'   each level, see [inverse_reason()]) and `lost` (all wells of the level
+#'   without a back-calculated concentration, lost before the fit or by the
+#'   inverse: a data.frame with `key`, `reason` and `comment` for each level).
 #' @export
 assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells = NULL) {
     bc <- back_calculate(fit)
     ends <- range(bc$conc)
+    rule <- if (is.null(criteria$replicate_loss)) 'documented' else criteria$replicate_loss
+    if (!is.null(wells)) {
+        wells <- wells[!is.na(wells$conc), , drop = FALSE]
+        if (is.null(wells$lost)) wells$lost <- ifelse(is.na(wells$OD), 'missing', NA_character_)
+        if (is.null(wells$key)) wells$key <- rep(NA_character_, nrow(wells))
+        if (is.null(wells$comment)) wells$comment <- rep(NA_character_, nrow(wells))
+    }
     planned <- if (!is.null(wells)) wells$conc else levels
     planned <- planned[!is.na(planned)]
-    measured <- if (!is.null(wells)) wells$conc[!is.na(wells$conc) & !is.na(wells$OD)] else planned
+    measured <- if (!is.null(wells)) wells$conc[!is.na(wells$OD)] else planned
     all_levels <- sort(unique(c(bc$conc, planned)))
     rows <- lapply(all_levels, function(lv) {
         b <- bc[bc$conc == lv, ]
         n_fit <- nrow(b)
         n_planned <- max(sum(planned == lv), n_fit)
         n_measured <- max(sum(measured == lv), n_fit)
+        # Wells lost before the fit, with their reasons; the loss is documented when every lost well
+        # was excluded by the user (a reason is required)
+        before <- if (is.null(wells)) data.frame(key = character(0), reason = character(0), comment = character(0)) else {
+            w <- wells[wells$conc == lv & !is.na(wells$lost), , drop = FALSE]
+            data.frame(key = as.character(w$key), reason = w$lost, comment = as.character(w$comment))
+        }
+        n_lost <- n_planned - n_fit
+        documented <- n_lost > 0 && nrow(before) == n_lost && all(before$reason == 'excluded')
         calc <- b$calc[!is.na(b$calc)]
         n_calc <- length(calc)
         edge <- lv <= ends[1] || lv >= ends[2]
@@ -175,6 +221,9 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
             'outside_interval'
         } else if (n_calc < n_fit) {
             'incomplete'
+        } else if (n_calc == 1 && n_planned >= 2 && !(rule == 'documented' && documented)) {
+            # A replicate left alone: by the plan, not as a singlet
+            'replicate_lost'
         } else if (!within) {
             'fail'
         } else if (n_calc >= 2) {
@@ -193,10 +242,14 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
                           cv.limit = cv_limit, status = status,
                           pass = status %in% c('pass', 'pass_no_cv', 'pass_singlet'))
         lost <- is.na(b$calc)
-        list(row = out, failed = data.frame(key = b$key[lost], reason = b$reason[lost]))
+        failed <- data.frame(key = b$key[lost], reason = b$reason[lost])
+        list(row = out, failed = failed,
+             lost = rbind(before, data.frame(key = as.character(failed$key), reason = failed$reason,
+                                             comment = rep(NA_character_, nrow(failed)))))
     })
     out <- do.call(rbind, lapply(rows, `[[`, 'row'))
     out$failed <- lapply(rows, `[[`, 'failed')
+    out$lost <- lapply(rows, `[[`, 'lost')
     out
 }
 
