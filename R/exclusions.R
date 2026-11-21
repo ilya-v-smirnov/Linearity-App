@@ -5,11 +5,17 @@
 #' coefficients, the back-calculated concentrations of every standard and the
 #' errors of back-calculation.
 #'
-#' A standard meets the acceptance criteria if the relative error of its
-#' back-calculated concentration is within `std_bias` (`std_bias_edge` at the
-#' lowest and highest level used in the fit). The summary of each model uses
-#' the standards of its own fit: all standards for the original model, the
-#' kept ones for the refitted model.
+#' The summary tells the wells from the levels. A well is within its
+#' individual bias limit if the relative error of its back-calculated
+#' concentration is within `std_bias` (`std_bias_edge` at the lowest and
+#' highest level used in the fit); the errors and this count use the wells
+#' of each fit: all standards for the original model, the kept ones for the
+#' refitted model. A calibrator level is accepted by the rules of the
+#' standards table (the bias of its mean and the CV of its replicates, see
+#' [assess_standards()]), and the levels are counted against the number
+#' required for the calibration (see [calibration_acceptance()]): an
+#' exclusion may lower the errors of the wells left without changing the
+#' levels accepted.
 #'
 #' @param original Fit on all standards (`lin_fit`).
 #' @param refit Fit without the excluded points (`lin_fit`).
@@ -19,16 +25,25 @@
 #' @param criteria See [qc_criteria()].
 #' @param levels Concentrations of all standards of the run, for the level
 #'   names (see [standard_names()]).
+#' @param wells All standard wells of the run, as `wells` of
+#'   [assess_standards()] (with `lost = "excluded"` for the points excluded by
+#'   the user); by default the wells of `standards`. The original model is
+#'   assessed on them without the exclusions by the user.
+#' @param calibration Acceptance of the refitted calibration (output of
+#'   [calibration_acceptance()]), so that the count is that of the standards
+#'   table; by default assessed on `wells`.
 #'
 #' @return A list with `coefs` (`coef`, `original`, `refitted`),
 #'   `back_calc` (`standard`: level name, `key`: position, `conc`, `OD`,
 #'   `excluded`, `calc.original`,
 #'   `calc.refitted`, `error.original`, `error.refitted`; errors in %) and
-#'   `summary` (`statistic`: `mean_error`, `max_error`, `n_pass`; `original`,
-#'   `refitted`; `n_total` for `n_pass`).
+#'   `summary` (`statistic`: `mean_error`, `max_error`, `n_wells_within`,
+#'   `n_levels_accepted`; `original`, `refitted`; `n_total` for the counts:
+#'   the wells of the fit, the levels of the run; `n_needed`: the levels
+#'   required).
 #' @export
 exclusion_effect <- function(original, refit, standards, excluded, criteria = qc_criteria(),
-                             levels = standards$conc) {
+                             levels = standards$conc, wells = NULL, calibration = NULL) {
     co <- coef_table_fit(original)
     cr <- coef_table_fit(refit)
     coefs <- data.frame(coef = co$coef, original = co$est, refitted = cr$est[match(co$coef, cr$coef)])
@@ -48,15 +63,32 @@ exclusion_effect <- function(original, refit, standards, excluded, criteria = qc
         limit <- ifelse(levels %in% range(levels), criteria$std_bias_edge, criteria$std_bias)
         c(mean_error = if (all(is.na(e))) NA_real_ else mean(e, na.rm = TRUE),
           max_error = if (all(is.na(e))) NA_real_ else max(e, na.rm = TRUE),
-          n_pass = sum(!is.na(e) & e <= limit),
+          n_within = sum(!is.na(e) & e <= limit),
           n_total = sum(used))
     }
     s_orig <- stats(bc$error.original, rep(TRUE, nrow(bc)))
     s_refit <- stats(bc$error.refitted, !bc$excluded)
-    summary <- data.frame(statistic = c('mean_error', 'max_error', 'n_pass'),
-                          original = unname(s_orig[1:3]), refitted = unname(s_refit[1:3]),
-                          n_total.original = c(NA, NA, s_orig[['n_total']]),
-                          n_total.refitted = c(NA, NA, s_refit[['n_total']]))
+
+    # The levels accepted by the rules of the standards table
+    if (is.null(wells)) {
+        wells <- data.frame(conc = standards$conc, OD = standards$OD, key = as.character(standards$.key),
+                            lost = ifelse(standards$.key %in% excluded, 'excluded', NA_character_))
+    }
+    accepted <- function(fit, wells) calibration_acceptance(assess_standards(fit, criteria, wells = wells), criteria)
+    # The original model has no exclusions by the user; the other losses (no OD, OD <= blank) remain
+    all_wells <- wells
+    if (!is.null(all_wells$lost)) all_wells$lost[all_wells$lost %in% 'excluded'] <- NA_character_
+    if (!is.null(all_wells$comment)) all_wells$comment[is.na(all_wells$lost)] <- NA_character_
+    cal_orig <- accepted(original, all_wells)
+    cal_refit <- if (is.null(calibration)) accepted(refit, wells) else calibration
+
+    summary <- data.frame(statistic = c('mean_error', 'max_error', 'n_wells_within', 'n_levels_accepted'),
+                          original = c(unname(s_orig[1:3]), cal_orig$n_pass),
+                          refitted = c(unname(s_refit[1:3]), cal_refit$n_pass),
+                          n_total.original = c(NA, NA, s_orig[['n_total']], cal_orig$n_levels),
+                          n_total.refitted = c(NA, NA, s_refit[['n_total']], cal_refit$n_levels),
+                          n_needed.original = c(NA, NA, NA, cal_orig$n_needed),
+                          n_needed.refitted = c(NA, NA, NA, cal_refit$n_needed))
     list(coefs = coefs, back_calc = bc, summary = summary)
 }
 
@@ -89,10 +121,13 @@ exclusion_effect_tables <- function(effect, lang = 'en', round_fun = signif, rou
 
     s <- effect$summary
     count <- function(n, total) paste0(n, ' / ', total)
+    levels <- function(n, total, needed) t('effect.levels_value', n = n, total = total, needed = needed)
     summary <- name(data.frame(
         vapply(paste0('effect.', s$statistic), t, ''),
-        c(pct(s$original[1:2]), count(s$original[3], s$n_total.original[3])),
-        c(pct(s$refitted[1:2]), count(s$refitted[3], s$n_total.refitted[3]))
+        c(pct(s$original[1:2]), count(s$original[3], s$n_total.original[3]),
+          levels(s$original[4], s$n_total.original[4], s$n_needed.original[4])),
+        c(pct(s$refitted[1:2]), count(s$refitted[3], s$n_total.refitted[3]),
+          levels(s$refitted[4], s$n_total.refitted[4], s$n_needed.refitted[4]))
     ), c('effect.parameter', 'effect.original', 'effect.refitted'))
 
     list(coefs = coefs, back_calc = back_calc, summary = summary)

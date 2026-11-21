@@ -341,11 +341,17 @@ test_that('excluded points are compared with the fit on all standards', {
     expect_equal(bc$calc.original, back_calculate(full$fit)$calc)
 
     s <- e$summary
-    expect_equal(s$statistic, c('mean_error', 'max_error', 'n_pass'))
+    expect_equal(s$statistic, c('mean_error', 'max_error', 'n_wells_within', 'n_levels_accepted'))
     expect_equal(s$original[1], mean(abs(bc$error.original)))
     expect_equal(s$refitted[2], max(abs(bc$error.refitted[!bc$excluded])))
     expect_equal(s$n_total.original[3], nrow(bc))
     expect_equal(s$n_total.refitted[3], nrow(bc) - 1)
+    # the refitted levels are those of the standards table
+    cal <- r$quality$calibration
+    expect_equal(c(s$refitted[4], s$n_total.refitted[4], s$n_needed.refitted[4]),
+                 c(cal$n_pass, cal$n_levels, cal$n_needed))
+    expect_equal(c(s$original[4], s$n_total.original[4]),
+                 c(full$quality$calibration$n_pass, full$quality$calibration$n_levels))
 
     tabs <- LinearityApp:::exclusion_effect_tables(e, 'en')
     expect_equal(names(tabs$coefs), c('Coef', 'Original', 'Refitted'))
@@ -353,8 +359,12 @@ test_that('excluded points are compared with the fit on all standards', {
                                           'Refitted calculated', 'Original error, %', 'Refitted error, %',
                                           'Excluded'))
     expect_equal(tabs$summary[[1]], c('Mean absolute relative error, %', 'Maximum absolute relative error, %',
-                                      'Number of standards meeting acceptance criteria'))
+                                      'Wells within individual bias limits', 'Accepted calibrator levels'))
     expect_match(tabs$summary$Refitted[3], paste0(' / ', nrow(bc) - 1), fixed = TRUE)
+    expect_equal(tabs$summary$Refitted[4], sprintf('%d / %d (%d required)', cal$n_pass, cal$n_levels, cal$n_needed))
+    ru <- LinearityApp:::exclusion_effect_tables(e, 'ru')$summary
+    expect_equal(ru[[1]][3:4], c(tr('effect.n_wells_within', 'ru'), tr('effect.n_levels_accepted', 'ru')))
+    expect_match(ru[[3]][4], sprintf('(требуется %d)', cal$n_needed), fixed = TRUE)
     expect_equal(tabs$back_calc$Position[tabs$back_calc$Excluded == 'Yes'], 'B1')
     expect_equal(sum(tabs$back_calc$Excluded == ''), nrow(bc) - 1)
     ex <- exclusions_table(r$exclusions, 'ru')
@@ -362,12 +372,45 @@ test_that('excluded points are compared with the fit on all standards', {
     expect_equal(unname(unlist(ex[1, 1:2])), c('S2', 'B1'))
 })
 
+test_that('the effect of the exclusions tells the wells within their limits from the levels accepted', {
+    # Duplicates of 10 read 8.1 and 11.9: each well is within ±20 %, the mean is exact, but the CV is 26.9 %
+    f <- function(x) 0.01 * x
+    conc <- c(1, 2.5, 5, 10, 20, 40, 80)
+    data <- synthetic_data(f, conc = conc)
+    ten <- which(data$type == 'standard' & data$conc == 10)
+    data$OD[ten] <- f(c(8.1, 11.9)) + 0.05
+    # a well of another level is excluded by the user
+    keys <- well_keys(data)
+    out <- keys[data$type == 'standard' & data$conc == 40][1]
+    r <- calculate(data, 'LIN', exclude = data.frame(key = out, reason = 'bubble'),
+                   round_fun = function(x, ...) x)
+    st <- r$quality$standards
+    expect_equal(st$calc.cv[st$conc == 10], 100 * stats::sd(c(8.1, 11.9)) / 10, tolerance = 1e-6)
+    expect_equal(st$status[st$conc == 10], 'fail')
+
+    s <- r$exclusion_effect$summary
+    bc <- r$exclusion_effect$back_calc
+    expect_equal(bc$error.refitted[bc$conc == 10], c(-19, 19), tolerance = 1e-6)
+    # both wells of 10 are within their limits...
+    expect_equal(s$refitted[s$statistic == 'n_wells_within'], sum(!bc$excluded))
+    # ...but the level is not accepted: as in the standards table
+    levels <- s[s$statistic == 'n_levels_accepted', ]
+    expect_equal(c(levels$refitted, levels$n_total.refitted), c(length(conc) - 1, length(conc)))
+    expect_equal(levels$refitted, r$quality$calibration$n_pass)
+    # the original model, on all wells, rejects the same level
+    expect_equal(c(levels$original, levels$n_total.original), c(length(conc) - 1, length(conc)))
+    tab <- LinearityApp:::exclusion_effect_tables(r$exclusion_effect, 'en')$summary
+    row <- function(label) unlist(tab[tab$Parameter == label, c('Original', 'Refitted')], use.names = FALSE)
+    expect_equal(row('Wells within individual bias limits'), c('14 / 14', '13 / 13'))
+    expect_equal(row('Accepted calibrator levels'), rep('6 / 7 (6 required)', 2))
+})
+
 test_that('a standard meets the criteria when its error is within the limit of its level', {
     std <- data.frame(.key = paste0('w', 1:4), conc = c(1, 2, 4, 8), OD = c(1, 2, 4, 8))
     fit <- fit_curve(std, 'LRM', linear = TRUE)
     # an exact line: every error is zero
     e <- exclusion_effect(fit, fit, std, character(0), qc_criteria())
-    expect_equal(e$summary$original, c(0, 0, 4), tolerance = 1e-8)
+    expect_equal(e$summary$original, c(0, 0, 4, 4), tolerance = 1e-8)
     expect_equal(e$back_calc$key, std$.key)
     expect_equal(e$back_calc$standard, c('S4', 'S3', 'S2', 'S1'))
     expect_equal(LinearityApp:::standard_names(c(1, 8), levels = c(1, 2, 4, 8, 16)), c('S5', 'S2'))

@@ -796,7 +796,9 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         original_fit <- tryCatch(fit_curve(all_std, model, linear, weights), error = function(e) NULL)
         if (!is.null(original_fit)) original_fit$interval <- fit$interval
         if (!is.null(original_fit)) {
-            effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels)
+            # The levels accepted after the exclusions are those of the standards table
+            effect <- exclusion_effect(original_fit, fit, all_std, manual$.key, criteria, levels = all_levels,
+                                       wells = std_wells, calibration = calibration)
         }
     }
 
