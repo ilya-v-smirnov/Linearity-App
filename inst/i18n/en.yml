@@ -171,12 +171,9 @@ infographic:
   samples: "{n} of {total} sample wells quantified"
   quantified: "Quantified"
   other: "Other"
-  r2_good: "meets the criterion (>= 0.99)"
-  r2_fair: "below the criterion of 0.99"
-  r2_poor: "low (< 0.98)"
+  r2_desc: "Coefficient of determination on the OD scale; descriptive, not an acceptance criterion"
   mean_error: "Mean |error|"
-  error_good: "within the allowed bias of the standards ({limit}%)"
-  error_poor: "exceeds the allowed bias of the standards ({limit}%)"
+  error_desc: "Mean absolute relative error of the back-calculated wells; descriptive, not an acceptance criterion (the allowed bias applies to the mean of each standard level)"
   lof_title: "Lack-of-fit"
   lof_good: "not detected"
   lof_fair: "borderline"
@@ -292,6 +289,7 @@ exclusion:
 plot:
   residuals: "Residuals"
   weighted_residuals: "Weighted residuals"
+  bias: "Bias, %"
   curve_original: "Original (all standards)"
   curve_refitted: "Refitted"
 
@@ -351,6 +349,7 @@ summary:
 report:
   background: "Background:"
   at_blank: "Signal at or below the background:"
+  equation: "Model equation:"
   group_title: "Experiment"
   date: "Date"
   title: "Experiment title"
@@ -418,7 +417,7 @@ note:
   power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
   par_unidentifiable: "Some parameters of the {model} model are not determined by the standards (e.g. the upper asymptote is not reached): the curve and the concentrations are valid, but the confidence intervals of the parameters are not reliable."
   no_accepted_standards: "No standard level meets the acceptance criteria: the full range of standards is used for quantification."
-  range_narrowed: "The quantification range is limited to the accepted standard levels: LLOQ = {lloq}, ULOQ = {uloq}."
+  range_narrowed: "The quantification range is limited to the accepted standard levels: lowest accepted calibrator {lloq}, highest accepted calibrator {uloq}."
   not_reportable: "The calibration is not accepted: the concentrations are shown for inspection only and are not reportable (range applied to the samples: {lloq}–{uloq})."
 
 quality:
@@ -433,7 +432,7 @@ quality:
   backcalc_legend: "When a level has fewer back-calculated wells than planned, the wells of each level (planned, fitted, back-calculated) and the reasons of the losses are listed under the individual points. CV unavailable: fewer than two back-calculated results of a level planned in replicate; such a level follows the rule for a level with one result left (acceptance criteria of the standards)."
   accepted: "Run accepted"
   rejected: "Run rejected"
-  range: "Quantification range (LLOQ – ULOQ): {lloq} – {uloq}"
+  range: "Quantification range (lowest – highest accepted calibrator): {lloq} – {uloq}"
   calibration_accepted: "Calibration accepted"
   calibration_rejected: "Calibration not accepted"
   calibration_accepted_no_cv: "Calibration accepted, CV not assessed"
@@ -449,6 +448,8 @@ quality:
   section_standards: "Standards (level means)"
   section_points: "Individual standard points"
   section_wells: "Wells deviating from the plan"
+  section_bias: "Bias of the back-calculated standards"
+  bias_help: "Where the curve over- or underestimates the concentration. Grey points: the signed bias (back-calculated minus nominal, % of nominal) of each well of the fit. Diamonds: the mean bias of each level, green if the level is accepted, red if not. Dashed lines: the allowed bias applied to each level, wider at the lowest and highest level. Wells without a back-calculated concentration are not shown (see the wells deviating from the plan). A trend along the concentration points to a model that does not fit, e.g. near the plateau, where the residuals in OD are small."
   section_qc: "Quality controls"
   section_samples: "Samples (replicates)"
   section_dilution: "Dilution linearity"
@@ -467,7 +468,6 @@ quality:
   background_unavailable_hint: "The verdict and the concentrations are suspended. Restore a background well or tick another role in Standard curve → Background, or choose “No background subtraction” there to calculate without a correction."
   warn_cv: "Replicate CV above the limit in {n} sample(s)."
   warn_dilution: "Non-linear dilutions in {n} sample(s)."
-  warn_r2: "R² of the standard curve is {r2} (< 0.99)."
 
 plate:
   sheet_instructions: "Instructions"
@@ -628,6 +628,8 @@ blank:
 
 bg:
   plot_section: "Background wells and calibrators"
+  levels_shown: "Calibrators on the plot"
+  levels_help: "Untick a level to hide it from the plot: the OD axis is rescaled to the points left, so that the scatter of the blanks can be seen next to strong calibrators. The view only: the background and the calculation do not change."
   table_help: "Deviation: OD of the well minus the value subtracted. Status: ✓ the well is in the background; — its role is not ticked; excluded: the well was excluded by the user, with the reason."
   report_excluded: "excluded by the user: {wells}"
   used: "Used"

@@ -15,7 +15,7 @@ r2_ui(r2, lang = "en")
 A shiny tag, or \code{NULL} when \code{r2} is missing.
 }
 \description{
-Zones: below 0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the
-criterion of the quality assessment).
+A descriptive statistic, not coloured: no acceptance criterion of the
+methods is set on R2.
 }
 \keyword{internal}

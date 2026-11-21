@@ -32,6 +32,8 @@ Flags of replicate groups (see \code{\link[=assess_run]{assess_run()}}):
 \item \code{nonlinear} (\code{"Dilution non-linear"}): the dilutions of the sample do not agree.
 }
 
-LLOQ and ULOQ are the lowest and highest accepted standard levels (see
-\code{\link[=qc_criteria]{qc_criteria()}}, argument \code{range}).
+The codes \code{"< LLOQ"} and \code{"> ULOQ"} are kept for compatibility: the
+limits are the lowest and highest accepted calibrators of the plate (see
+\code{\link[=qc_criteria]{qc_criteria()}}, argument \code{range}), not the limits set by a method; the
+app shows them as below the lowest and above the highest calibrator.
 }

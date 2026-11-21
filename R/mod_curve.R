@@ -355,6 +355,31 @@ model_equation_ui <- function(fit) {
 }
 
 
+#' Equation of the Calibration Model as Text
+#'
+#' The equation of [model_equation_ui()] in plain text with Unicode
+#' subscripts and superscripts, for the report.
+#'
+#' @param fit A `lin_fit` object.
+#'
+#' @return A character string.
+#' @keywords internal
+model_equation_text <- function(fit) {
+    log10 <- function(x) paste0('log₁₀(', x, ')')
+    u <- if (fit$log_scale) log10('C') else 'C'
+    u2 <- if (fit$log_scale) paste0('[', u, ']²') else paste0(u, '²')
+    degree <- poly_degree(fit$model)
+    ratio <- '(C / c)ᵇ'
+    rhs <- switch(
+        if (degree > 0) 'poly' else fit$model,
+        'poly' = paste0('a + b · ', u, if (degree == 2) paste0(' + c · ', u2)),
+        '4PL' = paste0('d + (a − d) / (1 + ', ratio, ')'),
+        '5PL' = paste0('d + (a − d) / [1 + ', ratio, ']ᵍ')
+    )
+    paste0(if (fit$log_scale) log10('OD') else 'OD', ' = ', rhs)
+}
+
+
 #' Tab Comparing the Original and the Refitted Model
 #'
 #' Inserted after the model parameters when standard points are excluded and
@@ -454,6 +479,11 @@ mod_curve_ui <- function(id, lang) {
                        shiny::div(class = 'background-panel',
                                   shiny::plotOutput(ns('background_plot'), height = '300px',
                                                     click = ns('background_click'))),
+                       # Calibrators shown on the plot: hiding the strong ones rescales the OD axis to the blanks
+                       shiny::div(class = 'level-toggles',
+                                  shiny::checkboxGroupInput(ns('bg_levels'),
+                                                            with_tooltip(t('bg.levels_shown'), t('bg.levels_help')),
+                                                            choices = character(0), inline = TRUE)),
                        shiny::uiOutput(ns('background_restore')),
                        shiny::h5(with_tooltip(t('bg.wells_section'), t('bg.table_help'))),
                        shiny::tableOutput(ns('background_wells')))
@@ -492,9 +522,13 @@ mod_curve_ui <- function(id, lang) {
                        shiny::uiOutput(ns('equation')),
                        shiny::h5(t('curve.section_coefs')),
                        shiny::tableOutput(ns('coefs')),
-                       shiny::h5(t('quality.section_standards')),
-                       shiny::tableOutput(ns('standards')),
-                       shiny::p(class = 'text-muted small', t('quality.backcalc_legend')),
+                       # The table and the plot of the bias share the width of the table
+                       shiny::div(class = 'std-block',
+                                  shiny::h5(with_tooltip(t('quality.section_standards'), t('quality.backcalc_legend'))),
+                                  shiny::tableOutput(ns('standards')),
+                                  # Where the curve over- or underestimates, along the concentration
+                                  shiny::h5(with_tooltip(t('quality.section_bias'), t('quality.bias_help'))),
+                                  shiny::div(class = 'bias-panel', shiny::plotOutput(ns('bias'), height = 'auto'))),
                        # Collapsed by default
                        shiny::tags$details(class = 'std-points',
                                            shiny::tags$summary(t('quality.section_points')),
@@ -524,6 +558,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         bg_exclusions <- shiny::reactiveVal(no_exclusions)
         # The point clicked last, on the curve (`standard`) or among the background wells (`background`)
         clicked <- shiny::reactiveVal(NULL)
+        # Standard levels shown on the plot of the background wells (the view only, not the calculation)
+        shown_levels <- shiny::reactiveVal(NULL)
 
         # New data: forget the exclusions; the units must be chosen again
         shiny::observeEvent(data(), {
@@ -539,6 +575,13 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             # The monotonic interval starts from the range of the standards of the new data
             conc <- data()$conc[data()$type == 'standard']
             conc <- conc[!is.na(conc)]
+            # All standard levels shown again on the plot of the background wells
+            levels <- sort(unique(conc))
+            shown_levels(as.character(levels))
+            shiny::updateCheckboxGroupInput(session, 'bg_levels',
+                                            choices = stats::setNames(as.character(levels),
+                                                                      standard_names(levels, conc)),
+                                            selected = as.character(levels), inline = TRUE)
             if (length(conc) > 0) {
                 shiny::updateCheckboxInput(session, 'use_interval', value = FALSE)
                 shiny::updateNumericInput(session, 'interval_from', value = min(conc))
@@ -551,6 +594,10 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             bg_roles(if (is.null(input$background)) character(0) else input$background)
         }, ignoreNULL = FALSE, ignoreInit = TRUE)
         shiny::observeEvent(input$bg_mode, bg_mode(input$bg_mode), ignoreInit = TRUE)
+        # No level ticked: the background wells alone
+        shiny::observeEvent(input$bg_levels, {
+            shown_levels(if (is.null(input$bg_levels)) character(0) else input$bg_levels)
+        }, ignoreNULL = FALSE, ignoreInit = TRUE)
         units_ok <- shiny::reactive(units_chosen(input$xunits))
         # The status of the background does not depend on the fit (see background_info below)
         lock <- shiny::reactive({
@@ -651,7 +698,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         # Warnings shown by the statistics below the plots are left out of the warnings box
         output$notes <- shiny::renderUI({
             # The unavailable background has its own box above the plots
-            hidden <- c('note.not_quantified', 'quality.warn_r2', 'note.lack_of_fit', 'quality.reason_background',
+            hidden <- c('note.not_quantified', 'note.lack_of_fit', 'quality.reason_background',
                         sample_warning_keys())
             shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
@@ -660,7 +707,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             r <- result()
             shiny::div(class = 'curve-stats',
                        r2_ui(r$quality$curve$r2, lang),
-                       mean_error_ui(r$fit, criteria()$std_bias, lang),
+                       mean_error_ui(r$fit, lang),
                        lof_ui(r$lack_of_fit$p, lang))
         })
         output$coefs <- shiny::renderTable({
@@ -695,7 +742,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         output$background_table <- shiny::renderTable(background_table(background_info(), lang))
         output$background_wells <- shiny::renderTable(background_wells_table(background_info(), lang))
         output$background_plot <- shiny::renderPlot({
-            p <- plot_background(background_info(), raw_standards(), lang)
+            p <- plot_background(background_info(), raw_standards(), lang, shown = shown_levels())
             shiny::req(p)
             p
         })
@@ -723,6 +770,11 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                                                sanitize.text.function = function(x) x)
         output$points <- shiny::renderTable(standard_points_table(result(), lang, highlight = TRUE), na = '',
                                             sanitize.text.function = function(x) x)
+        output$bias <- shiny::renderPlot({
+            p <- plot_bias(result(), xtitle = plot_args()$xtitle, lang = lang)
+            shiny::req(p)
+            p
+        }, height = plot_height('bias'))
         output$wells_block <- shiny::renderUI({
             if (is.null(quality_marked()$wells)) return(NULL)
             shiny::tags$details(class = 'std-points std-wells',

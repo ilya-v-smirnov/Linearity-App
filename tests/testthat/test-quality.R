@@ -126,7 +126,17 @@ test_that('failing end levels narrow the quantification range', {
     expect_equal(r$calibration_range[1], 2)
     expect_equal(r$standard_range, c(1, 64))
     expect_equal(r$result$flag, c('< LLOQ', 'OK'))
-    expect_match(message_text(r$notes), 'LLOQ = 2', fixed = TRUE, all = FALSE)
+    # the edges found on this plate are not called LLOQ and ULOQ (limits of a method)
+    notes <- message_text(r$notes)
+    expect_match(notes, 'lowest accepted calibrator 2, highest accepted calibrator 64', fixed = TRUE, all = FALSE)
+    expect_false(any(grepl('LLOQ|ULOQ', notes)))
+    expect_false(any(grepl('LLOQ|ULOQ|НПКО|ВПКО', c(message_text(r$notes, 'ru'),
+                                                     LinearityApp:::quality_summary(r, 'en')$range,
+                                                     LinearityApp:::quality_summary(r, 'ru')$range))))
+    # R² gives no warning: no criterion of the methods is set on it
+    low_r2 <- calculate(load_sample('griess'), 'LRM', subtract_background = FALSE)
+    expect_lt(low_r2$quality$curve$r2, 0.99)
+    expect_false(any(grepl('R²', message_text(low_r2$quality$warnings), fixed = TRUE)))
 
     r_all <- calculate(data, 'LRM', linear = TRUE, criteria = qc_criteria(range = 'all'))
     expect_equal(r_all$calibration_range, c(1, 64))
@@ -358,6 +368,50 @@ test_that('the verdict of the calibration is shown with the model parameters', {
     expect_match(as.character(LinearityApp:::verdict_ui(qc, 'en')), 'Calibration accepted', fixed = TRUE)
 })
 
+test_that('the bias of the back-calculated standards is plotted along the concentration', {
+    r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    p <- LinearityApp:::plot_bias(r, xtitle = 'x', lang = 'en')
+    expect_s3_class(p, 'ggplot')
+    b <- ggplot2::ggplot_build(p)
+    # wells, limits and level means
+    bc <- back_calculate(r$fit)
+    expect_equal(nrow(p$data), sum(!is.na(bc$calc)))
+    expect_equal(p$data$bias, (bc$recovery - 100)[!is.na(bc$calc)])
+    means <- b$data[[5]]
+    expect_equal(nrow(means), sum(!is.na(r$quality$standards$bias)))
+    # the level of 8 is not accepted: a red diamond
+    expect_true('#c62828' %in% means$fill)
+    # the limits applied: wider at the ends
+    upper <- b$data[[2]]$y
+    expect_equal(max(upper), 25)
+    expect_equal(min(upper), 20)
+    expect_equal(p$labels$y, 'Bias, %')
+    expect_equal(LinearityApp:::plot_bias(r, lang = 'ru')$labels$y, 'Смещение, %')
+})
+
+test_that('the equation of the model is written in the reports', {
+    eq <- function(model) {
+        LinearityApp:::model_equation_text(list(model = model, log_scale = LinearityApp:::model_log_scale(model)))
+    }
+    expect_equal(eq('LRM'), 'log₁₀(OD) = a + b · log₁₀(C)')
+    expect_equal(eq('QRM'), 'log₁₀(OD) = a + b · log₁₀(C) + c · [log₁₀(C)]²')
+    expect_equal(eq('LIN'), 'OD = a + b · C')
+    expect_equal(eq('QUAD'), 'OD = a + b · C + c · C²')
+    expect_equal(eq('4PL'), 'OD = d + (a − d) / (1 + (C / c)ᵇ)')
+    expect_equal(eq('5PL'), 'OD = d + (a − d) / [1 + (C / c)ᵇ]ᵍ')
+    r <- calculate(run_data(), 'LRM')
+    for (type in c('short', 'detailed')) {
+        blocks <- LinearityApp:::report_blocks(type, date = '2026-11-21', title = 't', method = 'm',
+                                               equation = LinearityApp:::model_equation_text(r$fit),
+                                               model_table = get_coef_ci(r$fit), result_table = r$result)
+        i <- which(vapply(blocks, function(x) identical(x$label, 'Model equation:'), logical(1)))
+        expect_length(i, 1)
+        expect_equal(blocks[[i]]$value, 'log₁₀(OD) = a + b · log₁₀(C)')
+        # right before the coefficients
+        expect_equal(blocks[[i + 1]]$type, 'table')
+    }
+})
+
 test_that('a rejected calibration has no range, and its concentrations are not reportable', {
     # Griess without background subtraction: only 3.12 and 50 of seven levels are accepted
     r <- calculate(load_sample('griess'), 'LRM', subtract_background = FALSE)
@@ -390,7 +444,7 @@ test_that('a rejected calibration has no range, and its concentrations are not r
     # an accepted calibration keeps its range and the note of a narrowed range
     ok <- calculate(load_sample('griess'), 'LRM')
     expect_false(any(grepl('not reportable', message_text(ok$notes), fixed = TRUE)))
-    expect_match(LinearityApp:::quality_summary(ok, 'en')$range, '^Quantification range \\(LLOQ')
+    expect_match(LinearityApp:::quality_summary(ok, 'en')$range, '^Quantification range \\(lowest')
 })
 
 test_that('a planned singlet is told apart from a replicate left alone', {

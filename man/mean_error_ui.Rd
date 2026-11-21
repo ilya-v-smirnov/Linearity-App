@@ -4,12 +4,10 @@
 \alias{mean_error_ui}
 \title{Mean Absolute Error of the Back-Calculated Standards}
 \usage{
-mean_error_ui(fit, limit, lang = "en")
+mean_error_ui(fit, lang = "en")
 }
 \arguments{
 \item{fit}{A \code{lin_fit} object.}
-
-\item{limit}{Allowed bias of the standards (\%), see \code{\link[=qc_criteria]{qc_criteria()}}.}
 
 \item{lang}{Language code.}
 }
@@ -18,6 +16,8 @@ A shiny tag, or \code{NULL} when the error cannot be computed.
 }
 \description{
 The same statistic as in the comparison of models (see
-\code{\link[=compare_models]{compare_models()}}); red when it exceeds the allowed bias of the standards.
+\code{\link[=compare_models]{compare_models()}}), over the wells of the fit. Descriptive, not
+coloured: the allowed bias applies to the mean of each level, not to this
+mean over all wells.
 }
 \keyword{internal}

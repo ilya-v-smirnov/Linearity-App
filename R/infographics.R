@@ -135,8 +135,8 @@ curve_stat_ui <- function(label, value, zone = NA, verdict = NULL) {
 
 #' Coefficient of Determination of the Standard Curve
 #'
-#' Zones: below 0.98 (red), 0.98-0.99 (orange) and from 0.99 (green, the
-#' criterion of the quality assessment).
+#' A descriptive statistic, not coloured: no acceptance criterion of the
+#' methods is set on R2.
 #'
 #' @param r2 Coefficient of determination.
 #' @param lang Language code.
@@ -145,30 +145,29 @@ curve_stat_ui <- function(label, value, zone = NA, verdict = NULL) {
 #' @keywords internal
 r2_ui <- function(r2, lang = 'en') {
     if (length(r2) != 1 || is.na(r2)) return(NULL)
-    zone <- if (r2 >= 0.99) 'good' else if (r2 >= 0.98) 'fair' else 'poor'
-    curve_stat_ui('R\u00b2 = ', sprintf('%.4f', r2), zone, tr(paste0('infographic.r2_', zone), lang))
+    curve_stat_ui('R\u00b2 = ', sprintf('%.4f', r2), NA, tr('infographic.r2_desc', lang))
 }
 
 
 #' Mean Absolute Error of the Back-Calculated Standards
 #'
 #' The same statistic as in the comparison of models (see
-#' [compare_models()]); red when it exceeds the allowed bias of the standards.
+#' [compare_models()]), over the wells of the fit. Descriptive, not
+#' coloured: the allowed bias applies to the mean of each level, not to this
+#' mean over all wells.
 #'
 #' @param fit A `lin_fit` object.
-#' @param limit Allowed bias of the standards (%), see [qc_criteria()].
 #' @param lang Language code.
 #'
 #' @return A shiny tag, or `NULL` when the error cannot be computed.
 #' @keywords internal
-mean_error_ui <- function(fit, limit, lang = 'en') {
+mean_error_ui <- function(fit, lang = 'en') {
     if (is.null(fit)) return(NULL)
     err <- abs(back_calculate(fit)$recovery - 100)
     if (all(is.na(err))) return(NULL)
     e <- mean(err, na.rm = TRUE)
-    zone <- if (e > limit) 'poor' else 'good'
-    curve_stat_ui(paste0(tr('infographic.mean_error', lang), ' = '), sprintf('%.1f%%', e), zone,
-                  tr(paste0('infographic.error_', zone), lang, limit = limit))
+    curve_stat_ui(paste0(tr('infographic.mean_error', lang), ' = '), sprintf('%.1f%%', e), NA,
+                  tr('infographic.error_desc', lang))
 }
 
 

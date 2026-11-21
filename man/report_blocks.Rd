@@ -13,6 +13,7 @@ report_blocks(
   weights = NULL,
   background = NULL,
   at_blank = NULL,
+  equation = NULL,
   model_table,
   result_table,
   means_table = NULL,
@@ -45,6 +46,9 @@ report_blocks(
 
 \item{at_blank}{Rule for a signal at or below the background (text shown
 in the report, see \code{blank_rule_text()}); \code{NULL} for none (log10 scales).}
+
+\item{equation}{Equation of the model (text shown before its coefficients,
+see \code{model_equation_text()}), or \code{NULL}.}
 
 \item{model_table}{Coefficients table from \code{\link[=get_coef_ci]{get_coef_ci()}}.}
 

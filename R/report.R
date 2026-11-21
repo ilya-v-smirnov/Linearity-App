@@ -26,7 +26,7 @@
 #'   `table`) and its content.
 #' @keywords internal
 report_blocks <- function(type = c('short', 'detailed'), date, title, method, scale = NULL, weights = NULL,
-                          background = NULL, at_blank = NULL,
+                          background = NULL, at_blank = NULL, equation = NULL,
                           model_table, result_table, means_table = NULL, qc_table = NULL,
                           exclusions = NULL, comparison = NULL, quality = NULL,
                           notes = character(0), lang = 'en', exclusion_effect = NULL,
@@ -51,10 +51,14 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                           list(b('text', text = tr('report.refit_note', lang, n = nrow(exclusions))))
                       })
 
+    # The equation of the model, before its coefficients
+    equation_line <- if (given(equation)) list(b('line', label = t('report.equation'), value = equation))
+
     if (type == 'short') {
         return(c(head,
                  list(b('heading', text = t('report.section_curve')), b('plot')),
                  method_lines,
+                 equation_line,
                  table(model_table),
                  # Only the levels that deviate from the plan, when there are any
                  if (has_rows(quality$tables$wells_deviating)) {
@@ -85,6 +89,7 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
       list(b('heading', text = t('report.section_parameters'))), method_lines,
       list(b('heading', text = t('report.section_curve')), b('plot'),
            b('subheading', text = t('curve.coefs'))),
+      equation_line,
       table(model_table),
       if (has_rows(comparison)) {
           c(list(b('subheading', text = t('report.section_models'))), table(comparison),
@@ -221,6 +226,8 @@ report_preview <- function(blocks, plot_output, lang = 'en', max_rows = 8) {
 #'   `background_text()`).
 #' @param at_blank Rule for a signal at or below the background (text shown
 #'   in the report, see `blank_rule_text()`); `NULL` for none (log10 scales).
+#' @param equation Equation of the model (text shown before its coefficients,
+#'   see `model_equation_text()`), or `NULL`.
 #' @param exclusions Optional table of standard points excluded by the user.
 #' @param exclusion_effect Optional tables comparing the calibration on all
 #'   standards with the refitted one (see [exclusion_effect_tables()]).
@@ -246,6 +253,7 @@ save_report <- function(file,
                         weights = NULL,
                         background = NULL,
                         at_blank = NULL,
+                        equation = NULL,
                         model_table,
                         result_table,
                         means_table = NULL,
@@ -260,7 +268,7 @@ save_report <- function(file,
                         operator = NULL,
                         plate = NULL) {
     blocks <- report_blocks(type, date = date, title = title, method = method, scale = scale, weights = weights,
-                            background = background, at_blank = at_blank,
+                            background = background, at_blank = at_blank, equation = equation,
                             model_table = model_table, result_table = result_table, means_table = means_table,
                             qc_table = qc_table, exclusions = exclusions, comparison = comparison,
                             quality = quality, notes = notes, lang = lang, exclusion_effect = exclusion_effect,

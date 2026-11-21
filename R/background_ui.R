@@ -180,13 +180,16 @@ background_wells_table <- function(bg, lang = 'en') {
 #' @inheritParams background_table
 #' @param standards Standard wells as measured: a data.frame with `conc` and
 #'   `OD`, or `NULL`.
+#' @param shown Concentrations of the standard levels shown (as character,
+#'   see `as.character()`), or `NULL` for all; the names of the levels (S1,
+#'   S2, ...) are those of all levels.
 #'
 #' @return A data.frame with `x`, `OD`, `group` (index of the group), `kind`
 #'   (`"used"`, `"unused"`, `"excluded"` or `"standard"`), `key` and
 #'   `role`, with the attributes `labels` (labels of the groups) and
 #'   `n_roles` (number of background groups).
 #' @keywords internal
-background_points <- function(bg, standards = NULL, lang = 'en') {
+background_points <- function(bg, standards = NULL, lang = 'en', shown = NULL) {
     w <- bg$wells
     w <- w[!is.na(w$OD), , drop = FALSE]
     roles <- intersect(background_roles(), w$role)
@@ -195,11 +198,14 @@ background_points <- function(bg, standards = NULL, lang = 'en') {
     labels <- sub(' ', '\n', role_labels(roles, lang))
     if (!is.null(standards)) {
         standards <- standards[!is.na(standards$OD) & !is.na(standards$conc), , drop = FALSE]
+        # The names of the levels come from all of them, before some are hidden
+        all_conc <- standards$conc
+        if (!is.null(shown)) standards <- standards[as.character(standards$conc) %in% shown, , drop = FALSE]
         levels <- sort(unique(standards$conc))
         if (length(levels) > 0) {
             pts <- rbind(pts, data.frame(group = length(roles) + match(standards$conc, levels), OD = standards$OD,
                                          kind = 'standard', key = NA_character_, role = 'standard'))
-            labels <- c(labels, paste0(standard_names(levels, standards$conc), '\n', signif(levels, 3)))
+            labels <- c(labels, paste0(standard_names(levels, all_conc), '\n', signif(levels, 3)))
         }
     }
     # The points of a group side by side, centred on its position
@@ -218,15 +224,17 @@ background_points <- function(bg, standards = NULL, lang = 'en') {
 #' judged against the signal of the calibrators. Wells used are filled,
 #' wells of a role left out open, wells excluded by the user red crosses; the
 #' dashed line is the value subtracted. A click on a background well excludes
-#' or restores it.
+#' or restores it. Standard levels can be hidden (`shown`), e.g. strong ones
+#' that compress the scale of the blanks; the OD axis follows the points
+#' shown.
 #'
 #' @inheritParams background_points
 #'
 #' @return A ggplot2 object, or `NULL` without background wells.
 #' @keywords internal
-plot_background <- function(bg, standards = NULL, lang = 'en') {
+plot_background <- function(bg, standards = NULL, lang = 'en', shown = NULL) {
     if (is.null(bg$wells) || all(is.na(bg$wells$OD))) return(NULL)
-    pts <- background_points(bg, standards, lang)
+    pts <- background_points(bg, standards, lang, shown)
     labels <- attr(pts, 'labels')
     n_roles <- attr(pts, 'n_roles')
     kinds <- c(used = tr('bg.legend_used', lang), unused = tr('bg.legend_unused', lang),

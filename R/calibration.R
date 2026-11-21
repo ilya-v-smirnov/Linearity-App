@@ -21,8 +21,10 @@
 #' - `high_cv` (`"High CV"`): the CV of replicates exceeds the limit.
 #' - `nonlinear` (`"Dilution non-linear"`): the dilutions of the sample do not agree.
 #'
-#' LLOQ and ULOQ are the lowest and highest accepted standard levels (see
-#' [qc_criteria()], argument `range`).
+#' The codes `"< LLOQ"` and `"> ULOQ"` are kept for compatibility: the
+#' limits are the lowest and highest accepted calibrators of the plate (see
+#' [qc_criteria()], argument `range`), not the limits set by a method; the
+#' app shows them as below the lowest and above the highest calibrator.
 #'
 #' @export
 FLAGS <- list(ok = 'OK',

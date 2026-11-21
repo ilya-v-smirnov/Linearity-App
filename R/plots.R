@@ -186,6 +186,57 @@ plot_fitted_resid <- function(result, xtitle = '', lang = 'en') {
 }
 
 
+#' Bias of the Back-Calculated Standards vs. Concentration
+#'
+#' Where the curve over- or underestimates: the signed bias (%) of every
+#' well of the fit with a back-calculated concentration (grey points), the
+#' mean bias of each level (diamonds: green when the level is accepted, red
+#' otherwise) and the limits applied to the levels (dashed: the allowed bias,
+#' wider at the boundary calibrators). The concentration axis is the same as
+#' on the standard curve (see [conc_axis()]).
+#'
+#' @param result Output of [calculate()].
+#' @param xtitle Title of the concentration axis.
+#' @param lang Language of the axis title.
+#'
+#' @return A ggplot2 object, or `NULL` without back-calculated wells.
+#' @keywords internal
+plot_bias <- function(result, xtitle = '', lang = 'en') {
+    bc <- back_calculate(result$fit)
+    wells <- data.frame(conc = bc$conc, bias = bc$recovery - 100)
+    wells <- wells[!is.na(wells$bias), , drop = FALSE]
+    if (nrow(wells) == 0) return(NULL)
+    st <- result$quality$standards
+    st <- st[st$n > 0, , drop = FALSE]
+    st <- st[order(st$conc), , drop = FALSE]
+    means <- st[!is.na(st$bias), , drop = FALSE]
+    means$state <- ifelse(means$pass, 'pass', 'fail')
+    limits <- data.frame(conc = st$conc, upper = st$bias.limit, lower = -st$bias.limit)
+    axis <- conc_axis(result)
+
+    plot <-
+        ggplot2::ggplot(wells, ggplot2::aes(.data$conc, .data$bias)) +
+        ggplot2::geom_hline(yintercept = 0, colour = 'grey40') +
+        ggplot2::geom_step(data = limits, ggplot2::aes(.data$conc, .data$upper), direction = 'mid',
+                           linetype = 'dashed', colour = 'grey30') +
+        ggplot2::geom_step(data = limits, ggplot2::aes(.data$conc, .data$lower), direction = 'mid',
+                           linetype = 'dashed', colour = 'grey30') +
+        ggplot2::geom_point(size = 1.8, alpha = 0.5, colour = 'grey20') +
+        ggplot2::geom_point(data = means, ggplot2::aes(.data$conc, .data$bias, fill = .data$state), shape = 23,
+                            size = 3.2, colour = 'black') +
+        ggplot2::scale_fill_manual(values = c(pass = '#1b5e20', fail = '#c62828'), guide = 'none') +
+        ggplot2::labs(x = xtitle, y = tr('plot.bias', lang)) +
+        lin_theme()
+    if (axis$log) {
+        plot <- plot + ggplot2::scale_x_log10(breaks = axis$breaks, labels = as.character(axis$breaks),
+                                              limits = axis$range)
+    } else {
+        plot <- plot + ggplot2::scale_x_continuous(limits = axis$range)
+    }
+    plot
+}
+
+
 #' Standard Curve and Residual Plots
 #'
 #' @param result Output of [calculate()].

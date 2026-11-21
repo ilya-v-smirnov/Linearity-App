@@ -23,8 +23,8 @@
 #' @param range Quantification range: `"accepted"` (from the lowest to the
 #'   highest accepted standard level) or `"all"` (all standards used in the fit).
 #' @param edge Concentrations within this factor of the boundary calibrators
-#'   (the lowest and highest level of the quantification range, LLOQ and ULOQ)
-#'   use the `_edge` limits.
+#'   (the lowest and highest accepted calibrator of the plate) use the
+#'   `_edge` limits.
 #' @param singlets Are standard levels planned as single wells accepted (by
 #'   their bias, the CV cannot be assessed)? Only the plan counts: a level
 #'   planned in replicate that keeps one result follows `replicate_loss`.
@@ -572,9 +572,7 @@ assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_f
         warnings <- c(warnings, list(lin_message('quality.warn_cv_not_assessed', n_cv = calibration$n_cv,
                                                  needed = calibration$n_cv_needed, n = calibration$n_no_cv)))
     }
-    if (!is.na(curve$r2) && curve$r2 < 0.99) {
-        warnings <- c(warnings, list(lin_message('quality.warn_r2', r2 = round(curve$r2, 4))))
-    }
+    # R2 is descriptive: no criterion of the methods is set on it, so it gives no warning
     if (identical(background, 'unavailable')) warnings <- list()
 
     list(standards = standards, calibration = calibration, samples = samples, dilution = dilution,

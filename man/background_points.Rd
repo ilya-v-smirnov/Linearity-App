@@ -4,7 +4,7 @@
 \alias{background_points}
 \title{Points of the Background Plot}
 \usage{
-background_points(bg, standards = NULL, lang = "en")
+background_points(bg, standards = NULL, lang = "en", shown = NULL)
 }
 \arguments{
 \item{bg}{The \code{background} element of \code{\link[=calculate]{calculate()}} (see
@@ -14,6 +14,10 @@ background_points(bg, standards = NULL, lang = "en")
 \code{OD}, or \code{NULL}.}
 
 \item{lang}{Language code.}
+
+\item{shown}{Concentrations of the standard levels shown (as character,
+see \code{as.character()}), or \code{NULL} for all; the names of the levels (S1,
+S2, ...) are those of all levels.}
 }
 \value{
 A data.frame with \code{x}, \code{OD}, \code{group} (index of the group), \code{kind}

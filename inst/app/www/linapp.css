@@ -143,6 +143,26 @@
 .well-standard { background: #cfe2f3; }
 .well-blank    { background: #e3e3e3; }
 .background-panel { max-width: 720px; }
+
+/* Standard levels shown on the plot of the background wells: toggle buttons */
+.level-toggles { margin: 0.2rem 0 0.8rem; }
+.level-toggles .control-label { font-size: 0.9rem; margin-bottom: 0.25rem; }
+.level-toggles .checkbox-inline { padding-left: 0; margin: 0 0.3rem 0.3rem 0; }
+.level-toggles input[type="checkbox"] { position: absolute; opacity: 0; pointer-events: none; }
+.level-toggles input[type="checkbox"] + span {
+    display: inline-block;
+    min-width: 2.6rem;
+    padding: 0.1rem 0.55rem;
+    border: 1px solid #3d85c6;
+    border-radius: 1rem;
+    color: #3d85c6;
+    background: #fff;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+}
+.level-toggles input[type="checkbox"]:checked + span { background: #9fc5e8; color: #000; }
+.level-toggles input[type="checkbox"]:focus-visible + span { outline: 2px solid #3d85c6; outline-offset: 1px; }
 .well-zero     { background: #d0e0e3; }
 .well-nc       { background: #ead1dc; }
 .well-qc       { background: #fce5cd; }
@@ -264,6 +284,19 @@
 /* Larger plots in higher windows */
 .curve-panel {
     flex: 0 1 clamp(320px, calc(100vh - 540px), 440px);
+    min-width: 280px;
+}
+
+/* Model parameters: the table of the standard levels sets the width, the plot of
+   the bias below it takes the same width (its own width does not count) */
+.std-block {
+    display: grid;
+    grid-template-columns: minmax(0, max-content);
+    max-width: 100%;
+}
+
+.bias-panel {
+    contain: inline-size;
     min-width: 280px;
 }
 

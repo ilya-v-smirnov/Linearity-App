@@ -50,8 +50,8 @@ the mean of all dilutions of a sample, and CV (\%) across dilutions.}
 highest accepted standard level) or \code{"all"} (all standards used in the fit).}
 
 \item{edge}{Concentrations within this factor of the boundary calibrators
-(the lowest and highest level of the quantification range, LLOQ and ULOQ)
-use the \verb{_edge} limits.}
+(the lowest and highest accepted calibrator of the plate) use the
+\verb{_edge} limits.}
 
 \item{singlets}{Are standard levels planned as single wells accepted (by
 their bias, the CV cannot be assessed)? Only the plan counts: a level

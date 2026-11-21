@@ -557,11 +557,12 @@ test_that('infographics count the sample wells and place R2 on its scale', {
     expect_match(html, '6 of 18 sample wells quantified', fixed = TRUE)
     expect_null(LinearityApp:::quantification_ui(character(0)))
 
+    # R² is descriptive: no colour, no criterion
     r2 <- function(x) as.character(LinearityApp:::r2_ui(x))
-    expect_match(r2(0.99421), 'R² = <strong class="zone-good">0.9942</strong>', fixed = TRUE)
-    expect_match(r2(0.985), 'zone-fair', fixed = TRUE)
-    expect_match(r2(0.5), 'zone-poor', fixed = TRUE)
-    expect_match(r2(0.5), 'title="low', fixed = TRUE)
+    expect_match(r2(0.99421), 'R² = <strong>0.9942</strong>', fixed = TRUE)
+    expect_false(grepl('zone-', r2(0.5), fixed = TRUE))
+    expect_false(grepl('criterion (', r2(0.995), fixed = TRUE))
+    expect_match(r2(0.5), 'descriptive, not an acceptance criterion', fixed = TRUE)
     expect_null(LinearityApp:::r2_ui(NA))
 
     lof <- function(p) as.character(LinearityApp:::lof_ui(p, 'en'))
@@ -578,10 +579,11 @@ test_that('the mean error of the back-calculated standards matches the compariso
     r <- calculate(d, model = 'LRM')
     expected <- compare_models(r$standard_data)
     expected <- expected$mean.abs.error[expected$model == 'LRM']
-    html <- as.character(LinearityApp:::mean_error_ui(r$fit, 20, 'en'))
-    expect_match(html, sprintf('Mean |error| = <strong class="zone-good">%.1f%%</strong>', expected), fixed = TRUE)
-    expect_match(as.character(LinearityApp:::mean_error_ui(r$fit, expected / 2, 'en')), 'zone-poor', fixed = TRUE)
-    expect_null(LinearityApp:::mean_error_ui(NULL, 20))
+    # descriptive: not compared with the allowed bias of a level
+    html <- as.character(LinearityApp:::mean_error_ui(r$fit, 'en'))
+    expect_match(html, sprintf('Mean |error| = <strong>%.1f%%</strong>', expected), fixed = TRUE)
+    expect_false(grepl('zone-', html, fixed = TRUE))
+    expect_null(LinearityApp:::mean_error_ui(NULL))
 })
 
 test_that('the flags of the sample wells are counted above the result table', {
@@ -664,7 +666,41 @@ test_that('the background has its own sub-tab, first, while the curve opens', {
         expect_match(output$background_notes$html, 'Not used: Negative control', fixed = TRUE)
         session$setInputs(background = c('blank', 'NC'))
         expect_match(output$background_table, '0.2000', fixed = TRUE)
+        # hiding calibrators changes the plot only
+        session$setInputs(bg_levels = c('1', '2'))
+        expect_match(output$background_plot$src, '^data:image/png')
+        session$setInputs(bg_levels = character(0))
+        expect_match(output$background_plot$src, '^data:image/png')
+        expect_match(output$background_table, '0.2000', fixed = TRUE)
     })
+})
+
+test_that('calibrators can be hidden from the plot of the background wells', {
+    html <- as.character(LinearityApp:::mod_curve_ui('curve', 'en'))
+    expect_match(html, '<div class="level-toggles">', fixed = TRUE)
+    expect_match(html, 'id="curve-bg_levels"', fixed = TRUE)
+    expect_match(html, 'Calibrators on the plot', fixed = TRUE)
+
+    data <- load_sample('bca')
+    bg <- calculate(data, 'LRM')$background
+    std <- data[data$type == 'standard', c('conc', 'OD')]
+    all <- LinearityApp:::background_points(bg, std, 'en')
+    expect_equal(attr(all, 'labels'), c('Reagent\nblank', paste0('S', 7:1, '\n', c(0.031, 0.063, 0.125, 0.25, 0.5, 1, 2))))
+    # the strong levels hidden: the names stay those of all levels, the axis follows the points left
+    low <- LinearityApp:::background_points(bg, std, 'en', shown = c('0.031', '0.063'))
+    expect_equal(attr(low, 'labels'), c('Reagent\nblank', 'S7\n0.031', 'S6\n0.063'))
+    expect_equal(sum(low$kind == 'standard'), 4)
+    expect_lt(max(low$OD), max(all$OD))
+    p <- LinearityApp:::plot_background(bg, std, 'en', shown = character(0))
+    expect_equal(sort(unique(p$data$kind)), 'used')
+    expect_lt(diff(ggplot2::layer_scales(p)$y$range$range), 0.01)
+
+    # the table of the standard levels and the plot of the bias share a block; the legend is a tooltip
+    expect_match(html, '<div class="std-block">', fixed = TRUE)
+    block <- regmatches(html, regexpr('<div class="std-block">.*?id="curve-bias"', html))
+    expect_match(block, 'id="curve-standards"', fixed = TRUE)
+    expect_false(grepl('<p class="text-muted small">When a level', html, fixed = TRUE))
+    expect_match(html, '<template>When a level has fewer back-calculated wells', fixed = TRUE)
 })
 
 test_that('background wells are excluded and restored by clicking on the plot', {

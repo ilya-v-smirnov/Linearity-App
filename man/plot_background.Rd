@@ -4,7 +4,7 @@
 \alias{plot_background}
 \title{Plot of the Background Wells}
 \usage{
-plot_background(bg, standards = NULL, lang = "en")
+plot_background(bg, standards = NULL, lang = "en", shown = NULL)
 }
 \arguments{
 \item{bg}{The \code{background} element of \code{\link[=calculate]{calculate()}} (see
@@ -14,6 +14,10 @@ plot_background(bg, standards = NULL, lang = "en")
 \code{OD}, or \code{NULL}.}
 
 \item{lang}{Language code.}
+
+\item{shown}{Concentrations of the standard levels shown (as character,
+see \code{as.character()}), or \code{NULL} for all; the names of the levels (S1,
+S2, ...) are those of all levels.}
 }
 \value{
 A ggplot2 object, or \code{NULL} without background wells.
@@ -24,6 +28,8 @@ measured (from the lowest level), so that the scatter of the blanks can be
 judged against the signal of the calibrators. Wells used are filled,
 wells of a role left out open, wells excluded by the user red crosses; the
 dashed line is the value subtracted. A click on a background well excludes
-or restores it.
+or restores it. Standard levels can be hidden (\code{shown}), e.g. strong ones
+that compress the scale of the blanks; the OD axis follows the points
+shown.
 }
 \keyword{internal}
