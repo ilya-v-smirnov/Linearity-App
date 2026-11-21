@@ -64,6 +64,7 @@ fake_curve <- function(lang = 'en', units_ok = TRUE) {
     r <- calculate(load_sample('griess'), 'LRM')
     list(result = shiny::reactive(r),
          units_ok = shiny::reactive(units_ok),
+         export_lock = shiny::reactive(LinearityApp:::export_lock(units_ok, r$background$status)),
          coef_table = shiny::reactive(get_coef_ci(r$model_direct, signif, 3)),
          notes = shiny::reactive(message_text(r$notes, lang)),
          plot_args = shiny::reactive(list(xtitle = 'x', ytitle = 'y')),
@@ -653,6 +654,50 @@ test_that('background wells are excluded and restored by clicking on the plot', 
         session$setInputs(confirm_restore = 1)
         expect_equal(nrow(session$returned$background_exclusions()), 0)
         expect_equal(session$returned$result()$nc_value, 0.125)
+    })
+})
+
+test_that('no background subtraction is an explicit choice; an unavailable background locks the exports', {
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(load_sample('bca')), rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = ', ng/ml', ytitle = 'y')
+        expect_equal(session$returned$result()$background$status, 'ok')
+        expect_null(session$returned$export_lock())
+        expect_null(output$background_alert)
+        # all roles unticked while subtraction is chosen: nothing is subtracted silently
+        session$setInputs(background = character(0))
+        expect_equal(session$returned$result()$background$status, 'unavailable')
+        expect_match(output$background_alert$html, 'Background unavailable', fixed = TRUE)
+        expect_match(output$background_warning$html, 'Background unavailable', fixed = TRUE)
+        expect_match(output$verdict$html, 'Background unavailable', fixed = TRUE)
+        # the reason is in the box above the plots, not repeated in the warnings
+        expect_null(output$notes)
+        expect_equal(session$returned$export_lock(), 'background')
+        expect_match(output$save_plot_ui$html, 'export-locked', fixed = TRUE)
+        # the raw wells stay visible
+        expect_match(output$background_plot$src, '^data:image/png')
+        # the explicit choice of no subtraction calculates without a correction
+        session$setInputs(bg_mode = 'none')
+        expect_equal(session$returned$result()$background$status, 'none')
+        expect_null(session$returned$export_lock())
+        expect_null(output$background_alert)
+        # back to subtraction with the reagent blank
+        session$setInputs(bg_mode = 'subtract', background = 'blank')
+        expect_equal(session$returned$result()$background$status, 'ok')
+    })
+    bare <- load_sample('bca')
+    bare <- bare[bare$type != 'blank', ]
+    shiny::testServer(LinearityApp:::mod_curve_server,
+                      args = list(lang = 'en', data = shiny::reactive(bare), rounding = rounding_3()), {
+        session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = ', ng/ml', ytitle = 'y')
+        # a plate without background wells: no subtraction is chosen by default
+        expect_equal(session$returned$result()$background$status, 'none')
+        expect_null(session$returned$export_lock())
+    })
+    locked <- fake_curve()
+    locked$export_lock <- shiny::reactive('background')
+    shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = locked), {
+        expect_match(output$download_ui$html, 'export-locked', fixed = TRUE)
     })
 })
 

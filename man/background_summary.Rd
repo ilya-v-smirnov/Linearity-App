@@ -4,7 +4,7 @@
 \alias{background_summary}
 \title{Background Correction of a Plate}
 \usage{
-background_summary(data, roles, exclude = NULL)
+background_summary(data, roles, exclude = NULL, subtract = length(roles) > 0)
 }
 \arguments{
 \item{data}{A data.frame with columns \code{type}, \code{OD} and optionally \code{.key}
@@ -15,12 +15,19 @@ background_summary(data, roles, exclude = NULL)
 
 \item{exclude}{Background wells excluded by the user: a data.frame with
 \code{key} and \code{reason}, or \code{NULL}.}
+
+\item{subtract}{Whether background subtraction was chosen. \code{FALSE} (the
+default without roles) is the explicit choice of no subtraction; \code{TRUE}
+without roles means that subtraction was chosen but no role ticked.}
 }
 \value{
 A list with \code{roles}, \code{keys} and \code{od} (the wells used), \code{n},
 \code{n_roles} (wells of the chosen roles, used or not), \code{mean}, \code{sd} (\code{NA}
-with fewer than two wells), \code{value} (the value subtracted: the mean; 0
-without roles or without a usable well, then \code{empty} is \code{TRUE}), \code{unused} (a named vector with
+with fewer than two wells), \code{status} (\code{"ok"}: the background is the mean
+of the wells used; \code{"none"}: no subtraction was chosen; \code{"unavailable"}:
+subtraction was chosen, but no well is usable or no role is ticked),
+\code{empty} (\code{TRUE} when \code{status} is \code{"unavailable"}), \code{value} (the value
+subtracted: the mean; 0 otherwise), \code{unused} (a named vector with
 the number of wells of the roles left out), \code{legacy} (see
 \code{\link[=legacy_background]{legacy_background()}}), \code{wells} (all wells of the background roles:
 \code{role}, \code{key}, \code{OD}, \code{used}, \code{excluded}, \code{reason}) and \code{scatter} (see

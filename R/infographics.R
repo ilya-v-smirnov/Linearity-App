@@ -88,7 +88,7 @@ flags_ui <- function(flags, lang = 'en') {
     # The short flags of the table are spelled out on the tiles
     label <- function(k) {
         if (k %in% c('below', 'above')) tr(paste0('results.flag_', k), lang)
-        else if (k %in% known) tr(paste0('flag.', k), lang) else k
+        else if (k %in% known) tr(paste0('flag.', k), lang) else translate_flags(k, lang)
     }
     colour <- function(k) if (k %in% known) k else 'other'
 

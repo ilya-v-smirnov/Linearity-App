@@ -482,13 +482,18 @@ assess_qc <- function(qc, range, criteria = qc_criteria()) {
 #' @param range Quantification range.
 #' @param lack_of_fit Output of [lack_of_fit()].
 #' @param criteria See [qc_criteria()].
+#' @param background Status of the background (see [background_summary()]):
+#'   `"unavailable"` suspends the verdict, the only reason given is then the
+#'   missing background (the other criteria are assessed on the OD as
+#'   measured and would mislead).
 #'
 #' @return A list with `standards`, `calibration`, `samples`, `dilution`,
-#'   `qc`, `curve` (R2, residual SE, lack-of-fit p) , `accepted` (logical) and
-#'   `reasons` (list of `lin_message` explaining a rejection or warnings).
+#'   `qc`, `curve` (R2, residual SE, lack-of-fit p) , `accepted` (logical),
+#'   `background` (the status) and `reasons` (list of `lin_message`
+#'   explaining a rejection or warnings).
 #' @keywords internal
 assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_fit,
-                       criteria = qc_criteria()) {
+                       criteria = qc_criteria(), background = 'ok') {
     sample_assessment <- assess_samples(result, range, criteria)
     samples <- sample_assessment$samples
     dilution <- sample_assessment$dilution
@@ -506,6 +511,7 @@ assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_f
     if (!is.null(qc_assessment) && !qc_assessment$accepted) {
         reasons <- c(reasons, list(lin_message('quality.reason_qc')))
     }
+    if (identical(background, 'unavailable')) reasons <- list(lin_message('quality.reason_background'))
     accepted <- length(reasons) == 0
 
     warnings <- sample_assessment$warnings
@@ -516,8 +522,9 @@ assess_run <- function(fit, standards, calibration, result, qc, range, lack_of_f
     if (!is.na(curve$r2) && curve$r2 < 0.99) {
         warnings <- c(warnings, list(lin_message('quality.warn_r2', r2 = round(curve$r2, 4))))
     }
+    if (identical(background, 'unavailable')) warnings <- list()
 
     list(standards = standards, calibration = calibration, samples = samples, dilution = dilution,
-         qc = qc_assessment, curve = curve, accepted = accepted, reasons = reasons,
+         qc = qc_assessment, curve = curve, accepted = accepted, background = background, reasons = reasons,
          warnings = warnings, criteria = criteria)
 }

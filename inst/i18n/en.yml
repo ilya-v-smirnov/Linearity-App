@@ -10,6 +10,7 @@ app:
 export:
   units_title: "Choose the units of the calibrator"
   units_needed: "Figures, tables and reports are exported only with the units of the calibrator concentrations. Choose them on the Standard curve step (Axis titles → X units) and export again."
+  background_needed: "Figures, tables and reports are not exported while the background chosen has no usable wells. In Standard curve → Background, restore a background well or tick another role, or choose “No background subtraction”, and export again."
   ok: "OK"
 
 common:
@@ -385,11 +386,12 @@ flag:
   excluded: "Excluded"
   high_cv: "High CV"
   nonlinear: "Dilution non-linear"
+  no_background: "Background unavailable"
 
 note:
   blank_scatter: "The background wells scatter by {range} OD (maximum minus minimum), more than the lowest calibrator {level} ({conc}) rises above the background ({signal} OD): the background is not reliable near the LLOQ. Check the background wells in Standard curve → Background."
-  background_empty: "No background is subtracted: all chosen background wells are excluded or have no OD."
-  no_background: "No background is subtracted: no background wells are chosen."
+  no_background_wells: "No background is subtracted: the plate has no background wells."
+  no_background: "No background is subtracted: “No background subtraction” is chosen."
   background_nc_legacy: "The plate has no reagent blank or zero calibrator: its {n} negative control well(s) (NC) are subtracted as background, as in earlier versions of the app. Choose the background wells in Standard curve → Background."
   background_changed: "The background subtracted now ({value}) differs from that of earlier versions of the app ({legacy}, the geometric mean of the blank and NC wells): the results of this plate may differ from an earlier analysis."
   interval: "Concentrations are calculated within the monotonic interval {lo}–{hi} set by the user."
@@ -437,6 +439,9 @@ quality:
   value: "Value"
   reason_calibration: "The calibration is not accepted: {n} of {total} standard levels meet the criteria ({needed} required)."
   reason_qc: "The quality controls do not meet the acceptance rule."
+  reason_background: "Background unavailable — no usable wells of the selected role: the run is not assessed and no concentrations are calculated."
+  background_unavailable: "Background unavailable — no usable wells of the selected role"
+  background_unavailable_hint: "The verdict and the concentrations are suspended. Restore a background well or tick another role in Standard curve → Background, or choose “No background subtraction” there to calculate without a correction."
   warn_cv: "Replicate CV above the limit in {n} sample(s)."
   warn_dilution: "Non-linear dilutions in {n} sample(s)."
   warn_r2: "R² of the standard curve is {r2} (< 0.99)."
@@ -608,7 +613,7 @@ bg:
   legend_used: "subtracted as background"
   legend_unused: "not used"
   group: "Background"
-  help: "The arithmetic mean OD of the wells of the ticked roles is subtracted from all wells. Reagent blank, zero calibrator and negative control are separate roles: combine them only if the method says so. By default the reagent blank is used; without it the zero calibrator; negative controls only when the plate has neither. Used: wells in the mean out of the wells of the ticked roles."
+  help: "The arithmetic mean OD of the wells of the ticked roles is subtracted from all wells. Reagent blank, zero calibrator and negative control are separate roles: combine them only if the method says so. By default the reagent blank is used; without it the zero calibrator; negative controls only when the plate has neither. Used: wells in the mean out of the wells of the ticked roles. To calculate without a correction, choose “No background subtraction”: with subtraction chosen and no usable well, the verdict and the concentrations are suspended."
   roles: "Wells subtracted as background"
   section: "Background correction"
   source: "Background wells"
@@ -616,7 +621,10 @@ bg:
   sd: "SD"
   subtracted: "Subtracted"
   none: "None"
-  none_subtracted: "none subtracted"
+  none_subtracted: "no background subtraction"
+  unavailable: "unavailable: no usable wells of the selected role, nothing calculated"
+  mode_subtract: "Subtract background"
+  mode_none: "No background subtraction"
   n_wells: "{n} well(s)"
   unused: "Not used: {roles}."
   report: "{roles}, wells used {n}, mean OD {mean}, SD {sd}; subtracted {value}"

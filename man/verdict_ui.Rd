@@ -22,6 +22,8 @@ A green, orange or red box with the acceptance of the calibration (the
 standards only; the quality controls are assessed in the result summary),
 the accepted calibration range, the number of accepted standard levels and
 the reason of a rejection. Orange: accepted, but the CV is assessed for
-fewer accepted levels than required (levels without replicates).
+fewer accepted levels than required (levels without replicates). With an
+unavailable background (see \code{\link[=background_summary]{background_summary()}}) the verdict is
+suspended: a red box says so instead.
 }
 \keyword{internal}

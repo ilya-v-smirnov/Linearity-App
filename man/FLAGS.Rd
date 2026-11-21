@@ -20,6 +20,10 @@ stored in English; use \code{\link[=translate_flags]{translate_flags()}} for dis
 \item \code{no_solution} (\code{"No solution"}): the OD cannot be reached by the curve.
 \item \code{missing} (\code{"Missing OD"}): the OD value is empty.
 \item \code{excluded} (\code{"Excluded"}): a standard point excluded by the user.
+\item \code{no_background} (\code{"Background unavailable"}): background subtraction was
+chosen, but no well of the chosen roles is usable; no well gets a
+concentration until a background well is restored or "no background
+subtraction" is chosen (see \code{\link[=background_summary]{background_summary()}}).
 }
 
 Flags of replicate groups (see \code{\link[=assess_run]{assess_run()}}):

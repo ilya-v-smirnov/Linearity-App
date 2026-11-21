@@ -17,7 +17,8 @@
 #' @return `mod_curve_server()` returns a list of reactives: `result`
 #'   (output of [calculate()]), `coef_table`, `notes` (translated warnings
 #'   without those of the samples, see [sample_warning_keys()]),
-#'   `plot_args` (axis titles), `model`, `weights`, `background` (settings),
+#'   `plot_args` (axis titles), `units_ok`, `export_lock` (why the exports
+#'   are locked, see [export_lock()]), `model`, `weights`, `background` (settings),
 #'   `exclusions` (user exclusions: `key`, `reason`), `background_exclusions`
 #'   (background wells excluded by the user) and `comparison`
 #'   (see [compare_models()]) and `effect_tables` (original and refitted
@@ -87,19 +88,57 @@ units_modal <- function(lang = 'en') {
 }
 
 
+#' Message Saying That the Background Is Unavailable
+#'
+#' @param lang Language code.
+#' @return A modal dialog.
+#' @keywords internal
+background_modal <- function(lang = 'en') {
+    shiny::modalDialog(
+        title = shiny::span(shiny::icon('triangle-exclamation', class = 'text-danger'), ' ',
+                            tr('quality.background_unavailable', lang)),
+        tr('export.background_needed', lang),
+        footer = shiny::modalButton(tr('export.ok', lang)),
+        easyClose = TRUE
+    )
+}
+
+
+#' Why Exports Are Locked
+#'
+#' @param units_ok Whether the units of the calibrator are chosen (see
+#'   [units_chosen()]).
+#' @param background Status of the background (see [background_summary()]),
+#'   or `NULL` when it is not known.
+#'
+#' @return `NULL` when the exports are ready, otherwise `"units"` or
+#'   `"background"`.
+#' @keywords internal
+export_lock <- function(units_ok, background = NULL) {
+    if (!isTRUE(units_ok)) return('units')
+    if (identical(background, 'unavailable')) return('background')
+    NULL
+}
+
+
 #' Message on a Click of a Locked Export Button
 #'
-#' Shows [units_modal()] when the action button of [export_button_ui()] is
-#' clicked, i.e. when the units of the calibrator are not chosen.
+#' Shows [units_modal()] or [background_modal()] when the action button of
+#' [export_button_ui()] is clicked, i.e. when the units of the calibrator are
+#' not chosen or the background is unavailable.
 #'
 #' @param input Input of the module.
 #' @param id Id of the download output within the module.
 #' @param lang Language code.
+#' @param lock Function returning the reason of the lock (see
+#'   [export_lock()]).
 #'
 #' @return Called for its side effect.
 #' @keywords internal
-observe_locked_export <- function(input, id, lang = 'en') {
-    shiny::observeEvent(input[[paste0(id, '_locked')]], shiny::showModal(units_modal(lang)))
+observe_locked_export <- function(input, id, lang = 'en', lock = function() 'units') {
+    shiny::observeEvent(input[[paste0(id, '_locked')]], {
+        shiny::showModal(if (identical(lock(), 'background')) background_modal(lang) else units_modal(lang))
+    })
 }
 
 
@@ -338,8 +377,16 @@ mod_curve_ui <- function(id, lang) {
             t('bg.group'), value = 'background', icon = shiny::icon('fill-drip'),
             shiny::div(class = 'step-view',
                        shiny::h5(with_tooltip(t('bg.section'), t('bg.help'))),
-                       # The roles subtracted as background; single wells are excluded on the plot below
-                       shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0), inline = TRUE),
+                       # No subtraction is an explicit choice; with subtraction, the roles are ticked and
+                       # single wells are excluded on the plot below
+                       shiny::radioButtons(ns('bg_mode'), NULL, inline = TRUE,
+                                           choices = stats::setNames(c('subtract', 'none'),
+                                                                     c(t('bg.mode_subtract'), t('bg.mode_none')))),
+                       shiny::conditionalPanel(
+                           condition = "input.bg_mode != 'none'", ns = ns,
+                           shiny::checkboxGroupInput(ns('background'), t('bg.roles'), choices = character(0),
+                                                     inline = TRUE)
+                       ),
                        shiny::tableOutput(ns('background_table')),
                        shiny::uiOutput(ns('background_warning')),
                        shiny::uiOutput(ns('background_notes')),
@@ -355,6 +402,8 @@ mod_curve_ui <- function(id, lang) {
             with_tooltip(t('curve.title'), t('curve.click_hint'), placement = 'bottom'), value = 'curve',
             shiny::div(
                 class = 'step-view',
+                # The background chosen is unavailable: the curve is shown on the OD as measured
+                shiny::uiOutput(ns('background_alert')),
                 # Each plot in a panel of limited width; the panels stay next to each other
                 # on the left, the statistics of the curve in one row below them, then the
                 # comparison of models
@@ -407,6 +456,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         no_exclusions <- data.frame(key = character(0), reason = character(0))
         # Roles of the background wells: the default of the plate until the user changes them
         bg_roles <- shiny::reactiveVal(NULL)
+        # Subtraction (`"subtract"`) or the explicit choice of none (`"none"`, the default without background wells)
+        bg_mode <- shiny::reactiveVal('subtract')
         exclusions <- shiny::reactiveVal(no_exclusions)
         bg_exclusions <- shiny::reactiveVal(no_exclusions)
         # The point clicked last, on the curve (`standard`) or among the background wells (`background`)
@@ -418,6 +469,8 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             bg_exclusions(no_exclusions)
             roles <- default_background(data()$type)
             bg_roles(roles)
+            bg_mode(if (length(roles) == 0) 'none' else 'subtract')
+            shiny::updateRadioButtons(session, 'bg_mode', selected = bg_mode())
             shiny::updateCheckboxGroupInput(session, 'background', choices = background_choices(data()$type, lang),
                                             selected = roles)
             shiny::updateSelectInput(session, 'xunits', selected = '')
@@ -430,20 +483,29 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
                 shiny::updateNumericInput(session, 'interval_to', value = max(conc))
             }
         })
-        # Unticking all roles subtracts nothing
+        # Unticking all roles subtracts nothing only with "No background subtraction": with
+        # subtraction chosen the background is then unavailable
         shiny::observeEvent(input$background, {
             bg_roles(if (is.null(input$background)) character(0) else input$background)
         }, ignoreNULL = FALSE, ignoreInit = TRUE)
+        shiny::observeEvent(input$bg_mode, bg_mode(input$bg_mode), ignoreInit = TRUE)
         units_ok <- shiny::reactive(units_chosen(input$xunits))
+        # The status of the background does not depend on the fit (see background_info below)
+        lock <- shiny::reactive({
+            bg <- tryCatch(background_info(), error = function(e) NULL)
+            export_lock(units_ok(), bg$status)
+        })
         output$save_plot_ui <- shiny::renderUI(export_button_ui(ns('save_plot'), t('curve.save_plot'), 'image',
-                                                                units_ok()))
-        observe_locked_export(input, 'save_plot', lang)
+                                                                is.null(lock())))
+        observe_locked_export(input, 'save_plot', lang, lock)
 
         settings <- shiny::reactive({
             shiny::req(input$model)
             quadratic <- poly_degree(input$model) == 2
+            subtract <- !identical(bg_mode(), 'none')
             list(model = input$model,
-                 background = bg_roles(),
+                 background = if (subtract) bg_roles() else character(0),
+                 subtract = subtract,
                  weights = if (is.null(input$weights)) 'none' else input$weights,
                  interval = if (quadratic && isTRUE(input$use_interval)) {
                      as.numeric(c(input$interval_from, input$interval_to))
@@ -457,7 +519,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             o <- options()
             with_validation(
                 calculate(d, model = s$model, weights = s$weights, interval = s$interval, background = s$background,
-                          exclude = exclusions(), exclude_background = bg_exclusions(),
+                          subtract_background = s$subtract, exclude = exclusions(), exclude_background = bg_exclusions(),
                           round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,
@@ -516,7 +578,9 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         }, height = plot_height('resid'))
         # Warnings shown by the statistics below the plots are left out of the warnings box
         output$notes <- shiny::renderUI({
-            hidden <- c('note.not_quantified', 'quality.warn_r2', 'note.lack_of_fit', sample_warning_keys())
+            # The unavailable background has its own box above the plots
+            hidden <- c('note.not_quantified', 'quality.warn_r2', 'note.lack_of_fit', 'quality.reason_background',
+                        sample_warning_keys())
             shown <- Filter(function(m) !m$key %in% hidden, result()$notes)
             notes_ui(message_text(shown, lang), lang)
         })
@@ -537,7 +601,19 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             d <- data()
             shiny::req(d, !is.null(bg_roles()))
             d$.key <- well_keys(d)
-            with_validation(background_summary(d, bg_roles(), bg_exclusions()), 'common.calc_error', lang)
+            subtract <- !identical(bg_mode(), 'none')
+            roles <- if (subtract) bg_roles() else character(0)
+            with_validation(background_summary(d, roles, bg_exclusions(), subtract), 'common.calc_error', lang)
+        })
+        # The background chosen has no usable well: said in the Background and the curve sub-tabs
+        unavailable_ui <- function() {
+            shiny::div(class = 'alert alert-danger background-unavailable', shiny::icon('circle-xmark'), ' ',
+                       shiny::strong(t('quality.background_unavailable')), shiny::br(),
+                       t('quality.background_unavailable_hint'))
+        }
+        output$background_alert <- shiny::renderUI({
+            bg <- tryCatch(background_info(), error = function(e) NULL)
+            if (isTRUE(bg$empty)) unavailable_ui()
         })
         # The standards as measured, for the scale of the scatter of the blanks
         raw_standards <- shiny::reactive({
@@ -553,6 +629,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         })
         output$background_warning <- shiny::renderUI({
             bg <- background_info()
+            if (isTRUE(bg$empty)) return(unavailable_ui())
             if (!isTRUE(bg$scatter$warn)) return(NULL)
             shiny::div(class = 'alert alert-warning', shiny::icon('triangle-exclamation'), ' ',
                        message_text(list(background_scatter_message(bg)), lang))
@@ -720,7 +797,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         output$save_plot <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_plot.jpeg'),
             content = function(file) {
-                shiny::req(units_ok())
+                shiny::req(is.null(lock()))
                 ggplot2::ggsave(file, plots(), width = 20, height = 10, units = 'cm', dpi = 600)
             }
         )
@@ -730,6 +807,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
              notes = notes,
              plot_args = plot_args,
              units_ok = units_ok,
+             export_lock = lock,
              model = shiny::reactive(settings()$model),
              weights = shiny::reactive(settings()$weights),
              background = shiny::reactive(settings()$background),

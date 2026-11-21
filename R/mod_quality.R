@@ -157,7 +157,9 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
     if (!is.null(sample_warnings)) {
         warnings <- c(Filter(function(m) !m$key %in% sample_warning_keys(), warnings), sample_warnings)
     }
-    list(title = tr(if (q$accepted) 'quality.accepted' else 'quality.rejected', lang),
+    title <- if (identical(q$background, 'unavailable')) 'quality.background_unavailable' else
+        if (q$accepted) 'quality.accepted' else 'quality.rejected'
+    list(title = tr(title, lang),
          range = tr('quality.range', lang, lloq = signif(result$calibration_range[1], 3),
                     uloq = signif(result$calibration_range[2], 3)),
          levels = tr('quality.levels', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed),
@@ -218,13 +220,33 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
 }
 
 
+#' Box of an Unavailable Background
+#'
+#' Background subtraction was chosen, but no well of the chosen roles is
+#' usable: the verdict and the concentrations are suspended until a well is
+#' restored or "no background subtraction" is chosen.
+#'
+#' @param lang Language code.
+#'
+#' @return A shiny tag.
+#' @keywords internal
+background_unavailable_ui <- function(lang) {
+    shiny::div(class = 'quality-verdict background-unavailable',
+               shiny::div(class = 'alert alert-danger',
+                          shiny::h4(shiny::icon('circle-xmark'), ' ', tr('quality.background_unavailable', lang)),
+                          shiny::p(tr('quality.background_unavailable_hint', lang))))
+}
+
+
 #' Verdict of the Calibration
 #'
 #' A green, orange or red box with the acceptance of the calibration (the
 #' standards only; the quality controls are assessed in the result summary),
 #' the accepted calibration range, the number of accepted standard levels and
 #' the reason of a rejection. Orange: accepted, but the CV is assessed for
-#' fewer accepted levels than required (levels without replicates).
+#' fewer accepted levels than required (levels without replicates). With an
+#' unavailable background (see [background_summary()]) the verdict is
+#' suspended: a red box says so instead.
 #'
 #' @param result Output of [calculate()].
 #' @param lang Language code.
@@ -234,6 +256,7 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
 #' @return A shiny tag.
 #' @keywords internal
 verdict_ui <- function(result, lang, unit = '') {
+    if (identical(result$background$status, 'unavailable')) return(background_unavailable_ui(lang))
     cal <- result$quality$calibration
     accepted <- isTRUE(cal$accepted)
     no_cv <- accepted && identical(cal$status, 'accepted_no_cv')

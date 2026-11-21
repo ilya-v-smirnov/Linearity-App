@@ -99,8 +99,8 @@ results_datatable <- function(table, lang, page_length = 25) {
                        language = dt_language(lang))
     )
     flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
-               FLAGS$high_cv, FLAGS$nonlinear)
-    colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828')
+               FLAGS$high_cv, FLAGS$nonlinear, FLAGS$no_background)
+    colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828', '#c62828')
     style <- function(widget, column, values, colours) {
         if (!column %in% names(table)) return(widget)
         DT::formatStyle(widget, column, fontWeight = 'bold', whiteSpace = 'nowrap',
@@ -244,12 +244,12 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column')) 
         output$qc_table <- DT::renderDT(results_datatable(qc(), lang, page_length = 10))
 
         output$download_ui <- shiny::renderUI(
-            export_button_ui(ns('download'), tr('results.download', lang), 'download', curve$units_ok()))
-        observe_locked_export(input, 'download', lang)
+            export_button_ui(ns('download'), tr('results.download', lang), 'download', is.null(curve$export_lock())))
+        observe_locked_export(input, 'download', lang, curve$export_lock)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_result_table.xlsx'),
             content = function(file) {
-                shiny::req(curve$units_ok())
+                shiny::req(is.null(curve$export_lock()))
                 sheets <- list(table())
                 names(sheets) <- tr('tab.results', lang)
                 if (!is.null(qc())) sheets[[tr('results.qc', lang)]] <- qc()

@@ -12,7 +12,8 @@ assess_run(
   qc,
   range,
   lack_of_fit,
-  criteria = qc_criteria()
+  criteria = qc_criteria(),
+  background = "ok"
 )
 }
 \arguments{
@@ -28,11 +29,17 @@ assess_run(
 \item{lack_of_fit}{Output of \code{\link[=lack_of_fit]{lack_of_fit()}}.}
 
 \item{criteria}{See \code{\link[=qc_criteria]{qc_criteria()}}.}
+
+\item{background}{Status of the background (see \code{\link[=background_summary]{background_summary()}}):
+\code{"unavailable"} suspends the verdict, the only reason given is then the
+missing background (the other criteria are assessed on the OD as
+measured and would mislead).}
 }
 \value{
 A list with \code{standards}, \code{calibration}, \code{samples}, \code{dilution},
-\code{qc}, \code{curve} (R2, residual SE, lack-of-fit p) , \code{accepted} (logical) and
-\code{reasons} (list of \code{lin_message} explaining a rejection or warnings).
+\code{qc}, \code{curve} (R2, residual SE, lack-of-fit p) , \code{accepted} (logical),
+\code{background} (the status) and \code{reasons} (list of \code{lin_message}
+explaining a rejection or warnings).
 }
 \description{
 Combines the calibration acceptance, the QC rule, replicate precision,

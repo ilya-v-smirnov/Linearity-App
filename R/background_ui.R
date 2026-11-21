@@ -23,6 +23,7 @@ background_choices <- function(type, lang = 'en') {
     roles <- background_roles()
     n <- vapply(roles, function(r) sum(type %in% r), 0)
     roles <- roles[n > 0]
+    if (length(roles) == 0) return(character(0))
     stats::setNames(roles, paste0(role_labels(roles, lang), ' (', n[n > 0], ')'))
 }
 
@@ -55,7 +56,8 @@ excluded_text <- function(bg) {
 background_table <- function(bg, lang = 'en') {
     num <- function(x) if (is.na(x)) '—' else sprintf('%.4f', x)
     source <- if (length(bg$roles) == 0) tr('bg.none', lang) else paste(role_labels(bg$roles, lang), collapse = ' + ')
-    out <- data.frame(source, paste0(bg$n, '/', bg$n_roles), num(bg$mean), num(bg$sd), sprintf('%.4f', bg$value))
+    subtracted <- if (isTRUE(bg$empty)) '—' else sprintf('%.4f', bg$value)
+    out <- data.frame(source, paste0(bg$n, '/', bg$n_roles), num(bg$mean), num(bg$sd), subtracted)
     names(out) <- vapply(c('bg.source', 'bg.used', 'bg.mean', 'bg.sd', 'bg.subtracted'), tr, '', lang = lang)
     out
 }
@@ -95,6 +97,7 @@ background_scatter_message <- function(bg) {
 #' @return A character string.
 #' @keywords internal
 background_text <- function(bg, lang = 'en') {
+    if (isTRUE(bg$empty)) return(tr('bg.unavailable', lang))
     if (length(bg$roles) == 0) return(tr('bg.none_subtracted', lang))
     out <- tr('bg.report', lang, roles = paste(role_labels(bg$roles, lang), collapse = ' + '),
               n = paste0(bg$n, '/', bg$n_roles),
@@ -139,7 +142,8 @@ background_import_ui <- function(data, lang = 'en') {
 #' @inheritParams background_table
 #'
 #' @return A data.frame with translated column names: role, position, OD,
-#'   deviation from the value subtracted and the status of the well (used,
+#'   deviation from the value subtracted (empty when nothing is subtracted)
+#'   and the status of the well (used,
 #'   excluded by the user with the reason, or of a role left out); the wells
 #'   used first, then by role in the order of [background_roles()]. `NULL`
 #'   without background wells.
@@ -151,7 +155,10 @@ background_wells_table <- function(bg, lang = 'en') {
     num <- function(x, fmt) ifelse(is.na(x), '', sprintf(fmt, x))
     status <- ifelse(w$used, tr('bg.used_yes', lang),
                      ifelse(w$excluded, paste0(tr('bg.status_excluded', lang), ': ', w$reason), tr('bg.used_no', lang)))
-    out <- data.frame(role_labels(w$role, lang), w$key, num(w$OD, '%.4f'), num(w$OD - bg$value, '%+.4f'), status)
+    # Without a background value there is nothing to deviate from
+    subtracted <- is.null(bg$status) || identical(bg$status, 'ok')
+    deviation <- if (subtracted) w$OD - bg$value else rep(NA_real_, nrow(w))
+    out <- data.frame(role_labels(w$role, lang), w$key, num(w$OD, '%.4f'), num(deviation, '%+.4f'), status)
     names(out) <- vapply(c('bg.role', 'bg.position', 'bg.od', 'bg.deviation', 'bg.status'), tr, '', lang = lang)
     out
 }
@@ -238,7 +245,7 @@ plot_background <- function(bg, standards = NULL, lang = 'en') {
     if (n_roles < length(labels)) {
         plot <- plot + ggplot2::geom_vline(xintercept = n_roles + 0.5, colour = 'grey60')
     }
-    if (length(bg$roles) > 0) {
+    if (identical(bg$status, 'ok')) {
         plot <- plot + ggplot2::geom_hline(yintercept = bg$value, linetype = 'dashed', colour = 'blue')
     }
     plot

@@ -18,7 +18,8 @@ calculate(
   blank_zero = FALSE,
   interval = NULL,
   background = NULL,
-  exclude_background = NULL
+  exclude_background = NULL,
+  subtract_background = NULL
 )
 }
 \arguments{
@@ -61,6 +62,14 @@ Ignored for the other models.}
 
 \item{exclude_background}{Background wells excluded by the user: a
 data.frame with columns \code{key} and \code{reason}.}
+
+\item{subtract_background}{Whether background subtraction was chosen;
+\code{NULL} for \code{TRUE} when \code{background} has roles. \code{FALSE} (or no roles) is
+the explicit choice of no subtraction. When subtraction was chosen but no
+well of the roles is usable (all excluded or without OD, or no role
+ticked), the background is unavailable: the run is not accepted, samples
+and quality controls get no concentration (flag \code{"Background unavailable"}), while the curve is fitted on the OD as measured for
+inspection.}
 }
 \value{
 A list with components:

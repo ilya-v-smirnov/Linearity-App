@@ -299,10 +299,9 @@ test_that('single background wells are excluded from the background', {
     expect_equal(nrow(r$exclusions), 0)
     expect_equal(c(nrow(both$standard_data), nrow(r$standard_data)), c(9, 14))
 
-    # all chosen wells excluded: nothing is subtracted, with a warning
+    # all chosen wells excluded: the background is unavailable (see the test below)
     none <- calculate(data, 'LRM', exclude_background = data.frame(key = keys, reason = 'Outlier'))
-    expect_equal(none$nc_value, 0)
-    expect_match(message_text(none$notes), 'all chosen background wells are excluded', fixed = TRUE, all = FALSE)
+    expect_equal(none$background$status, 'unavailable')
 
     # the plot shows the calibrators as measured from the lowest level, to the right of the blanks
     std <- data[data$type == 'standard', c('conc', 'OD')]
@@ -312,6 +311,79 @@ test_that('single background wells are excluded from the background', {
     expect_equal(sort(unique(pts$kind)), c('excluded', 'standard', 'used'))
     expect_equal(sum(pts$kind == 'standard'), 14)
     expect_s3_class(LinearityApp:::plot_background(bg, std, 'ru'), 'ggplot')
+})
+
+test_that('an unavailable background suspends the verdict and the concentrations', {
+    data <- load_sample('bca')
+    keys <- well_keys(data)[data$type == 'blank']
+    all_out <- data.frame(key = keys, reason = 'Outlier')
+    ok <- calculate(data, 'LRM')
+    expect_equal(ok$background$status, 'ok')
+    expect_true(ok$quality$accepted)
+
+    # every reagent blank excluded: the curve is fitted on the OD as measured for inspection only
+    r <- calculate(data, 'LRM', exclude_background = all_out)
+    bg <- r$background
+    expect_equal(bg$status, 'unavailable')
+    expect_true(bg$empty)
+    expect_equal(r$nc_value, 0)
+    expect_false(r$quality$accepted)
+    expect_equal(r$quality$background, 'unavailable')
+    # the missing background is the only reason, without the warnings of the uncorrected fit
+    expect_equal(vapply(r$quality$reasons, function(m) m$key, ''), 'quality.reason_background')
+    expect_length(r$quality$warnings, 0)
+    # the notes of the uncorrected fit are left out
+    expect_equal(vapply(r$notes, function(m) m$key, ''), 'quality.reason_background')
+    # no concentration for samples and quality controls
+    expect_true(all(is.na(r$result$conc)))
+    expect_true(all(is.na(r$result$conc.lower)))
+    expect_true(all(is.na(r$result$OD.corrected)))
+    expect_true(all(r$result$flag == FLAGS$no_background))
+    expect_equal(unname(translate_flags(FLAGS$no_background, 'ru')), 'Фон недоступен')
+    # zero for samples below the blank does not apply either
+    expect_true(all(is.na(calculate(data, 'LRM', exclude_background = all_out, blank_zero = TRUE)$result$conc)))
+    # the verdict says so instead of accepting or rejecting the calibration
+    html <- as.character(LinearityApp:::verdict_ui(r, 'en'))
+    expect_match(html, 'Background unavailable — no usable wells of the selected role', fixed = TRUE)
+    expect_false(grepl('Calibration accepted', html, fixed = TRUE))
+    expect_equal(LinearityApp:::quality_summary(r, 'en')$title,
+                 'Background unavailable — no usable wells of the selected role')
+    # the background table and the report show no value subtracted
+    expect_equal(LinearityApp:::background_table(bg, 'en')$Subtracted, '—')
+    expect_match(LinearityApp:::background_text(bg, 'en'), '^unavailable')
+    expect_equal(LinearityApp:::background_wells_table(bg, 'en')$Deviation, c('', ''))
+
+    # subtraction chosen without a role ticked: unavailable too
+    no_role <- calculate(data, 'LRM', background = character(0), subtract_background = TRUE)
+    expect_equal(no_role$background$status, 'unavailable')
+    expect_true(all(is.na(no_role$result$conc)))
+
+    # restoring a well brings the background back
+    one <- calculate(data, 'LRM', exclude_background = all_out[1, ])
+    expect_equal(one$background$status, 'ok')
+    expect_false(any(is.na(one$result$conc[one$result$flag == FLAGS$ok])))
+
+    # the explicit choice of no subtraction is calculated, with a note, even if the wells are excluded
+    none <- calculate(data, 'LRM', subtract_background = FALSE, exclude_background = all_out)
+    expect_equal(none$background$status, 'none')
+    expect_equal(none$nc_value, 0)
+    expect_equal(none$background$roles, character(0))
+    expect_equal(none$background$n, 0)
+    expect_true(any(!is.na(none$result$conc)))
+    expect_false(any(none$result$flag == FLAGS$no_background))
+    expect_false('quality.reason_background' %in% vapply(none$quality$reasons, function(m) m$key, ''))
+    expect_match(message_text(none$notes), '“No background subtraction” is chosen', fixed = TRUE, all = FALSE)
+    expect_equal(LinearityApp:::background_text(none$background, 'en'), 'no background subtraction')
+    # a plate without background wells is calculated without a correction by default
+    bare <- calculate(data[data$type != 'blank', ], 'LRM')
+    expect_equal(bare$background$status, 'none')
+    expect_match(message_text(bare$notes), 'the plate has no background wells', fixed = TRUE, all = FALSE)
+
+    # exports wait for the units first, then for the background
+    expect_equal(LinearityApp:::export_lock(FALSE, 'unavailable'), 'units')
+    expect_equal(LinearityApp:::export_lock(TRUE, 'unavailable'), 'background')
+    expect_null(LinearityApp:::export_lock(TRUE, 'none'))
+    expect_match(as.character(LinearityApp:::background_modal('ru')), 'Без вычитания фона', fixed = TRUE)
 })
 
 test_that('a scatter of the blanks above the signal of the lowest calibrator is reported', {

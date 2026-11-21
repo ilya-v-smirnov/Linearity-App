@@ -331,12 +331,12 @@ mod_summary_server <- function(id, lang, curve, rounding) {
         })
 
         output$download_ui <- shiny::renderUI(
-            export_button_ui(ns('download'), t('summary.download'), 'download', curve$units_ok()))
-        observe_locked_export(input, 'download', lang)
+            export_button_ui(ns('download'), t('summary.download'), 'download', is.null(curve$export_lock())))
+        observe_locked_export(input, 'download', lang, curve$export_lock)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(Sys.Date(), '_summary.xlsx'),
             content = function(file) {
-                shiny::req(curve$units_ok())
+                shiny::req(is.null(curve$export_lock()))
                 sheets <- list(table())
                 names(sheets) <- t('tab.summary')
                 if (!is.null(tables()$dilution)) sheets[[t('quality.section_dilution')]] <- tables()$dilution

@@ -11,6 +11,10 @@
 #' - `no_solution` (`"No solution"`): the OD cannot be reached by the curve.
 #' - `missing` (`"Missing OD"`): the OD value is empty.
 #' - `excluded` (`"Excluded"`): a standard point excluded by the user.
+#' - `no_background` (`"Background unavailable"`): background subtraction was
+#'   chosen, but no well of the chosen roles is usable; no well gets a
+#'   concentration until a background well is restored or "no background
+#'   subtraction" is chosen (see [background_summary()]).
 #'
 #' Flags of replicate groups (see [assess_run()]):
 #'
@@ -29,7 +33,8 @@ FLAGS <- list(ok = 'OK',
               missing = 'Missing OD',
               excluded = 'Excluded',
               high_cv = 'High CV',
-              nonlinear = 'Dilution non-linear')
+              nonlinear = 'Dilution non-linear',
+              no_background = 'Background unavailable')
 
 
 ##################### BACKGROUND ###############################################
@@ -163,17 +168,23 @@ blank_scatter <- function(od, value, standards) {
 #'   [background_roles()]); `character(0)` subtracts nothing.
 #' @param exclude Background wells excluded by the user: a data.frame with
 #'   `key` and `reason`, or `NULL`.
+#' @param subtract Whether background subtraction was chosen. `FALSE` (the
+#'   default without roles) is the explicit choice of no subtraction; `TRUE`
+#'   without roles means that subtraction was chosen but no role ticked.
 #'
 #' @return A list with `roles`, `keys` and `od` (the wells used), `n`,
 #'   `n_roles` (wells of the chosen roles, used or not), `mean`, `sd` (`NA`
-#'   with fewer than two wells), `value` (the value subtracted: the mean; 0
-#'   without roles or without a usable well, then `empty` is `TRUE`), `unused` (a named vector with
+#'   with fewer than two wells), `status` (`"ok"`: the background is the mean
+#'   of the wells used; `"none"`: no subtraction was chosen; `"unavailable"`:
+#'   subtraction was chosen, but no well is usable or no role is ticked),
+#'   `empty` (`TRUE` when `status` is `"unavailable"`), `value` (the value
+#'   subtracted: the mean; 0 otherwise), `unused` (a named vector with
 #'   the number of wells of the roles left out), `legacy` (see
 #'   [legacy_background()]), `wells` (all wells of the background roles:
 #'   `role`, `key`, `OD`, `used`, `excluded`, `reason`) and `scatter` (see
 #'   [blank_scatter()]).
 #' @keywords internal
-background_summary <- function(data, roles, exclude = NULL) {
+background_summary <- function(data, roles, exclude = NULL, subtract = length(roles) > 0) {
     bad <- setdiff(roles, background_roles())
     if (length(bad) > 0) lin_abort('error.background_role', roles = bad, choices = background_roles())
     keys <- if ('.key' %in% names(data)) data$.key else well_keys(data)
@@ -187,13 +198,19 @@ background_summary <- function(data, roles, exclude = NULL) {
     in_roles <- data$type %in% roles
     used <- in_roles & !is.na(data$OD) & !excluded
     od <- data$OD[used]
-    empty <- length(roles) > 0 && length(od) == 0
-    value <- if (length(roles) == 0 || empty) 0 else background_value(od)$value
+    status <- if (!isTRUE(subtract)) 'none' else if (length(od) == 0) 'unavailable' else 'ok'
+    if (status == 'none') {
+        used[] <- FALSE
+        od <- numeric(0)
+    }
+    empty <- status == 'unavailable'
+    value <- if (status == 'ok') background_value(od)$value else 0
     others <- setdiff(background_roles(), roles)
     unused <- vapply(others, function(r) sum(data$type %in% r), 0)
     wells <- data.frame(role = data$type[all], key = keys[all], OD = data$OD[all], used = used[all],
                         excluded = excluded[all], reason = reason[all])
-    list(roles = roles, keys = keys[used], od = od, n = length(od), n_roles = sum(in_roles), empty = empty,
+    list(roles = roles, keys = keys[used], od = od, n = length(od), n_roles = sum(in_roles), status = status,
+         empty = empty,
          mean = if (length(od) > 0) mean(od) else NA_real_,
          sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
          value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells,
@@ -377,6 +394,14 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' @param background Roles of the wells subtracted as background (see
 #'   [background_roles()]); `NULL` for the default role of the plate (see
 #'   [default_background()]); `character(0)` subtracts nothing.
+#' @param subtract_background Whether background subtraction was chosen;
+#'   `NULL` for `TRUE` when `background` has roles. `FALSE` (or no roles) is
+#'   the explicit choice of no subtraction. When subtraction was chosen but no
+#'   well of the roles is usable (all excluded or without OD, or no role
+#'   ticked), the background is unavailable: the run is not accepted, samples
+#'   and quality controls get no concentration (flag `"Background
+#'   unavailable"`), while the curve is fitted on the OD as measured for
+#'   inspection.
 #' @param interval For the quadratic models: the monotonic interval of
 #'   concentrations (lower and upper bound) set by the user, or `NULL` for the
 #'   range of the standards. The curve is inverted on the branch of the
@@ -430,7 +455,7 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
                       round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
                       extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL,
-                      exclude_background = NULL) {
+                      exclude_background = NULL, subtract_background = NULL) {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
     }
@@ -439,18 +464,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     # Background subtraction; the results show the OD as measured and corrected
     defaulted <- is.null(background)
     if (defaulted) background <- default_background(data$type)
-    bg <- background_summary(data, background, exclude_background)
+    subtract <- if (is.null(subtract_background)) length(background) > 0 else isTRUE(subtract_background)
+    if (!subtract) background <- character(0)
+    bg <- background_summary(data, background, exclude_background, subtract)
+    # An unavailable background is a reason of the verdict (see assess_run()), not a note
     notes <- list()
-    if (length(background) == 0) {
-        notes <- c(notes, list(lin_message('note.no_background')))
-    } else if (bg$empty) {
-        notes <- c(notes, list(lin_message('note.background_empty')))
-    } else if (defaulted && identical(background, 'NC')) {
+    if (bg$status == 'none') {
+        no_wells <- defaulted && !any(is_background(data$type))
+        notes <- c(notes, list(lin_message(if (no_wells) 'note.no_background_wells' else 'note.no_background')))
+    } else if (bg$status == 'ok' && defaulted && identical(background, 'NC')) {
         notes <- c(notes, list(lin_message('note.background_nc_legacy', n = bg$n)))
     }
     if (isTRUE(bg$scatter$warn)) notes <- c(notes, list(background_scatter_message(bg)))
     # A plate analysed again: the background of earlier versions differs by more than 1 %
-    if (!is.na(bg$legacy) && abs(bg$value - bg$legacy) > 0.01 * abs(bg$legacy)) {
+    if (bg$status == 'ok' && !is.na(bg$legacy) && abs(bg$value - bg$legacy) > 0.01 * abs(bg$legacy)) {
         notes <- c(notes, list(lin_message('note.background_changed', value = signif(bg$value, 4),
                                            legacy = signif(bg$legacy, 4))))
     }
@@ -543,9 +570,14 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
         rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
         if (blank_zero) rows$conc[flag == FLAGS$od_le_nc] <- 0
+        # The background chosen is unavailable: no concentration from the OD as measured
+        if (bg$empty) {
+            rows$conc <- rows$conc.lower <- rows$conc.upper <- rep(NA_real_, nrow(rows))
+            flag <- rep(FLAGS$no_background, nrow(rows))
+        }
         corrected <- rows$OD
         rows$OD <- round(rows$.od_raw, 4)
-        rows$OD.corrected <- round(corrected, 4)
+        rows$OD.corrected <- if (bg$empty) NA_real_ else round(corrected, 4)
         rows$.od_raw <- NULL
         rows$flag <- flag
         rownames(rows) <- NULL
@@ -599,8 +631,11 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     sample_data$.key <- NULL
     sample_data <- drop_empty_columns(sample_data, c('well', 'id'))
 
-    quality <- assess_run(fit, standards, calibration, sample_data, qc, conc_range, lof, criteria)
+    quality <- assess_run(fit, standards, calibration, sample_data, qc, conc_range, lof, criteria,
+                          background = bg$status)
     notes <- c(notes, quality$reasons, quality$warnings)
+    # The notes of a curve fitted on the OD as measured would mislead: only the reason is kept
+    if (bg$empty) notes <- quality$reasons
 
     list(model_direct = fit,
          fit = fit,

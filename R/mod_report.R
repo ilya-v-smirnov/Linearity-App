@@ -110,12 +110,13 @@ mod_report_server <- function(id, lang, curve, summary) {
         output$plot <- shiny::renderPlot(plot())
 
         output$download_ui <- shiny::renderUI(
-            export_button_ui(session$ns('download'), tr('report.download', lang), 'download', curve$units_ok()))
-        observe_locked_export(input, 'download', lang)
+            export_button_ui(session$ns('download'), tr('report.download', lang), 'download',
+                             is.null(curve$export_lock())))
+        observe_locked_export(input, 'download', lang, curve$export_lock)
         output$download <- shiny::downloadHandler(
             filename = function() paste0(date(), '_report_', type(), '.docx'),
             content = function(file) {
-                shiny::req(curve$units_ok())
+                shiny::req(is.null(curve$export_lock()))
                 write_report(blocks(), file, plot())
             }
         )

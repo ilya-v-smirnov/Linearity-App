@@ -4,7 +4,7 @@
 \alias{observe_locked_export}
 \title{Message on a Click of a Locked Export Button}
 \usage{
-observe_locked_export(input, id, lang = "en")
+observe_locked_export(input, id, lang = "en", lock = function() "units")
 }
 \arguments{
 \item{input}{Input of the module.}
@@ -12,12 +12,16 @@ observe_locked_export(input, id, lang = "en")
 \item{id}{Id of the download output within the module.}
 
 \item{lang}{Language code.}
+
+\item{lock}{Function returning the reason of the lock (see
+\code{\link[=export_lock]{export_lock()}}).}
 }
 \value{
 Called for its side effect.
 }
 \description{
-Shows \code{\link[=units_modal]{units_modal()}} when the action button of \code{\link[=export_button_ui]{export_button_ui()}} is
-clicked, i.e. when the units of the calibrator are not chosen.
+Shows \code{\link[=units_modal]{units_modal()}} or \code{\link[=background_modal]{background_modal()}} when the action button of
+\code{\link[=export_button_ui]{export_button_ui()}} is clicked, i.e. when the units of the calibrator are
+not chosen or the background is unavailable.
 }
 \keyword{internal}
