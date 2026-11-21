@@ -75,7 +75,10 @@ test_that('calculate() inverts the Linear model and keeps standards below the bl
     expect_equal(nrow(calculate(low, 'LRM')$standard_data), 10)
     cmp <- compare_models(calculate(low, 'LIN')$standard_data)
     expect_equal(cmp$model, calibration_models())
-    expect_false(any(is.na(cmp$AIC)))
+    # an exact straight line has no plateau: the logistic fits drift and do not converge
+    logistic <- cmp$model %in% c('4PL', '5PL')
+    expect_false(any(is.na(cmp$AIC[!logistic])))
+    expect_equal(cmp$status[logistic], rep('not_converged', 2))
 })
 
 test_that('4PL agrees with drc', {
@@ -215,6 +218,9 @@ test_that('models are compared on a common scale', {
     expect_equal(tab$Note[cmp$model == '4PL'], '')
     expect_equal(LinearityApp:::comparison_status(data.frame(status = 'fit_failed', n.levels = 7,
                                                              n.levels.required = 6), 'ru'),
+                 'Подгонка не удалась')
+    expect_equal(LinearityApp:::comparison_status(data.frame(status = 'not_converged', n.levels = 7,
+                                                             n.levels.required = 6), 'ru'),
                  'Подгонка не сошлась')
 
     tab <- LinearityApp:::comparison_table(compare_models(std), 'ru')
@@ -222,6 +228,55 @@ test_that('models are compared on a common scale', {
     # every model fitted: no column of notes
     expect_false(tr('compare.note_column', 'ru') %in% names(tab))
     expect_true(tr('compare.lowest_aic', 'ru') %in% names(tab))
+})
+
+test_that('only converged starts of the logistic fits are compared', {
+    # The Griess standards do not reach the upper plateau: the fits need a few hundred iterations
+    std <- calculate(load_sample('griess'), 'LRM')$calibration_pool
+    std <- std[!is.na(std$OD), ]
+    shape <- list(model = '4PL', log_scale = FALSE)
+    # the stop codes taken as convergence
+    converged <- LinearityApp:::lm_converged
+    expect_true(all(vapply(c(1:4, 6:8), converged, logical(1))))
+    expect_false(any(vapply(c(-1, 0, 5, 9, NA), converged, logical(1))))
+
+    # with the default limits every model and weighting converges
+    for (weights in weighting_schemes()) {
+        cmp <- compare_models(std, weights = weights)
+        expect_true(all(cmp$status == 'ok'), info = weights)
+    }
+
+    # the iterations are limited to two: the estimates are finite, but no start converges
+    local_mocked_bindings(logistic_control = function(n_par) minpack.lm::nls.lm.control(maxiter = 2))
+    res <- suppressWarnings(minpack.lm::nls.lm(
+        par = LinearityApp:::start_4pl(std$conc, std$OD), control = LinearityApp:::logistic_control(4),
+        fn = function(p) std$OD - LinearityApp:::curve_fun(shape, std$conc, p)))
+    expect_true(all(is.finite(unlist(res$par))))
+    expect_true(is.finite(sum(res$fvec^2)))
+    expect_false(converged(res$info))
+    for (model in c('4PL', '5PL')) {
+        w <- rep(1, nrow(std))
+        expect_equal(LinearityApp:::fit_logistic(model, std$conc, std$OD, w), list(status = 'not_converged'))
+        expect_error(fit_curve(std, model), 'did not converge', class = 'lin_error')
+    }
+    expect_error(calculate(load_sample('griess'), '4PL'), 'did not converge')
+
+    # in the comparison: no statistics, not marked, and the reason in the note
+    expect_no_warning(cmp <- compare_models(std))
+    logistic <- cmp$model %in% c('4PL', '5PL')
+    expect_equal(cmp$status[logistic], rep('not_converged', 2))
+    expect_true(all(is.na(cmp$AIC[logistic])))
+    expect_true(all(is.na(cmp$BIC[logistic])))
+    expect_false(any(cmp$lowest.aic[logistic]))
+    expect_equal(sum(cmp$lowest.aic), 1)
+    expect_equal(cmp$status[!logistic], rep('ok', sum(!logistic)))
+    for (lang in supported_languages()) {
+        tab <- LinearityApp:::comparison_table(cmp, lang)
+        expect_equal(tab[[tr('compare.note_column', lang)]][logistic], rep(tr('compare.not_converged', lang), 2))
+        expect_equal(tab[[tr('compare.aic', lang)]][logistic], c('', ''))
+        expect_equal(tab[[tr('compare.bic', lang)]][logistic], c('', ''))
+    }
+    expect_equal(LinearityApp:::comparison_table(cmp, 'en')$Note[logistic], rep('Fit did not converge', 2))
 })
 
 test_that('the common set of wells does not depend on the model', {

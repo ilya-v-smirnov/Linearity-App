@@ -14,7 +14,8 @@ comparison_status(cmp, lang)
 \value{
 Character vector, one text per model: empty for the fitted
 models, otherwise the reason (too few standard levels, with the numbers
-available and required, or a fit that failed).
+available and required, a fit that did not converge or a fit that
+failed).
 }
 \description{
 Why a Compared Model Is Not Fitted

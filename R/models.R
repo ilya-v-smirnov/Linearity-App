@@ -321,51 +321,98 @@ start_4pl <- function(x, y, extend = 0.1) {
 }
 
 
+#' Control of the Levenberg-Marquardt Fits
+#'
+#' The limit on the calls to the residual function is set from the limit on
+#' the iterations (an iteration of `nls.lm` without an analytic Jacobian
+#' takes at least one call per parameter and one more), so that the
+#' iterations are the limit that applies; the default of `nls.lm` (100 calls
+#' per parameter) stops a slow fit after about a hundred iterations. `nls.lm`
+#' does not iterate more than 1024 times.
+#'
+#' @param n_par Number of parameters.
+#'
+#' @return An `nls.lm.control` list.
+#' @keywords internal
+logistic_control <- function(n_par) {
+    maxiter <- 1000
+    minpack.lm::nls.lm.control(maxiter = maxiter, maxfev = 2 * maxiter * (n_par + 1))
+}
+
+
+#' Has a Levenberg-Marquardt Fit Converged?
+#'
+#' @param info The stop code of `minpack.lm::nls.lm`.
+#'
+#' @return `TRUE` for the convergence tests (1-4: relative reduction of the
+#'   sum of squares, relative change of the parameters, orthogonality of the
+#'   residuals to the Jacobian) and for a solution that cannot be improved at
+#'   machine precision (6-8); `FALSE` for improper input (0) and for the limits
+#'   on the calls (5) and on the iterations (-1 and 9).
+#' @keywords internal
+lm_converged <- function(info) {
+    isTRUE(info %in% c(1:4, 6:8))
+}
+
+
 #' Fit a Logistic Model with Several Starting Points
 #'
 #' Minimises the weighted residual sum of squares with the Levenberg-Marquardt
 #' algorithm (`minpack.lm::nls.lm`) from several starting points and returns
-#' the best solution. `nls.lm` is used directly (not `nlsLM`), because
-#' building an `nls` object fails when the parameters are not identifiable
-#' (e.g. the upper asymptote is not reached), although the curve itself is
-#' well determined.
+#' the best converged solution (see [lm_converged()]): a start stopped by a
+#' limit is not compared, even when its estimates are finite. `nls.lm` is
+#' used directly (not `nlsLM`), because building an `nls` object fails when
+#' the parameters are not identifiable (e.g. the upper asymptote is not
+#' reached), although the curve itself is well determined.
 #'
 #' @param model `"4PL"` or `"5PL"`.
 #' @param x,y,w Concentrations, ODs and weights.
 #'
-#' @return A list with `par` (named internal parameters) and `rss` (weighted
-#'   residual sum of squares), or `NULL` if no start converged.
+#' @return A list with `status` `"ok"`, `par` (named internal parameters) and
+#'   `rss` (weighted residual sum of squares); `list(status =
+#'   "not_converged")` if some start gave finite estimates but none
+#'   converged; `NULL` if no start gave finite estimates.
 #' @keywords internal
 fit_logistic <- function(model, x, y, w) {
     shape <- list(model = model, log_scale = FALSE)
-    ctrl <- minpack.lm::nls.lm.control(maxiter = 500)
 
     try_fit <- function(start, lower = NULL) {
+        # A start stopped by a limit warns; it is told by its stop code instead
         res <- tryCatch(
-            minpack.lm::nls.lm(par = start, lower = lower, control = ctrl,
-                               fn = function(p) sqrt(w) * (y - curve_fun(shape, x, p))),
+            suppressWarnings(
+                minpack.lm::nls.lm(par = start, lower = lower, control = logistic_control(length(start)),
+                                   fn = function(p) sqrt(w) * (y - curve_fun(shape, x, p)))),
             error = function(e) NULL)
         if (is.null(res)) return(NULL)
         par <- unlist(res$par)
         names(par) <- names(start)
         rss <- sum(res$fvec^2)
         if (!all(is.finite(par)) || !is.finite(rss)) return(NULL)
-        list(par = par, rss = rss)
+        list(par = par, rss = rss, converged = lm_converged(res$info))
     }
     best_of <- function(fits) {
         fits <- Filter(Negate(is.null), fits)
         if (length(fits) == 0) return(NULL)
         fits[[which.min(vapply(fits, function(f) f$rss, 0))]]
     }
+    result <- function(fits) {
+        fits <- Filter(Negate(is.null), fits)
+        if (length(fits) == 0) return(NULL)
+        best <- best_of(Filter(function(f) f$converged, fits))
+        if (is.null(best)) return(list(status = 'not_converged'))
+        list(status = 'ok', par = best$par, rss = best$rss)
+    }
 
     fits4 <- lapply(c(0.1, 0.5, 1, 3), function(e) try_fit(start_4pl(x, y, e)))
-    best4 <- best_of(fits4)
-    if (model == '4PL') return(best4)
+    if (model == '4PL') return(result(fits4))
 
+    # The best 4PL solution is only a start of the 5PL fit: converged if possible
+    start4 <- best_of(Filter(function(f) f$converged, fits4))
+    if (is.null(start4)) start4 <- best_of(fits4)
     lower <- c(a = -Inf, b = -Inf, lc = -Inf, d = -Inf, g = 0.05)
     starts <- list(c(start_4pl(x, y, 0.1), g = 1))
-    if (!is.null(best4)) starts <- c(list(c(best4$par, g = 1)), starts)
-    best_of(lapply(starts, function(s) try_fit(s, lower)))
+    if (!is.null(start4)) starts <- c(list(c(start4$par, g = 1)), starts)
+    result(lapply(starts, function(s) try_fit(s, lower)))
 }
 
 
@@ -459,6 +506,7 @@ fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'n
     } else {
         best <- fit_logistic(model, x, y, w)
         if (is.null(best)) lin_abort('error.fit_failed', model = model)
+        if (best$status == 'not_converged') lin_abort('error.fit_not_converged', model = model)
         object <- NULL
         par <- best$par
         rss <- best$rss
@@ -671,7 +719,8 @@ information_criteria <- function(fit) {
 #'   have `NA` statistics. Besides the statistics: `n.used` (wells in the
 #'   fit), `n.failed` (wells of the fit without a back-calculated
 #'   concentration), `n.available` (wells of the common set), `status`
-#'   (`"ok"`, `"too_few_levels"` or `"fit_failed"`), `n.levels` (standard
+#'   (`"ok"`, `"too_few_levels"`, `"not_converged"` (no start of the
+#'   optimiser converged, see [fit_logistic()]) or `"fit_failed"`), `n.levels` (standard
 #'   levels the model can use) and `n.levels.required` (the number of
 #'   parameters plus one, as for the calibration), the list columns `wells`
 #'   (IDs of the wells used; `NULL` if not fitted) and `dropped` (IDs left
@@ -692,9 +741,10 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
                             max.abs.error = NA_real_, lof.p = NA_real_)
         row <- list(stats = stats, wells = NULL, dropped = keys[!usable])
         if (n_levels < n_params(m) + 1) return(row)
-        fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) NULL)
-        if (is.null(fit)) {
-            row$stats$status <- 'fit_failed'
+        fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) e)
+        if (inherits(fit, 'error')) {
+            # No statistics: a fit stopped by a limit has no AIC to compare
+            row$stats$status <- if (identical(fit$key, 'error.fit_not_converged')) 'not_converged' else 'fit_failed'
             return(row)
         }
         stats$status <- 'ok'

@@ -12,15 +12,17 @@ fit_logistic(model, x, y, w)
 \item{x, y, w}{Concentrations, ODs and weights.}
 }
 \value{
-A list with \code{par} (named internal parameters) and \code{rss} (weighted
-residual sum of squares), or \code{NULL} if no start converged.
+A list with \code{status} \code{"ok"}, \code{par} (named internal parameters) and
+\code{rss} (weighted residual sum of squares); \code{list(status = "not_converged")} if some start gave finite estimates but none
+converged; \code{NULL} if no start gave finite estimates.
 }
 \description{
 Minimises the weighted residual sum of squares with the Levenberg-Marquardt
 algorithm (\code{minpack.lm::nls.lm}) from several starting points and returns
-the best solution. \code{nls.lm} is used directly (not \code{nlsLM}), because
-building an \code{nls} object fails when the parameters are not identifiable
-(e.g. the upper asymptote is not reached), although the curve itself is
-well determined.
+the best converged solution (see \code{\link[=lm_converged]{lm_converged()}}): a start stopped by a
+limit is not compared, even when its estimates are finite. \code{nls.lm} is
+used directly (not \code{nlsLM}), because building an \code{nls} object fails when
+the parameters are not identifiable (e.g. the upper asymptote is not
+reached), although the curve itself is well determined.
 }
 \keyword{internal}
