@@ -19,9 +19,12 @@ A shiny tag.
 }
 \description{
 A green, orange or red box with the acceptance of the calibration (the
-standards only; the quality controls are assessed in the result summary),
-the accepted calibration range, the number of accepted standard levels and
-the reason of a rejection. Orange: accepted, but the CV is assessed for
+standards only; the quality controls are assessed in the result summary).
+Accepted: the calibration range, the levels not accepted inside it (allowed
+by the criteria) and the number of accepted levels. Rejected: no calibration
+range, the number of accepted levels, the levels not accepted and the range
+applied to the samples, whose concentrations are not reportable. Orange:
+accepted, but the CV is assessed for
 fewer accepted levels than required (levels without replicates). With an
 unavailable background (see \code{\link[=background_summary]{background_summary()}}) the verdict is
 suspended: a red box says so instead.

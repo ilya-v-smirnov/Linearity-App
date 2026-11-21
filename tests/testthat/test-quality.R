@@ -345,10 +345,52 @@ test_that('the verdict of the calibration is shown with the model parameters', {
     expect_match(html, 'Accepted calibration range: 1\u201364 \u00b5M', fixed = TRUE)
     expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'range: 1\u201364</p>', fixed = TRUE)
 
+    # a level not accepted inside an accepted range is named
+    expect_false(grepl('Not accepted', html, fixed = TRUE))
+    gap <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
+    expect_true(gap$quality$calibration$accepted)
+    expect_match(as.character(LinearityApp:::verdict_ui(gap, 'en')), '<p>Not accepted inside the range: 8</p>',
+                 fixed = TRUE)
+
     # failing quality controls reject the run, not the calibration
     qc <- calculate(run_data(qc = data.frame(id = 'QC-M', nominal = 10, od = 0.9)), 'LRM')
     expect_false(qc$quality$accepted)
     expect_match(as.character(LinearityApp:::verdict_ui(qc, 'en')), 'Calibration accepted', fixed = TRUE)
+})
+
+test_that('a rejected calibration has no range, and its concentrations are not reportable', {
+    # Griess without background subtraction: only 3.12 and 50 of seven levels are accepted
+    r <- calculate(load_sample('griess'), 'LRM', subtract_background = FALSE)
+    cal <- r$quality$calibration
+    expect_false(cal$accepted)
+    expect_equal(c(cal$lloq, cal$uloq), c(3.125, 50))
+    html <- as.character(LinearityApp:::verdict_ui(r, 'en', unit = 'nM'))
+    expect_match(html, 'Calibration not accepted', fixed = TRUE)
+    expect_false(grepl('Accepted calibration range', html, fixed = TRUE))
+    expect_match(html, '<p>Calibration range: not established</p>', fixed = TRUE)
+    expect_match(html, '<p>Accepted standard levels: 2 of 7 (6 required)</p>', fixed = TRUE)
+    expect_match(html, '<p>Not accepted: 1.56, 6.25, 12.5, 25, 100</p>', fixed = TRUE)
+    expect_match(html, '<p>Range applied to the samples: 3.12–50 nM (not reportable)</p>', fixed = TRUE)
+    # the levels are not repeated as a bullet
+    expect_false(grepl('<li>', html, fixed = TRUE))
+    ru <- as.character(LinearityApp:::verdict_ui(r, 'ru'))
+    expect_match(ru, 'Диапазон калибровки: не установлен', fixed = TRUE)
+
+    # the concentrations are kept for inspection, with a note instead of a narrowed range
+    notes <- message_text(r$notes)
+    expect_false(any(grepl('quantification range is limited', notes, fixed = TRUE)))
+    expect_match(notes, 'shown for inspection only and are not reportable (range applied to the samples: 3.12–50)',
+                 fixed = TRUE, all = FALSE)
+    expect_true(any(!is.na(r$result$conc)))
+    # the report says the same
+    s <- LinearityApp:::quality_summary(r, 'en')
+    expect_equal(s$range, 'Quantification range: not established (range applied to the samples: 3.12 – 50, not reportable)')
+    expect_false(any(grepl('standard levels meet the criteria', s$reasons, fixed = TRUE)))
+
+    # an accepted calibration keeps its range and the note of a narrowed range
+    ok <- calculate(load_sample('griess'), 'LRM')
+    expect_false(any(grepl('not reportable', message_text(ok$notes), fixed = TRUE)))
+    expect_match(LinearityApp:::quality_summary(ok, 'en')$range, '^Quantification range \\(LLOQ')
 })
 
 test_that('a planned singlet is told apart from a replicate left alone', {

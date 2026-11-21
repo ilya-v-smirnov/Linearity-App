@@ -411,6 +411,7 @@ note:
   par_unidentifiable: "Some parameters of the {model} model are not determined by the standards (e.g. the upper asymptote is not reached): the curve and the concentrations are valid, but the confidence intervals of the parameters are not reliable."
   no_accepted_standards: "No standard level meets the acceptance criteria: the full range of standards is used for quantification."
   range_narrowed: "The quantification range is limited to the accepted standard levels: LLOQ = {lloq}, ULOQ = {uloq}."
+  not_reportable: "The calibration is not accepted: the concentrations are shown for inspection only and are not reportable (range applied to the samples: {lloq}–{uloq})."
 
 quality:
   status_outside_interval: "✗ outside the interval"
@@ -430,6 +431,11 @@ quality:
   reason_no_cv: "The CV criterion was checked for only {n_cv} accepted standard levels ({needed} required): {n} accepted levels have a single result."
   warn_cv_not_assessed: "The CV of the standards was checked for only {n_cv} accepted levels ({needed} required): {n} levels have a single result."
   calibration_range: "Accepted calibration range: {lloq}–{uloq}{unit}"
+  range_not_established: "Calibration range: not established"
+  range_used: "Range applied to the samples: {lloq}–{uloq}{unit} (not reportable)"
+  range_rejected: "Quantification range: not established (range applied to the samples: {lloq} – {uloq}, not reportable)"
+  failed_levels: "Not accepted: {levels}"
+  failed_inside: "Not accepted inside the range: {levels}"
   levels: "Accepted standard levels: {n} of {total} ({needed} required)"
   section_standards: "Standards (level means)"
   section_points: "Individual standard points"

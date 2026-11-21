@@ -658,12 +658,20 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
             notes <- c(notes, list(lin_message('note.no_accepted_standards')))
         } else if (calibration$lloq > conc_range[1] || calibration$uloq < conc_range[2]) {
             conc_range <- c(calibration$lloq, calibration$uloq)
-            notes <- c(notes, list(lin_message('note.range_narrowed', lloq = signif(conc_range[1], 3),
-                                               uloq = signif(conc_range[2], 3))))
+            # A rejected calibration has no quantification range (see below)
+            if (calibration$accepted) {
+                notes <- c(notes, list(lin_message('note.range_narrowed', lloq = signif(conc_range[1], 3),
+                                                   uloq = signif(conc_range[2], 3))))
+            }
         }
     }
     if (!is.null(fit$interval)) {
         conc_range <- c(max(conc_range[1], fit$interval[1]), min(conc_range[2], fit$interval[2]))
+    }
+    # The concentrations of a rejected calibration are kept for inspection, not for reporting
+    if (!calibration$accepted) {
+        notes <- c(notes, list(lin_message('note.not_reportable', lloq = signif(conc_range[1], 3),
+                                           uloq = signif(conc_range[2], 3))))
     }
     if (!monotonic) {
         x_lim <- working_interval(fit)

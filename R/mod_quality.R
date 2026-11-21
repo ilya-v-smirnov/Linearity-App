@@ -159,11 +159,17 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
     }
     title <- if (identical(q$background, 'unavailable')) 'quality.background_unavailable' else
         if (q$accepted) 'quality.accepted' else 'quality.rejected'
+    lloq <- signif(result$calibration_range[1], 3)
+    uloq <- signif(result$calibration_range[2], 3)
+    # A rejected calibration has no quantification range: the range applied to the samples is not reportable
+    range <- if (isTRUE(cal$accepted)) tr('quality.range', lang, lloq = lloq, uloq = uloq) else
+        tr('quality.range_rejected', lang, lloq = lloq, uloq = uloq)
+    # The rejection of the calibration is told by the line of the levels
+    reasons <- Filter(function(m) !identical(m$key, 'quality.reason_calibration'), q$reasons)
     list(title = tr(title, lang),
-         range = tr('quality.range', lang, lloq = signif(result$calibration_range[1], 3),
-                    uloq = signif(result$calibration_range[2], 3)),
+         range = range,
          levels = tr('quality.levels', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed),
-         reasons = message_text(q$reasons, lang),
+         reasons = message_text(reasons, lang),
          warnings = message_text(warnings, lang))
 }
 
@@ -248,9 +254,12 @@ background_unavailable_ui <- function(lang) {
 #' Verdict of the Calibration
 #'
 #' A green, orange or red box with the acceptance of the calibration (the
-#' standards only; the quality controls are assessed in the result summary),
-#' the accepted calibration range, the number of accepted standard levels and
-#' the reason of a rejection. Orange: accepted, but the CV is assessed for
+#' standards only; the quality controls are assessed in the result summary).
+#' Accepted: the calibration range, the levels not accepted inside it (allowed
+#' by the criteria) and the number of accepted levels. Rejected: no calibration
+#' range, the number of accepted levels, the levels not accepted and the range
+#' applied to the samples, whose concentrations are not reportable. Orange:
+#' accepted, but the CV is assessed for
 #' fewer accepted levels than required (levels without replicates). With an
 #' unavailable background (see [background_summary()]) the verdict is
 #' suspended: a red box says so instead.
@@ -267,15 +276,25 @@ verdict_ui <- function(result, lang, unit = '') {
     cal <- result$quality$calibration
     accepted <- isTRUE(cal$accepted)
     no_cv <- accepted && identical(cal$status, 'accepted_no_cv')
-    range <- tr('quality.calibration_range', lang, lloq = signif(result$calibration_range[1], 3),
-                uloq = signif(result$calibration_range[2], 3),
-                unit = if (nzchar(unit)) paste0(' ', unit) else '')
+    unit <- if (nzchar(unit)) paste0(' ', unit) else ''
+    used <- list(lloq = signif(result$calibration_range[1], 3), uloq = signif(result$calibration_range[2], 3),
+                 unit = unit)
     levels <- tr('quality.levels', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed)
-    reason <- if (!accepted) {
-        tr('quality.reason_calibration', lang, n = cal$n_pass, total = cal$n_levels, needed = cal$n_needed)
+    failed <- failed_levels(result$quality$standards)
+    if (accepted) {
+        range <- do.call(tr, c(list('quality.calibration_range', lang), used))
+        # Single levels not accepted between the LLOQ and the ULOQ are allowed by the criteria; they are named
+        inside <- failed_levels(result$quality$standards, c(cal$lloq, cal$uloq))
+        lines <- list(range, if (length(inside) > 0) tr('quality.failed_inside', lang, levels = inside), levels)
+    } else {
+        # No calibration range; the range applied to the samples is shown as not reportable
+        lines <- list(tr('quality.range_not_established', lang), levels,
+                      if (length(failed) > 0) tr('quality.failed_levels', lang, levels = failed),
+                      do.call(tr, c(list('quality.range_used', lang), used)))
     }
-    if (no_cv) {
-        reason <- tr('quality.reason_no_cv', lang, n_cv = cal$n_cv, needed = cal$n_cv_needed, n = cal$n_no_cv)
+    # The bullet adds what the lines do not say: why the CV is not assessed
+    reason <- if (no_cv) {
+        tr('quality.reason_no_cv', lang, n_cv = cal$n_cv, needed = cal$n_cv_needed, n = cal$n_no_cv)
     }
     key <- if (no_cv) 'calibration_accepted_no_cv' else if (accepted) 'calibration_accepted' else
         'calibration_rejected'
@@ -284,8 +303,26 @@ verdict_ui <- function(result, lang, unit = '') {
     shiny::div(class = 'quality-verdict',
                shiny::div(class = paste('alert', style),
                           shiny::h4(shiny::icon(icon), ' ', tr(paste0('quality.', key), lang)),
-                          shiny::p(range), shiny::p(levels),
+                          lapply(Filter(Negate(is.null), lines), shiny::p),
                           if (!is.null(reason)) shiny::tags$ul(shiny::tags$li(reason))))
+}
+
+
+#' Standard Levels Not Accepted as Text
+#'
+#' @param standards Output of [assess_standards()].
+#' @param within Optional range (LLOQ, ULOQ): only the levels strictly inside
+#'   it.
+#'
+#' @return The concentrations of the levels not accepted, from the lowest,
+#'   joined by commas; `character(0)` if there are none.
+#' @keywords internal
+failed_levels <- function(standards, within = NULL) {
+    if (is.null(standards) || nrow(standards) == 0) return(character(0))
+    conc <- sort(standards$conc[!standards$pass])
+    if (!is.null(within)) conc <- conc[!is.na(within[1]) & conc > within[1] & conc < within[2]]
+    if (length(conc) == 0) return(character(0))
+    paste(signif(conc, 3), collapse = ', ')
 }
 
 
