@@ -395,7 +395,8 @@ flag:
   no_background: "Background unavailable"
 
 note:
-  blank_scatter: "The background wells scatter by {range} OD (maximum minus minimum), more than the lowest calibrator {level} ({conc}) rises above the background ({signal} OD): the background is not reliable near the LLOQ. Check the background wells in Standard curve → Background."
+  blank_range: "Blank OD range ({range} OD, maximum minus minimum) exceeds the net signal of the lowest calibrator {level} ({conc}): {signal} OD above the background. Check the background wells in Standard curve → Background."
+  blank_signal: "Mean signal of the lowest calibrator {level} ({conc}) is at or below the selected background: {signal} OD after subtraction. Check the background wells in Standard curve → Background."
   no_background_wells: "No background is subtracted: the plate has no background wells."
   blank_zero_decreasing: "The curve decreases with the concentration: a weak signal means a high concentration, so samples with OD ≤ blank do not get concentration 0."
   no_background: "No background is subtracted: “No background subtraction” is chosen."

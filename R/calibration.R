@@ -133,30 +133,56 @@ legacy_background <- function(data) {
 }
 
 
-#' Scatter of the Background Wells Against the Lowest Calibrator
+#' Background Wells Against the Lowest Calibrator
 #'
-#' The background wells used should agree much better than the signal of the
-#' lowest calibrator rises above them. The check fails when the range of the
-#' wells used (maximum minus minimum OD) exceeds the signal of the lowest
-#' standard level above the background (its mean OD as measured minus the
-#' value subtracted).
+#' Observed values: the range of the background wells used (maximum minus
+#' minimum OD, with two wells or more) and the net signal of the lowest
+#' standard level by concentration (its mean OD as measured minus the value
+#' subtracted). The lowest level is not taken for a validated LLOQ.
+#'
+#' Two findings, only for a calibration whose signal increases with the
+#' concentration (judged from the standards as measured: the mean OD of the
+#' highest level above that of the lowest one), where the comparison makes
+#' sense; on a decreasing calibration (e.g. a competitive ELISA) the lowest
+#' concentration gives the highest signal and nothing is concluded:
+#'
+#' * `"signal_at_background"`: the net signal of the lowest calibrator is
+#'   zero or negative (with any number of background wells);
+#' * `"range_exceeds_signal"`: the net signal is positive, but the range of
+#'   the background wells exceeds it.
 #'
 #' @param od ODs of the background wells used.
 #' @param value Value subtracted.
 #' @param standards Standard wells as measured, with `conc` and `OD`.
 #'
-#' @return A list with `range`, `conc` and `level` (concentration and name of
-#'   the lowest standard level, see [standard_names()]), `signal` and `warn`;
-#'   `NULL` with fewer than two wells or without standards.
+#' @return A list with `range` (`NA` with a single well), `conc` and `level`
+#'   (concentration and name of the lowest standard level, see
+#'   [standard_names()]), `signal`, `direction` (`"increasing"`,
+#'   `"decreasing"`, or `NA` with a single level or equal means), `reason`
+#'   (one of the findings above, `NULL` for none) and `warn` (a finding);
+#'   `NULL` without background wells or without standards.
 #' @keywords internal
 blank_scatter <- function(od, value, standards) {
     standards <- standards[!is.na(standards$conc) & !is.na(standards$OD), , drop = FALSE]
-    if (length(od) < 2 || nrow(standards) == 0) return(NULL)
+    if (length(od) == 0 || nrow(standards) == 0) return(NULL)
     lowest <- min(standards$conc)
-    signal <- mean(standards$OD[standards$conc == lowest]) - value
-    spread <- max(od) - min(od)
+    highest <- max(standards$conc)
+    low_od <- mean(standards$OD[standards$conc == lowest])
+    high_od <- mean(standards$OD[standards$conc == highest])
+    direction <- if (highest == lowest || high_od == low_od) NA_character_ else
+        if (high_od > low_od) 'increasing' else 'decreasing'
+    signal <- low_od - value
+    spread <- if (length(od) >= 2) max(od) - min(od) else NA_real_
+    reason <- NULL
+    if (identical(direction, 'increasing')) {
+        if (signal <= 0) {
+            reason <- 'signal_at_background'
+        } else if (!is.na(spread) && spread > signal) {
+            reason <- 'range_exceeds_signal'
+        }
+    }
     list(range = spread, conc = lowest, level = standard_names(lowest, standards$conc), signal = signal,
-         warn = spread > signal)
+         direction = direction, reason = reason, warn = !is.null(reason))
 }
 
 

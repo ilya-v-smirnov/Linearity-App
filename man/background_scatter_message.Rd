@@ -2,7 +2,7 @@
 % Please edit documentation in R/background_ui.R
 \name{background_scatter_message}
 \alias{background_scatter_message}
-\title{Warning About the Scatter of the Background Wells}
+\title{Warning About the Background Wells and the Lowest Calibrator}
 \usage{
 background_scatter_message(bg)
 }
@@ -11,9 +11,11 @@ background_scatter_message(bg)
 \code{\link[=background_summary]{background_summary()}}).}
 }
 \value{
-A \code{lin_message} (see \code{\link[=blank_scatter]{blank_scatter()}}).
+A \code{lin_message} for the finding of \code{\link[=blank_scatter]{blank_scatter()}}: the net
+signal of the lowest calibrator at or below the background, or the range
+of the background wells above that signal.
 }
 \description{
-Warning About the Scatter of the Background Wells
+Warning About the Background Wells and the Lowest Calibrator
 }
 \keyword{internal}

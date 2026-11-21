@@ -659,7 +659,8 @@ test_that('background wells are excluded and restored by clicking on the plot', 
                       args = list(lang = 'en', data = shiny::reactive(data), rounding = rounding_3()), {
         session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
         expect_equal(session$returned$result()$nc_value, 0.125)
-        expect_match(output$background_warning$html, 'The background wells scatter by 0.1000 OD', fixed = TRUE)
+        expect_match(output$background_warning$html, 'Mean signal of the lowest calibrator S7 (0.031) is at or below',
+                     fixed = TRUE)
         clicked_point <<- high
         session$setInputs(background_click = list(x = 1, y = 0.175))
         session$setInputs(reason_choice = 'outlier', reason = '', confirm_exclude = 1)

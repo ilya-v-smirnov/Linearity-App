@@ -75,15 +75,21 @@ background_notes <- function(bg, lang = 'en') {
 }
 
 
-#' Warning About the Scatter of the Background Wells
+#' Warning About the Background Wells and the Lowest Calibrator
 #'
 #' @inheritParams background_table
 #'
-#' @return A `lin_message` (see [blank_scatter()]).
+#' @return A `lin_message` for the finding of [blank_scatter()]: the net
+#'   signal of the lowest calibrator at or below the background, or the range
+#'   of the background wells above that signal.
 #' @keywords internal
 background_scatter_message <- function(bg) {
     sc <- bg$scatter
-    lin_message('note.blank_scatter', range = sprintf('%.4f', sc$range), signal = sprintf('%.4f', sc$signal),
+    if (identical(sc$reason, 'signal_at_background')) {
+        return(lin_message('note.blank_signal', signal = sprintf('%.4f', sc$signal), level = sc$level,
+                           conc = signif(sc$conc, 3)))
+    }
+    lin_message('note.blank_range', range = sprintf('%.4f', sc$range), signal = sprintf('%.4f', sc$signal),
                 level = sc$level, conc = signif(sc$conc, 3))
 }
 

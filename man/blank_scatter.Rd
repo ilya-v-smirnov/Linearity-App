@@ -2,7 +2,7 @@
 % Please edit documentation in R/calibration.R
 \name{blank_scatter}
 \alias{blank_scatter}
-\title{Scatter of the Background Wells Against the Lowest Calibrator}
+\title{Background Wells Against the Lowest Calibrator}
 \usage{
 blank_scatter(od, value, standards)
 }
@@ -14,15 +14,30 @@ blank_scatter(od, value, standards)
 \item{standards}{Standard wells as measured, with \code{conc} and \code{OD}.}
 }
 \value{
-A list with \code{range}, \code{conc} and \code{level} (concentration and name of
-the lowest standard level, see \code{\link[=standard_names]{standard_names()}}), \code{signal} and \code{warn};
-\code{NULL} with fewer than two wells or without standards.
+A list with \code{range} (\code{NA} with a single well), \code{conc} and \code{level}
+(concentration and name of the lowest standard level, see
+\code{\link[=standard_names]{standard_names()}}), \code{signal}, \code{direction} (\code{"increasing"},
+\code{"decreasing"}, or \code{NA} with a single level or equal means), \code{reason}
+(one of the findings above, \code{NULL} for none) and \code{warn} (a finding);
+\code{NULL} without background wells or without standards.
 }
 \description{
-The background wells used should agree much better than the signal of the
-lowest calibrator rises above them. The check fails when the range of the
-wells used (maximum minus minimum OD) exceeds the signal of the lowest
-standard level above the background (its mean OD as measured minus the
-value subtracted).
+Observed values: the range of the background wells used (maximum minus
+minimum OD, with two wells or more) and the net signal of the lowest
+standard level by concentration (its mean OD as measured minus the value
+subtracted). The lowest level is not taken for a validated LLOQ.
+}
+\details{
+Two findings, only for a calibration whose signal increases with the
+concentration (judged from the standards as measured: the mean OD of the
+highest level above that of the lowest one), where the comparison makes
+sense; on a decreasing calibration (e.g. a competitive ELISA) the lowest
+concentration gives the highest signal and nothing is concluded:
+\itemize{
+\item \code{"signal_at_background"}: the net signal of the lowest calibrator is
+zero or negative (with any number of background wells);
+\item \code{"range_exceeds_signal"}: the net signal is positive, but the range of
+the background wells exceeds it.
+}
 }
 \keyword{internal}

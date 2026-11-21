@@ -473,32 +473,67 @@ test_that('an unavailable background suspends the verdict and the concentrations
     expect_match(as.character(LinearityApp:::background_modal('ru')), 'Без вычитания фона', fixed = TRUE)
 })
 
-test_that('a scatter of the blanks above the signal of the lowest calibrator is reported', {
+test_that('the blanks are compared with the net signal of the lowest calibrator, for two reasons', {
     data <- load_sample('bca')
+    keys <- well_keys(data)[data$type == 'blank']
+    s7 <- mean(data$OD[data$type == 'standard' & data$conc == 0.031])
     # the blanks of the example agree well: no warning
     ok <- calculate(data, 'LRM')
+    expect_equal(ok$background$scatter$direction, 'increasing')
     expect_false(ok$background$scatter$warn)
-    expect_false(any(grepl('scatter', message_text(ok$notes), fixed = TRUE)))
+    expect_null(ok$background$scatter$reason)
+    expect_false(any(grepl('lowest calibrator', message_text(ok$notes), fixed = TRUE)))
 
-    # blanks 0.075 and 0.175: a range of 0.1 OD, while S7 (0.031) reads about 0.0885
-    data$OD[data$type == 'blank'] <- c(0.075, 0.175)
+    # blanks 0.06 and 0.09: a range of 0.03 OD above the net signal of S7 (0.031), about 0.0135 OD
+    data$OD[data$type == 'blank'] <- c(0.06, 0.09)
     r <- calculate(data, 'LRM')
     sc <- r$background$scatter
-    expect_equal(sc$range, 0.1)
-    expect_equal(sc$conc, 0.031)
-    expect_equal(sc$level, 'S7')
-    s7 <- mean(data$OD[data$type == 'standard' & data$conc == 0.031])
-    expect_equal(sc$signal, s7 - 0.125)
-    expect_true(sc$warn)
+    expect_equal(sc$range, 0.03)
+    expect_equal(c(sc$conc, sc$level), c('0.031', 'S7'))
+    expect_equal(sc$signal, s7 - 0.075)
+    expect_gt(sc$signal, 0)
+    expect_equal(sc$reason, 'range_exceeds_signal')
     expect_match(message_text(r$notes, 'en'),
-                 sprintf('The background wells scatter by 0.1000 OD (maximum minus minimum), more than the lowest calibrator S7 (0.031) rises above the background (%.4f OD)',
-                         s7 - 0.125), fixed = TRUE, all = FALSE)
-    expect_match(message_text(r$notes, 'ru'), 'Разброс лунок фона 0.1000 OD', fixed = TRUE, all = FALSE)
+                 sprintf('Blank OD range (0.0300 OD, maximum minus minimum) exceeds the net signal of the lowest calibrator S7 (0.031): %.4f OD above the background.',
+                         s7 - 0.075), fixed = TRUE, all = FALSE)
+    expect_match(message_text(r$notes, 'ru'), 'Размах OD бланков (0.0300 OD', fixed = TRUE, all = FALSE)
+    # no conclusion about the LLOQ
+    expect_false(any(grepl('LLOQ', message_text(r$notes), fixed = TRUE)))
 
-    # with the high blank excluded a single well is left: nothing to compare
-    keys <- well_keys(data)[data$type == 'blank']
+    # blanks 0.075 and 0.175: S7 (about 0.0885) is below their mean, whatever their range
+    data$OD[data$type == 'blank'] <- c(0.075, 0.175)
+    low <- calculate(data, 'LRM')$background$scatter
+    expect_equal(low$reason, 'signal_at_background')
+    # two identical blanks above S7: the same reason, not a scatter
+    data$OD[data$type == 'blank'] <- c(0.1, 0.1)
+    same <- calculate(data, 'LRM')
+    expect_equal(same$background$scatter$range, 0)
+    expect_equal(same$background$scatter$reason, 'signal_at_background')
+    notes <- message_text(same$notes, 'en')
+    expect_match(notes, sprintf('Mean signal of the lowest calibrator S7 (0.031) is at or below the selected background: %.4f OD after subtraction.',
+                                s7 - 0.1), fixed = TRUE, all = FALSE)
+    expect_false(any(grepl('Blank OD range', notes, fixed = TRUE)))
+
+    # a single background well: no range, but the signal is still compared with it
     one <- calculate(data, 'LRM', exclude_background = data.frame(key = keys[2], reason = 'Outlier'))
-    expect_null(one$background$scatter)
+    expect_true(is.na(one$background$scatter$range))
+    expect_equal(one$background$scatter$reason, 'signal_at_background')
+    data$OD[data$type == 'blank'] <- c(0.05, 0.2)
+    single <- calculate(data, 'LRM', exclude_background = data.frame(key = keys[2], reason = 'Outlier'))
+    expect_null(single$background$scatter$reason)
+
+    # a decreasing calibration: the table and the plot stay, nothing is concluded
+    conc <- c(1, 2, 4, 8, 16)
+    dec <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'sample'),
+                      conc = c(conc, conc, NA, NA, NA), dilution = c(rep(NA, 12), 1),
+                      OD = c(rep(1.1 - 0.05 * conc, 2), 0.05, 0.35, 0.5))
+    d <- calculate(dec, 'LIN')
+    expect_equal(d$background$scatter$direction, 'decreasing')
+    expect_false(d$background$scatter$warn)
+    expect_false(any(grepl('lowest calibrator', message_text(d$notes), fixed = TRUE)))
+    expect_equal(nrow(LinearityApp:::background_wells_table(d$background, 'en')), 2)
+    expect_s3_class(LinearityApp:::plot_background(d$background, dec[dec$type == 'standard', c('conc', 'OD')]),
+                    'ggplot')
 
     # saturation and a signal at the background level are no reasons for a background well
     expect_equal(LinearityApp:::background_exclusion_reasons(), c('outlier', 'pipetting', 'bubble'))
