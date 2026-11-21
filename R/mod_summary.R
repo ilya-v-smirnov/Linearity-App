@@ -31,7 +31,7 @@ NULL
 #' @return Character vector.
 #' @keywords internal
 grouping_columns <- function(result) {
-    exclude <- c('type', 'well', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag')
+    exclude <- c('type', 'well', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag', 'OD.le.blank')
     setdiff(result_columns(names(result)), exclude)
 }
 

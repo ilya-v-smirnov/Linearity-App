@@ -212,6 +212,7 @@ compare:
 col:
   od_raw: "OD as measured"
   od_corrected: "Corrected OD"
+  od_le_blank: "OD ≤ blank"
   n_backcalc: "Back-calculated wells"
   backcalc_reason: "Not back-calculated"
   conc: "Concentration"
@@ -338,6 +339,7 @@ summary:
 
 report:
   background: "Background:"
+  at_blank: "Signal at or below the background:"
   group_title: "Experiment"
   date: "Date"
   title: "Experiment title"
@@ -391,6 +393,7 @@ flag:
 note:
   blank_scatter: "The background wells scatter by {range} OD (maximum minus minimum), more than the lowest calibrator {level} ({conc}) rises above the background ({signal} OD): the background is not reliable near the LLOQ. Check the background wells in Standard curve → Background."
   no_background_wells: "No background is subtracted: the plate has no background wells."
+  blank_zero_decreasing: "The curve decreases with the concentration: a weak signal means a high concentration, so samples with OD ≤ blank do not get concentration 0."
   no_background: "No background is subtracted: “No background subtraction” is chosen."
   background_nc_legacy: "The plate has no reagent blank or zero calibrator: its {n} negative control well(s) (NC) are subtracted as background, as in earlier versions of the app. Choose the background wells in Standard curve → Background."
   background_changed: "The background subtracted now ({value}) differs from that of earlier versions of the app ({legacy}, the geometric mean of the blank and NC wells): the results of this plate may differ from an earlier analysis."
@@ -522,6 +525,7 @@ error:
   template_counts: "The numbers of levels, series, samples and replicates must be non-negative numbers"
   no_nc: "No valid OD values in the chosen background wells"
   unknown_model: "Unknown model: {model}. Use one of: {choices}"
+  blank_rule: "Unknown rule for a signal at the background: {rule}. Use one of: {choices}"
   fit_failed: "The {model} model could not be fitted to the standards"
   weights_unknown: "Unknown weighting: {weights}"
   criteria: "Invalid acceptance criteria: {names}"
@@ -589,6 +593,12 @@ backcalc:
   beyond_vertex: "OD beyond the vertex of the parabola"
   outside_asymptotes: "OD outside fitted asymptotes"
   no_solution: "no solution"
+
+blank:
+  rule: "Signal at or below the background"
+  rule_help: "For the models on the original OD scale (linear, quadratic, logistic), where the curve can be inverted for an OD at or below the blank. The same rule applies to the calibrators, the quality controls and the samples. By the calibration range: such an OD is inverted like any other, and the calibration range decides. Not reportable: calibrators with such an OD are left out of the fit, quality controls and samples get the flag OD ≤ blank and no concentration. On log–log scales such an OD has no inverse in any case."
+  rule_range: "By the calibration range"
+  rule_exclude: "Not reportable"
 
 bg:
   plot_section: "Background wells and calibrators"

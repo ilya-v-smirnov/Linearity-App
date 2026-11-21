@@ -35,12 +35,16 @@ aggregate_result <- function(result, group_vars = 'sample.name',
 #' @param result Result table from [calculate()].
 #' @param lang Language code.
 #'
-#' @return The table with translated `flag` values.
+#' @return The table with translated `flag` values; the signal at or below
+#'   the background (`OD.le.blank`) is marked with a check mark.
 #' @export
 localize_result <- function(result, lang = 'en') {
     if (is.null(result)) return(NULL)
     if ('flag' %in% names(result)) {
         result$flag <- translate_flags(result$flag, lang)
+    }
+    if ('OD.le.blank' %in% names(result)) {
+        result$OD.le.blank <- ifelse(result$OD.le.blank %in% TRUE, '✓', '')
     }
     result
 }

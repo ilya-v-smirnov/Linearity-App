@@ -12,7 +12,8 @@ localize_result(result, lang = "en")
 \item{lang}{Language code.}
 }
 \value{
-The table with translated \code{flag} values.
+The table with translated \code{flag} values; the signal at or below
+the background (\code{OD.le.blank}) is marked with a check mark.
 }
 \description{
 Translate the Flag Column of a Result Table

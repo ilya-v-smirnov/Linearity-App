@@ -91,6 +91,7 @@ mod_report_server <- function(id, lang, curve, summary) {
                           scale = tr(scale_key(curve$model()), lang),
                           weights = weight_labels(curve$weights(), lang),
                           background = background_text(r$background, lang),
+                          at_blank = blank_rule_text(r, lang),
                           model_table = curve$coef_table(),
                           result_table = localize_result(r$result, lang),
                           means_table = summary$table(),

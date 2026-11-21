@@ -19,7 +19,8 @@ calculate(
   interval = NULL,
   background = NULL,
   exclude_background = NULL,
-  subtract_background = NULL
+  subtract_background = NULL,
+  at_blank = "range"
 )
 }
 \arguments{
@@ -45,8 +46,11 @@ columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}
 a concentration: any of \code{"below"} (under the LLOQ) and \code{"above"} (over
 the ULOQ). Their flags are kept.}
 
-\item{blank_zero}{If \code{TRUE}, samples with OD at or below the blank get
-concentration 0 (flag kept).}
+\item{blank_zero}{If \code{TRUE}, samples with OD at or below the blank and
+outside the calibration range (or without a concentration) get
+concentration 0 (flag kept). Only for a curve that increases with the
+concentration: on a decreasing curve a weak signal means a high
+concentration, the option is then ignored with a note.}
 
 \item{interval}{For the quadratic models: the monotonic interval of
 concentrations (lower and upper bound) set by the user, or \code{NULL} for the
@@ -70,6 +74,12 @@ well of the roles is usable (all excluded or without OD, or no role
 ticked), the background is unavailable: the run is not accepted, samples
 and quality controls get no concentration (flag \code{"Background unavailable"}), while the curve is fitted on the OD as measured for
 inspection.}
+
+\item{at_blank}{Rule for a signal at or below the background on the
+original OD scale, applied alike to the calibrators, quality controls and
+samples (see \code{\link[=blank_rules]{blank_rules()}}): \code{"range"} (the default) inverts it like
+any other OD, \code{"exclude"} makes it not reportable. Ignored on log10
+scales, where such a signal has no inverse.}
 }
 \value{
 A list with components:
@@ -100,9 +110,14 @@ calibration (see \code{\link[=exclusion_effect]{exclusion_effect()}}; \code{NULL
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
 \item \code{result}: sample results with \code{OD} as measured (before the blank is
 subtracted), \code{OD.corrected} (after it), \code{conc} (dilution-corrected), its confidence interval
-\code{conc.lower}, \code{conc.upper} and \code{flag};
+\code{conc.lower}, \code{conc.upper}, \code{flag} and, when some wells have a signal at
+or below the background, \code{OD.le.blank} (logical; see \code{\link[=classify_wells]{classify_wells()}});
 \item \code{qc}: quality controls with nominal and measured concentration, OD as measured,
-recovery (\%) and flag (\code{NULL} if there are no QC wells).
+recovery (\%), flag and \code{OD.le.blank} as for the samples (\code{NULL} if there
+are no QC wells);
+\item \code{at_blank}: the rule for a signal at or below the background (see
+\code{\link[=blank_rules]{blank_rules()}}); \code{increasing}: whether the curve increases with the
+concentration (see \code{\link[=curve_increasing]{curve_increasing()}}).
 }
 
 The background is the arithmetic mean of the wells of the chosen roles

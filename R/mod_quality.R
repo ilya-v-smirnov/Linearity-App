@@ -183,9 +183,10 @@ quality_summary <- function(result, lang = 'en', sample_warnings = NULL) {
 #' @return A data.frame with translated column names: level name, position,
 #'   nominal concentration, OD as measured and after the background
 #'   correction, back-calculated concentration, bias (%) and
-#'   absolute error (back-calculated minus nominal); when some points have
-#'   no back-calculated concentration, a last column with the reason (see
-#'   [inverse_reason()]).
+#'   absolute error (back-calculated minus nominal); when some points have a
+#'   signal at or below the background, a column marking them; when some
+#'   points have no back-calculated concentration, a last column with the
+#'   reason (see [inverse_reason()]).
 #' @keywords internal
 standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     std <- result$standard_data
@@ -208,6 +209,12 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
                       error = num(calc - std$conc))
     cols <- c('exclusion.standard', 'exclusion.key', 'col.nominal', 'col.od_raw', 'col.od_corrected', 'col.calc',
               'col.bias', 'col.error')
+    # The signal at or below the background, as for the samples and the quality controls
+    at_blank <- !is.na(std$OD) & std$OD <= 0
+    if (any(at_blank)) {
+        out$at_blank <- ifelse(at_blank, '✓', '')
+        cols <- c(cols, 'col.od_le_blank')
+    }
     if (any(!is.na(reason))) {
         out$reason <- ifelse(is.na(reason), '', vapply(paste0('backcalc.', reason), tr, '', lang = lang))
         if (highlight) out$reason <- ifelse(is.na(reason), '', paste0('<span class="crit-fail">', out$reason, '</span>'))

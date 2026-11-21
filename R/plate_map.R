@@ -116,7 +116,7 @@ well_order <- function(well, by = 'column') {
 #' @return Character vector of column names.
 #' @keywords internal
 sample_columns <- function(data) {
-    setdiff(names(data), c('well', 'type', 'dilution', 'conc', 'OD', 'OD.corrected', 'id', 'rep'))
+    setdiff(names(data), c('well', 'type', 'dilution', 'conc', 'OD', 'OD.corrected', 'OD.le.blank', 'id', 'rep'))
 }
 
 

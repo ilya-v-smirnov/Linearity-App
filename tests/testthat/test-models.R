@@ -461,8 +461,9 @@ test_that('a flat calibration line has no inverse', {
         expect_equal(LinearityApp:::inverse_fun(fit, 0.3), 3)
         fit$par[['b']] <- 0
         expect_true(all(is.na(LinearityApp:::inverse_fun(fit, c(0.2, 0.5, 0.9)))), info = linear)
-        expect_equal(LinearityApp:::assign_flags(0.5, LinearityApp:::inverse_fun(fit, 0.5), c(1, 8)),
-                     FLAGS$no_solution)
+        cls <- LinearityApp:::classify_wells(fit, 0.5, LinearityApp:::inverse_fun(fit, 0.5), c(1, 8))
+        expect_equal(cls$flag, FLAGS$no_solution)
+        expect_equal(cls$inverse, 'flat')
     }
 })
 

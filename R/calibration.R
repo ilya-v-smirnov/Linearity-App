@@ -276,17 +276,20 @@ standard_names <- function(conc, levels = conc) {
 
 #' Select Standard Wells Usable for Fitting
 #'
-#' Standards with a missing OD, (on log scales) a non-positive OD after
-#' background subtraction, or excluded by the user are not used for fitting.
+#' Standards with a missing OD, a non-positive OD after background
+#' subtraction (on log scales, or with the rule `"exclude"`, see
+#' [blank_rules()]), or excluded by the user are not used for fitting.
 #'
 #' @param standard_data Background-subtracted standard rows with `.key`.
 #' @param log_scale Logical; `TRUE` if the model is fitted on log10 scales.
 #' @param exclude Data.frame with columns `key` and `reason`, or `NULL`.
+#' @param at_blank Rule for a signal at or below the background (see
+#'   [blank_rules()]).
 #'
 #' @return A list with `used` and `excluded` data.frames; `excluded` has a
 #'   `reason` column with flag codes and a `comment` column with the user's reason.
 #' @keywords internal
-split_standards <- function(standard_data, log_scale = TRUE, exclude = NULL) {
+split_standards <- function(standard_data, log_scale = TRUE, exclude = NULL, at_blank = 'range') {
     reason <- rep(NA_character_, nrow(standard_data))
     comment <- rep(NA_character_, nrow(standard_data))
     if (!is.null(exclude) && nrow(exclude) > 0) {
@@ -295,7 +298,9 @@ split_standards <- function(standard_data, log_scale = TRUE, exclude = NULL) {
         reason[manual] <- FLAGS$excluded
         comment[manual] <- as.character(exclude$reason[idx[manual]])
     }
-    if (log_scale) reason[is.na(reason) & !is.na(standard_data$OD) & standard_data$OD <= 0] <- FLAGS$od_le_nc
+    if (!blank_usable(log_scale, at_blank)) {
+        reason[is.na(reason) & !is.na(standard_data$OD) & standard_data$OD <= 0] <- FLAGS$od_le_nc
+    }
     reason[is.na(standard_data$OD)] <- FLAGS$missing
 
     excluded <- standard_data[!is.na(reason), , drop = FALSE]
@@ -306,23 +311,94 @@ split_standards <- function(standard_data, log_scale = TRUE, exclude = NULL) {
 }
 
 
-#' Assign Result Flags
+#' Rules for a Signal at or Below the Background
 #'
-#' @param od Background-subtracted OD.
-#' @param conc Concentration estimate before dilution correction.
-#' @param conc_range Range of standard concentrations used in the fit.
+#' How a well whose background-subtracted OD is zero or negative is treated
+#' by the models fitted on the original OD scale (on log10 scales such a
+#' well has no inverse in any case). The same rule applies to the
+#' calibrators and to the quality controls and samples:
 #'
-#' @return Character vector of flags (see [FLAGS]).
+#' * `"range"`: like any other OD, through the inverse of the curve and the
+#'   calibration range;
+#' * `"exclude"`: not reportable; calibrators with such an OD are left out of
+#'   the fit (flag `"OD <= blank"`), quality controls and samples get the
+#'   flag `"OD <= blank"` and no concentration.
+#'
+#' @return Character vector of rule codes.
+#' @export
+blank_rules <- function() c('range', 'exclude')
+
+
+#' Is a Signal at or Below the Background Usable?
+#'
+#' @param log_scale Logical; `TRUE` if the model is fitted on log10 scales.
+#' @param at_blank Rule for such a signal (see [blank_rules()]).
+#'
+#' @return `TRUE` if a well with OD <= 0 is inverted like any other.
 #' @keywords internal
-assign_flags <- function(od, conc, conc_range) {
+blank_usable <- function(log_scale, at_blank = 'range') !isTRUE(log_scale) && identical(at_blank, 'range')
+
+
+#' Does the Curve Increase With the Concentration?
+#'
+#' Compares the curve at the ends of its working interval (see
+#' [working_interval()]).
+#'
+#' @param fit A `lin_fit` object.
+#'
+#' @return `TRUE` or `FALSE`; `NA` if the curve cannot be evaluated.
+#' @keywords internal
+curve_increasing <- function(fit) {
+    y <- curve_fun(fit, working_interval(fit))
+    if (any(!is.finite(y))) return(NA)
+    y[2] > y[1]
+}
+
+
+#' Classify Wells by Signal, Inverse and Calibration Range
+#'
+#' Three separate properties of each well, from which the flag follows:
+#'
+#' * `at.blank`: the background-subtracted OD is zero or negative (a fact
+#'   about the signal; by itself it does not remove the concentration);
+#' * `inverse`: why the curve gives no concentration (see
+#'   [inverse_reason()]), `NA` when it gives one; with the rule `"exclude"`
+#'   (or on log10 scales) a signal at or below the background has none
+#'   (`"od_le_blank"`);
+#' * `range`: `"below"`, `"within"` or `"above"` the calibration range, `NA`
+#'   without a concentration.
+#'
+#' The flag: `"Missing OD"` without an OD; `"OD <= blank"` when the signal at
+#' or below the background has no inverse; `"No solution"` for the other
+#' failures of the inverse; otherwise `"< LLOQ"`, `"OK"` or `"> ULOQ"`. The
+#' range is never overwritten by the signal.
+#'
+#' @param fit A `lin_fit` object.
+#' @param od Background-subtracted ODs.
+#' @param conc Concentrations from the inverse of the curve (before the
+#'   dilution correction), see [inverse_predict_ci()].
+#' @param conc_range Quantification range (LLOQ, ULOQ).
+#' @param at_blank Rule for a signal at or below the background (see
+#'   [blank_rules()]).
+#'
+#' @return A data.frame with `at.blank`, `inverse`, `range` and `flag`.
+#' @keywords internal
+classify_wells <- function(fit, od, conc, conc_range, at_blank = 'range') {
+    at <- !is.na(od) & od <= 0
+    inverse <- inverse_reason(fit, od)
+    if (!blank_usable(fit$log_scale, at_blank)) inverse[at] <- 'od_le_blank'
+    inverse[is.na(inverse) & is.na(conc)] <- 'no_solution'
+    has <- is.na(inverse)
     tol <- 1e-9 * diff(range(conc_range))
-    flag <- rep(FLAGS$ok, length(od))
-    flag[!is.na(conc) & conc > conc_range[2] + tol] <- FLAGS$above
-    flag[!is.na(conc) & conc < conc_range[1] - tol] <- FLAGS$below
-    flag[is.na(conc)] <- FLAGS$no_solution
-    flag[!is.na(od) & od <= 0] <- FLAGS$od_le_nc
+    range <- rep(NA_character_, length(od))
+    range[has] <- 'within'
+    range[has & conc > conc_range[2] + tol] <- 'above'
+    range[has & conc < conc_range[1] - tol] <- 'below'
+    flag <- c(below = FLAGS$below, within = FLAGS$ok, above = FLAGS$above)[range]
+    flag[!has] <- FLAGS$no_solution
+    flag[!has & inverse == 'od_le_blank'] <- FLAGS$od_le_nc
     flag[is.na(od)] <- FLAGS$missing
-    flag
+    data.frame(at.blank = at, inverse = inverse, range = range, flag = unname(flag))
 }
 
 
@@ -387,8 +463,16 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' @param extrapolate Samples outside the quantification range that still get
 #'   a concentration: any of `"below"` (under the LLOQ) and `"above"` (over
 #'   the ULOQ). Their flags are kept.
-#' @param blank_zero If `TRUE`, samples with OD at or below the blank get
-#'   concentration 0 (flag kept).
+#' @param blank_zero If `TRUE`, samples with OD at or below the blank and
+#'   outside the calibration range (or without a concentration) get
+#'   concentration 0 (flag kept). Only for a curve that increases with the
+#'   concentration: on a decreasing curve a weak signal means a high
+#'   concentration, the option is then ignored with a note.
+#' @param at_blank Rule for a signal at or below the background on the
+#'   original OD scale, applied alike to the calibrators, quality controls and
+#'   samples (see [blank_rules()]): `"range"` (the default) inverts it like
+#'   any other OD, `"exclude"` makes it not reportable. Ignored on log10
+#'   scales, where such a signal has no inverse.
 #' @param exclude_background Background wells excluded by the user: a
 #'   data.frame with columns `key` and `reason`.
 #' @param background Roles of the wells subtracted as background (see
@@ -437,9 +521,14 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
 #'   * `result`: sample results with `OD` as measured (before the blank is
 #'     subtracted), `OD.corrected` (after it), `conc` (dilution-corrected), its confidence interval
-#'     `conc.lower`, `conc.upper` and `flag`;
+#'     `conc.lower`, `conc.upper`, `flag` and, when some wells have a signal at
+#'     or below the background, `OD.le.blank` (logical; see [classify_wells()]);
 #'   * `qc`: quality controls with nominal and measured concentration, OD as measured,
-#'     recovery (%) and flag (`NULL` if there are no QC wells).
+#'     recovery (%), flag and `OD.le.blank` as for the samples (`NULL` if there
+#'     are no QC wells);
+#'   * `at_blank`: the rule for a signal at or below the background (see
+#'     [blank_rules()]); `increasing`: whether the curve increases with the
+#'     concentration (see [curve_increasing()]).
 #'
 #' The background is the arithmetic mean of the wells of the chosen roles
 #' (argument `background`): reagent blank, zero calibrator and negative
@@ -455,9 +544,12 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
                       round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
                       extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL,
-                      exclude_background = NULL, subtract_background = NULL) {
+                      exclude_background = NULL, subtract_background = NULL, at_blank = 'range') {
     if (length(model) != 1 || !model %in% calibration_models()) {
         lin_abort('error.unknown_model', model = model, choices = calibration_models())
+    }
+    if (length(at_blank) != 1 || !at_blank %in% blank_rules()) {
+        lin_abort('error.blank_rule', rule = at_blank, choices = blank_rules())
     }
     data$.key <- well_keys(data)
 
@@ -486,11 +578,13 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
 
     # Standards used for fitting
     log_scale <- model_log_scale(model, linear)
-    std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude)
+    std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, exclude, at_blank)
     standard_data <- std$used
     # Common set of calibration wells for the comparison of models: after the exclusions
-    # by the user, before the restrictions of the chosen model
-    pool <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale = FALSE, exclude)$used
+    # by the user and the rule of the method for a signal at the background, before the
+    # restrictions of the chosen model
+    pool <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale = FALSE, exclude,
+                            at_blank)$used
     rownames(pool) <- NULL
     pool$.od_raw <- NULL
     # Points excluded by the user are listed in `exclusions`; warn about the others
@@ -558,28 +652,42 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         notes <- c(notes, list(lin_message('note.lack_of_fit', p = signif(lof$p, 2))))
     }
 
-    # Samples and QC: inverse prediction, flags, dilution correction
+    # Zero for a signal at the background only where a weak signal means a low concentration
+    increasing <- curve_increasing(fit)
+    if (blank_zero && !isTRUE(increasing)) {
+        notes <- c(notes, list(lin_message('note.blank_zero_decreasing')))
+        blank_zero <- FALSE
+    }
+
+    # Samples and QC: inverse prediction, then the signal, the inverse and the range
+    # (classify_wells()) give the flag, as for the calibrators; dilution correction
     quantify <- function(rows, extrapolate = character(0), blank_zero = FALSE) {
         rows$dilution[is.na(rows$dilution)] <- 1
         pred <- inverse_predict_ci(fit, rows$OD, level)
-        flag <- assign_flags(rows$OD, pred$conc, conc_range)
+        cls <- classify_wells(fit, rows$OD, pred$conc, conc_range, at_blank)
+        flag <- cls$flag
         ok <- flag == FLAGS$ok |
             (flag == FLAGS$below & 'below' %in% extrapolate) |
             (flag == FLAGS$above & 'above' %in% extrapolate)
         rows$conc <- ifelse(ok, round_fun(pred$conc * rows$dilution, round_par), NA_real_)
         rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
         rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
-        if (blank_zero) rows$conc[flag == FLAGS$od_le_nc] <- 0
+        # A concentration within the range is kept even if the signal is at the background
+        if (blank_zero) rows$conc[cls$at.blank & flag != FLAGS$ok] <- 0
+        at_blank_well <- cls$at.blank
         # The background chosen is unavailable: no concentration from the OD as measured
         if (bg$empty) {
             rows$conc <- rows$conc.lower <- rows$conc.upper <- rep(NA_real_, nrow(rows))
             flag <- rep(FLAGS$no_background, nrow(rows))
+            at_blank_well <- rep(NA, nrow(rows))
         }
         corrected <- rows$OD
         rows$OD <- round(rows$.od_raw, 4)
         rows$OD.corrected <- if (bg$empty) NA_real_ else round(corrected, 4)
         rows$.od_raw <- NULL
         rows$flag <- flag
+        # The signal at or below the background is shown apart from the flag, when it occurs
+        if (any(at_blank_well, na.rm = TRUE)) rows$OD.le.blank <- at_blank_well
         rownames(rows) <- NULL
         rows
     }
@@ -603,6 +711,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         qc$recovery <- round(100 * measured$conc / qc_rows$conc, 1)
         qc$OD <- measured$OD
         qc$flag <- measured$flag
+        qc$OD.le.blank <- measured$OD.le.blank
         qc <- drop_empty_columns(qc, c('well', 'id'))
     }
 
@@ -615,7 +724,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     original_fit <- NULL
     effect <- NULL
     if (nrow(manual) > 0) {
-        all_std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale)$used
+        all_std <- split_standards(data[data$type == 'standard', , drop = FALSE], log_scale, at_blank = at_blank)$used
         original_fit <- tryCatch(fit_curve(all_std, model, linear, weights), error = function(e) NULL)
         if (!is.null(original_fit)) original_fit$interval <- fit$interval
         if (!is.null(original_fit)) {
@@ -659,7 +768,9 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
          lack_of_fit = lof,
          notes = notes,
          result = sample_data,
-         qc = qc)
+         qc = qc,
+         at_blank = at_blank,
+         increasing = increasing)
 }
 
 

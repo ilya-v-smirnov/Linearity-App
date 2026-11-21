@@ -24,7 +24,7 @@
 #'   `table`) and its content.
 #' @keywords internal
 report_blocks <- function(type = c('short', 'detailed'), date, title, method, scale = NULL, weights = NULL,
-                          background = NULL,
+                          background = NULL, at_blank = NULL,
                           model_table, result_table, means_table = NULL, qc_table = NULL,
                           exclusions = NULL, comparison = NULL, quality = NULL,
                           notes = character(0), lang = 'en', exclusion_effect = NULL,
@@ -44,6 +44,7 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                       if (!is.null(scale)) list(b('line', label = t('report.scale'), value = scale)),
                       if (!is.null(weights)) list(b('line', label = t('report.weights'), value = weights)),
                       if (!is.null(background)) list(b('line', label = t('report.background'), value = background)),
+                      if (!is.null(at_blank)) list(b('line', label = t('report.at_blank'), value = at_blank)),
                       if (has_rows(exclusions)) {
                           list(b('text', text = tr('report.refit_note', lang, n = nrow(exclusions))))
                       })
@@ -210,6 +211,8 @@ report_preview <- function(blocks, plot_output, lang = 'en', max_rows = 8) {
 #' @param weights Weighting (text shown in the report).
 #' @param background Background correction (text shown in the report, see
 #'   `background_text()`).
+#' @param at_blank Rule for a signal at or below the background (text shown
+#'   in the report, see `blank_rule_text()`); `NULL` for none (log10 scales).
 #' @param exclusions Optional table of standard points excluded by the user.
 #' @param exclusion_effect Optional tables comparing the calibration on all
 #'   standards with the refitted one (see [exclusion_effect_tables()]).
@@ -234,6 +237,7 @@ save_report <- function(file,
                         scale = NULL,
                         weights = NULL,
                         background = NULL,
+                        at_blank = NULL,
                         model_table,
                         result_table,
                         means_table = NULL,
@@ -248,7 +252,7 @@ save_report <- function(file,
                         operator = NULL,
                         plate = NULL) {
     blocks <- report_blocks(type, date = date, title = title, method = method, scale = scale, weights = weights,
-                            background = background,
+                            background = background, at_blank = at_blank,
                             model_table = model_table, result_table = result_table, means_table = means_table,
                             qc_table = qc_table, exclusions = exclusions, comparison = comparison,
                             quality = quality, notes = notes, lang = lang, exclusion_effect = exclusion_effect,

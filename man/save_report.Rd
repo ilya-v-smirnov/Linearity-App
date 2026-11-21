@@ -13,6 +13,7 @@ save_report(
   scale = NULL,
   weights = NULL,
   background = NULL,
+  at_blank = NULL,
   model_table,
   result_table,
   means_table = NULL,
@@ -45,6 +46,9 @@ save_report(
 
 \item{background}{Background correction (text shown in the report, see
 \code{background_text()}).}
+
+\item{at_blank}{Rule for a signal at or below the background (text shown
+in the report, see \code{blank_rule_text()}); \code{NULL} for none (log10 scales).}
 
 \item{model_table}{Coefficients table from \code{\link[=get_coef_ci]{get_coef_ci()}}.}
 

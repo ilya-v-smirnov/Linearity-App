@@ -4,7 +4,12 @@
 \alias{split_standards}
 \title{Select Standard Wells Usable for Fitting}
 \usage{
-split_standards(standard_data, log_scale = TRUE, exclude = NULL)
+split_standards(
+  standard_data,
+  log_scale = TRUE,
+  exclude = NULL,
+  at_blank = "range"
+)
 }
 \arguments{
 \item{standard_data}{Background-subtracted standard rows with \code{.key}.}
@@ -12,13 +17,17 @@ split_standards(standard_data, log_scale = TRUE, exclude = NULL)
 \item{log_scale}{Logical; \code{TRUE} if the model is fitted on log10 scales.}
 
 \item{exclude}{Data.frame with columns \code{key} and \code{reason}, or \code{NULL}.}
+
+\item{at_blank}{Rule for a signal at or below the background (see
+\code{\link[=blank_rules]{blank_rules()}}).}
 }
 \value{
 A list with \code{used} and \code{excluded} data.frames; \code{excluded} has a
 \code{reason} column with flag codes and a \code{comment} column with the user's reason.
 }
 \description{
-Standards with a missing OD, (on log scales) a non-positive OD after
-background subtraction, or excluded by the user are not used for fitting.
+Standards with a missing OD, a non-positive OD after background
+subtraction (on log scales, or with the rule \code{"exclude"}, see
+\code{\link[=blank_rules]{blank_rules()}}), or excluded by the user are not used for fitting.
 }
 \keyword{internal}

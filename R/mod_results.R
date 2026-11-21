@@ -28,7 +28,7 @@ NULL
 #' @keywords internal
 result_columns <- function(columns) {
     first <- intersect(c('well', 'id', 'sample.name', 'sample.date'), columns)
-    last <- intersect(c('dilution', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag'), columns)
+    last <- intersect(c('dilution', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag', 'OD.le.blank'), columns)
     c(first, setdiff(columns, c(first, last)), last)
 }
 

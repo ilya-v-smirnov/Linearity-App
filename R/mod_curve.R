@@ -142,6 +142,34 @@ observe_locked_export <- function(input, id, lang = 'en', lock = function() 'uni
 }
 
 
+#' Translated Labels of the Rules for a Signal at the Background
+#'
+#' @param rules Rule codes (see [blank_rules()]).
+#' @param lang Language code.
+#'
+#' @return Character vector of labels named by the codes.
+#' @keywords internal
+blank_rule_labels <- function(rules = blank_rules(), lang = 'en') {
+    stats::setNames(vapply(paste0('blank.rule_', rules), tr, '', lang = lang), rules)
+}
+
+
+#' Rule for a Signal at the Background as Text
+#'
+#' For the parameters of the report.
+#'
+#' @param result Output of [calculate()].
+#' @param lang Language code.
+#'
+#' @return A character string, or `NULL` on log10 scales, where the rule does
+#'   not apply.
+#' @keywords internal
+blank_rule_text <- function(result, lang = 'en') {
+    if (is.null(result$at_blank) || isTRUE(result$fit$log_scale)) return(NULL)
+    unname(blank_rule_labels(result$at_blank, lang))
+}
+
+
 #' Translated Labels of Weighting Schemes
 #'
 #' @param weights Weighting codes.
@@ -349,6 +377,13 @@ mod_curve_ui <- function(id, lang) {
             shiny::selectInput(ns('weights'), with_tooltip(t('curve.weights'), t('curve.weights_help')),
                                choices = stats::setNames(weights, weight_labels(weights, lang)),
                                selected = 'none'),
+            # Models on the original OD scale only: on log10 scales a signal at the background has no inverse
+            shiny::conditionalPanel(
+                condition = "input.model != 'LRM' && input.model != 'QRM'", ns = ns,
+                shiny::radioButtons(ns('at_blank'), with_tooltip(t('blank.rule'), t('blank.rule_help')),
+                                    choices = stats::setNames(blank_rules(), blank_rule_labels(lang = lang)),
+                                    selected = 'range', width = '100%')
+            ),
             # Quadratic models only: the branch of the parabola used for quantification
             shiny::conditionalPanel(
                 condition = "input.model == 'QUAD' || input.model == 'QRM'", ns = ns,
@@ -506,6 +541,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             list(model = input$model,
                  background = if (subtract) bg_roles() else character(0),
                  subtract = subtract,
+                 at_blank = if (is.null(input$at_blank)) 'range' else input$at_blank,
                  weights = if (is.null(input$weights)) 'none' else input$weights,
                  interval = if (quadratic && isTRUE(input$use_interval)) {
                      as.numeric(c(input$interval_from, input$interval_to))
@@ -519,7 +555,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             o <- options()
             with_validation(
                 calculate(d, model = s$model, weights = s$weights, interval = s$interval, background = s$background,
-                          subtract_background = s$subtract, exclude = exclusions(), exclude_background = bg_exclusions(),
+                          subtract_background = s$subtract, at_blank = s$at_blank, exclude = exclusions(), exclude_background = bg_exclusions(),
                           round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,

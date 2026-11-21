@@ -62,7 +62,94 @@ test_that('linear model is inverted exactly', {
     data <- synthetic_data(f, sample_od = c(0.25, 1, 2.5, 0.05, 5, -0.01))
     r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_rounding)
     expect_equal(r$result$conc[1:3], c(2.5, 10, 25))
-    expect_equal(r$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', 'OD <= blank'))
+    # on the original scale an OD below the blank is inverted, the range decides
+    expect_equal(r$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', '< LLOQ'))
+    expect_equal(r$result$OD.le.blank, c(rep(FALSE, 5), TRUE))
+    # not reportable by the rule of the method
+    ex <- calculate(data, 'LRM', linear = TRUE, round_fun = no_rounding, at_blank = 'exclude')
+    expect_equal(ex$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', 'OD <= blank'))
+    expect_error(calculate(data, 'LIN', at_blank = 'zero'), 'Unknown rule')
+})
+
+test_that('a signal at the background is judged alike for calibrators, QC and samples', {
+    # blanks 0.10; corrected OD = 0.02 * conc - 0.03: the lowest calibrator (1) reads -0.01
+    conc <- c(1, 2, 4, 8, 16)
+    od <- 0.10 + 0.02 * conc - 0.03
+    data <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'QC', 'sample'),
+                       conc = c(conc, conc, NA, NA, 1, NA), dilution = c(rep(NA, 13), 1),
+                       OD = c(od, od, 0.10, 0.10, 0.09, 0.09))
+    no_round <- function(x, ...) x
+    r <- calculate(data, 'LIN', round_fun = no_round)
+    # the calibrator at -0.01 is in the fit and its level is accepted ...
+    expect_equal(nrow(r$standard_data), 10)
+    expect_true(r$quality$standards$pass[r$quality$standards$conc == 1])
+    expect_equal(r$calibration_range, c(1, 16))
+    # ... so the same OD gives the same concentration for the QC and the sample
+    expect_equal(r$qc$conc, 1, tolerance = 1e-8)
+    expect_equal(r$qc$flag, 'OK')
+    expect_true(r$qc$OD.le.blank)
+    expect_equal(r$result$conc, 1, tolerance = 1e-8)
+    expect_equal(r$result$flag, 'OK')
+    expect_true(r$result$OD.le.blank)
+    # a concentration within the range is not replaced by zero
+    expect_equal(calculate(data, 'LIN', round_fun = no_round, blank_zero = TRUE)$result$conc, 1, tolerance = 1e-8)
+    # the three properties are kept apart
+    cls <- LinearityApp:::classify_wells(r$fit, c(-0.01, -0.05, 0.1, NA), c(1, -1, 6.5, NA), c(1, 16))
+    expect_equal(cls$at.blank, c(TRUE, TRUE, FALSE, FALSE))
+    expect_equal(cls$inverse, c(NA, NA, NA, 'missing'))
+    expect_equal(cls$range, c('within', 'below', 'within', NA))
+    expect_equal(cls$flag, c('OK', '< LLOQ', 'OK', 'Missing OD'))
+    # the table of the points and the results mark the signal at the background
+    pts <- LinearityApp:::standard_points_table(r, 'en')
+    expect_equal(sum(pts[['OD ≤ blank']] == '✓'), 2)
+    expect_equal(localize_result(r$result)$OD.le.blank, '✓')
+    expect_equal(LinearityApp:::result_columns(names(r$result))[ncol(r$result)], 'OD.le.blank')
+
+    # not reportable: the calibrators at the background leave the fit, the QC and the sample get no value
+    ex <- calculate(data, 'LIN', round_fun = no_round, at_blank = 'exclude')
+    expect_equal(nrow(ex$standard_data), 8)
+    expect_equal(ex$excluded_standards$reason, rep('OD <= blank', 2))
+    expect_match(message_text(ex$notes), 'excluded from the fit: OD <= blank (2)', fixed = TRUE, all = FALSE)
+    expect_equal(nrow(ex$calibration_pool), 8)
+    expect_equal(ex$qc$flag, 'OD <= blank')
+    expect_true(is.na(ex$qc$conc))
+    expect_equal(ex$result$flag, 'OD <= blank')
+    expect_true(is.na(ex$result$conc))
+    # zero for a signal at the background on an increasing curve
+    expect_equal(calculate(data, 'LIN', at_blank = 'exclude', blank_zero = TRUE)$result$conc, 0)
+    expect_equal(LinearityApp:::blank_rule_text(ex, 'en'), 'Not reportable')
+    blocks <- LinearityApp:::report_blocks('detailed', date = '2026-11-21', title = 't', method = 'm',
+                                           at_blank = LinearityApp:::blank_rule_text(ex, 'ru'),
+                                           model_table = get_coef_ci(ex$fit), result_table = ex$result)
+    line <- Filter(function(b) identical(b$label, 'Signal at or below the background:'), blocks)
+    expect_equal(line[[1]]$value, 'Не пригоден')
+
+    # on log-log scales the rule does not apply: no inverse in any case
+    lg <- calculate(data, 'LRM')
+    expect_equal(lg$result$flag, 'OD <= blank')
+    expect_equal(nrow(calculate(data, 'LRM', at_blank = 'range')$standard_data), 8)
+    expect_null(LinearityApp:::blank_rule_text(lg, 'en'))
+})
+
+test_that('a weak signal on a decreasing curve is a high concentration, not zero', {
+    conc <- c(1, 2, 4, 8, 16)
+    od <- 1 - 0.05 * conc
+    data <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'sample'),
+                       conc = c(conc, conc, NA, NA, NA), dilution = c(rep(NA, 12), 1),
+                       OD = c(od + 0.1, od + 0.1, 0.1, 0.1, 0.05))
+    r <- calculate(data, 'LIN', blank_zero = TRUE)
+    expect_false(r$increasing)
+    expect_equal(r$result$flag, '> ULOQ')
+    expect_true(r$result$OD.le.blank)
+    expect_true(is.na(r$result$conc))
+    expect_match(message_text(r$notes), 'the curve decreases with the concentration', ignore.case = TRUE,
+                 all = FALSE)
+    # extrapolated above the highest calibrator: 21
+    up <- calculate(data, 'LIN', extrapolate = 'above', round_fun = function(x, ...) x)
+    expect_equal(up$result$conc, 21, tolerance = 1e-8)
+    # without a signal at the background the column is left out
+    data$OD[13] <- 0.5
+    expect_false('OD.le.blank' %in% names(calculate(data, 'LIN')$result))
 })
 
 test_that('quadratic model uses the branch that contains the standards', {
