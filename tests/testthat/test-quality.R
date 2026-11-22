@@ -266,6 +266,38 @@ test_that('the rounding shown cannot change the status of a quality control or a
     expect_lt(cv_percent(shown), 20)
 })
 
+test_that('a value next to its verdict is never shown equal to the limit it is not', {
+    limit_digits <- LinearityApp:::limit_digits
+    pct_limit <- LinearityApp:::pct_limit
+    x <- c(20.04, 19.96, 20, 18.3, -20.04, 20.0011, NA)
+    expect_equal(limit_digits(x, 20), c(2L, 2L, 1L, 1L, 2L, 3L, 1L))
+    expect_equal(pct_limit(x, 20), c('20.04', '19.96', '20.0', '18.3', '-20.04', '20.001', ''))
+    # a recovery is compared with 100 % +- the limit
+    expect_equal(limit_digits(c(120.04, 79.96, 110), 20, center = 100), c(2L, 2L, 1L))
+    # limits per value
+    expect_equal(pct_limit(c(25.03, 25.03), c(25, 20)), c('25.03', '25.0'))
+
+    # the QC read at 12.004 fails by +20.04 %: so in the table of the QC and in the results
+    qc <- data.frame(id = 'QC-M', nominal = 10, od = 0.02 * 12.004)
+    r <- calculate(run_data(qc = qc), 'LRM', linear = TRUE)
+    tab <- quality_tables(r$quality, 'en')$qc
+    expect_equal(tab[['Bias, %']], '20.04')
+    expect_equal(tab$Accepted, '✗')
+    expect_equal(round_result(r$qc, signif, 3, r$quality$qc$wells$bias.limit)$recovery, 120.04)
+    expect_equal(round_result(r$qc, signif, 3)$recovery, 120)
+
+    # duplicates with a CV of 20.001 %: High CV, shown as 20.001 in the summary and the quality table
+    samples <- data.frame(name = 'A', dilution = 1, od = 0.02 * c(9.9996, 13.294))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
+    s <- r$quality$samples
+    expect_equal(LinearityApp:::summary_table(s, 'sample.name')$cv, 20.001)
+    expect_equal(quality_tables(list(samples = s), 'en')$samples[['CV, %']], '20.001')
+    # away from the limit, one decimal as before
+    samples$od <- 0.02 * c(10, 11)
+    s <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)$quality$samples
+    expect_equal(LinearityApp:::summary_table(s, 'sample.name')$cv, round(s$cv, 1))
+})
+
 test_that('quality tables and summary are translated', {
     qc <- data.frame(id = 'QC-M', nominal = 10, od = 0.2)
     samples <- data.frame(name = c('A', 'A'), dilution = c(1, 2), od = c(0.4, 0.2))
@@ -736,6 +768,8 @@ test_that('the bias plot keeps a level without back-calculated wells and says it
     expect_equal(label$x, log10(32))
     expect_equal(label$y, -Inf)
     expect_equal(label$label, '0/2 calculated')
+    # as large as the axis labels (12 pt), not hidden at the bottom
+    expect_equal(label$size, 4)
     expect_equal(LinearityApp:::plot_bias(r, lang = 'ru')$layers[[8]]$data$label, '0/2 рассчитано')
     # the level stays inside the concentration axis
     expect_true(log10(32) <= b$layout$panel_params[[1]]$x.range[2])

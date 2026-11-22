@@ -109,7 +109,8 @@ summary_table <- function(samples, group_vars, stats = summary_statistics(), rou
     if (is.null(samples) || length(group_vars) == 0) return(NULL)
     out <- samples
     for (col in c('mean', 'sd', 'min', 'max')) out[[col]] <- round_fun(out[[col]], round_par)
-    out$cv <- round(out$cv, 1)
+    # One decimal, more where it would show the CV equal to its limit (see limit_digits())
+    out$cv <- round(out$cv, if (is.null(out$cv.limit)) 1 else limit_digits(out$cv, out$cv.limit))
     out <- cbind(out, summary_checks(samples, dilution, lang))
     out[, c(group_vars, intersect(summary_statistics(), stats)), drop = FALSE]
 }

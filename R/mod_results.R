@@ -217,12 +217,12 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column'),
         ns <- session$ns
 
         # Rounded for display and export only: the statuses are assessed at full precision
-        shown <- function(tab) {
+        shown <- function(tab, bias_limit = NULL) {
             r <- rounding()
-            order_result(localize_result(round_result(tab, r$fun, r$par), lang), by())
+            order_result(localize_result(round_result(tab, r$fun, r$par, bias_limit), lang), by())
         }
         full <- shiny::reactive(shown(curve$result()$result))
-        qc <- shiny::reactive(shown(curve$result()$qc))
+        qc <- shiny::reactive(shown(curve$result()$qc, curve$result()$quality$qc$wells$bias.limit))
 
         # Column choices follow the data; the user's choice is kept, new columns are shown
         known <- shiny::reactiveVal(character(0))

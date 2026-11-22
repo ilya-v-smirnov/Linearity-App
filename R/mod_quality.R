@@ -13,6 +13,52 @@ html_escape <- function(x) {
 }
 
 
+#' Decimals That Tell a Value From Its Limit
+#'
+#' A value shown next to a verdict must lie on the side of the limit that the
+#' verdict says: a bias of 20.04 % fails a limit of 20 %, but shown with one
+#' decimal it reads 20.0. One decimal is used by default; where the value so
+#' rounded equals a threshold (`center - limit` or `center + limit`) while the
+#' value itself does not, more decimals are used, up to `max_digits`, until
+#' the shown value differs from the threshold.
+#'
+#' @param x Values.
+#' @param limit Allowed deviation from `center` (recycled).
+#' @param center Centre of the allowed interval (recycled): 0 for a bias or a
+#'   CV, 100 for a recovery.
+#' @param digits,max_digits Default and largest number of decimals.
+#'
+#' @return Integer vector of decimals, one per value.
+#' @keywords internal
+limit_digits <- function(x, limit, center = 0, digits = 1L, max_digits = 4L) {
+    n <- length(x)
+    out <- rep(as.integer(digits), n)
+    if (n == 0 || length(limit) == 0) return(out)
+    limit <- rep_len(limit, n)
+    center <- rep_len(center, n)
+    on_threshold <- function(i, d) {
+        th <- center[i] + c(-1, 1) * limit[i]
+        any(abs(round(x[i], d) - th) < 1e-9 * max(1, abs(th))) && !any(x[i] == th)
+    }
+    for (i in which(!is.na(x) & !is.na(limit) & !is.na(center))) {
+        while (out[i] < max_digits && on_threshold(i, out[i])) out[i] <- out[i] + 1L
+    }
+    out
+}
+
+
+#' Format Percentages Against Their Limit
+#'
+#' @inheritParams limit_digits
+#'
+#' @return Character vector: the values with the decimals of [limit_digits()]
+#'   (one by default), `""` for `NA`.
+#' @keywords internal
+pct_limit <- function(x, limit, center = 0) {
+    ifelse(is.na(x), '', sprintf('%.*f', limit_digits(x, limit, center), x))
+}
+
+
 #' Quality Tables for Display
 #'
 #' Formats the parts of a quality assessment (see [assess_run()]) as tables
@@ -72,10 +118,11 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
         cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
         # A level planned in replicate without two back-calculated results: the CV is unavailable
-        cv_text <- pct(st$calc.cv)
+        cv_text <- pct_limit(st$calc.cv, st$cv.limit)
         cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
         standards <- name(data.frame(num(st$conc), dash(num(st$od.mean, 4)), dash(num(st$calc.mean)),
-                                     fail(dash(cv_text), cv_failed), fail(dash(pct(st$bias)), bias_failed),
+                                     fail(dash(cv_text), cv_failed),
+                                     fail(dash(pct_limit(st$bias, st$bias.limit)), bias_failed),
                                      sprintf('%g', st$bias.limit),
                                      fail(standard_status(st$status, lang, bias_failed, cv_failed), !st$pass)),
                           c('col.conc', 'col.od_mean', 'col.calc', 'col.calc_cv', 'col.bias', 'col.limit',
@@ -97,7 +144,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     qc <- NULL
     if (!is.null(quality$qc)) {
         q <- quality$qc$levels
-        qc <- name(data.frame(q$id, num(q$nominal), q$n, q$n.pass, num(q$mean), pct(q$cv), pct(q$bias),
+        qc <- name(data.frame(q$id, num(q$nominal), q$n, q$n.pass, num(q$mean), pct(q$cv),
+                              pct_limit(q$bias, q$bias.limit),
                               sprintf('%g', q$bias.limit), mark(q$pass)),
                    c('col.id', 'col.nominal', 'col.count', 'col.n_pass', 'col.mean', 'col.cv', 'col.bias',
                      'col.limit', 'col.pass'))
@@ -109,7 +157,7 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         id_cols <- setdiff(names(s), c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min', 'max', 'cv.limit', 'flag'))
         samples <- data.frame(as_text(s[id_cols]),
                               n = s$n, n.quantified = s$n.quantified, mean = num(s$mean), sd = num(s$sd),
-                              cv = pct(s$cv), flag = translate_flags(s$flag, lang))
+                              cv = pct_limit(s$cv, s$cv.limit), flag = translate_flags(s$flag, lang))
         samples <- name(samples, c(id_keys(id_cols), 'col.count', 'col.n_quant', 'col.mean', 'col.sd', 'col.cv',
                                    'col.flag'))
     }
@@ -121,8 +169,10 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         counts <- function(col) if (col %in% names(d)) d[[col]] else rep(NA_integer_, nrow(d))
         dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution),
                                     counts('n'), counts('n.quantified'), num(d$mean),
-                                    fail(pct(d$deviation), abs(d$deviation) > criteria$dilution_bias),
-                                    fail(pct(d$cv), d$cv > criteria$dilution_cv), fail(mark(d$pass), !d$pass)),
+                                    fail(pct_limit(d$deviation, criteria$dilution_bias),
+                                         abs(d$deviation) > criteria$dilution_bias),
+                                    fail(pct_limit(d$cv, criteria$dilution_cv), d$cv > criteria$dilution_cv),
+                                    fail(mark(d$pass), !d$pass)),
                          c(id_keys(id_cols), 'col.dilution', 'col.count', 'col.n_quant', 'col.mean', 'col.deviation',
                            'col.cv_dil', 'col.pass'))
     }
@@ -277,7 +327,7 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     } else {
         st$bias.limit[match(pts$conc, st$conc)]
     }
-    bias_text <- ifelse(is.na(bias), '', sprintf('%.1f', bias))
+    bias_text <- pct_limit(bias, limit)
     if (highlight) {
         failed <- !pts$excluded & (is.na(bias) | abs(bias) > limit)
         bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)

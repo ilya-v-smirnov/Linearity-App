@@ -41,15 +41,22 @@ aggregate_result <- function(result, group_vars = 'sample.name',
 #' @param round_fun,round_par Rounding of the concentrations (`conc`,
 #'   `conc.lower`, `conc.upper`); the recovery of the quality controls is
 #'   rounded to 0.1 %.
+#' @param bias_limit Allowed bias (%) of each quality control, in the order
+#'   of the rows (`bias.limit` of the wells of [assess_qc()]): a recovery that
+#'   would read as 100 % +- the limit while it is not gets more decimals (see
+#'   [limit_digits()]).
 #'
 #' @return The table with rounded values; `NULL` for `NULL`.
 #' @export
-round_result <- function(result, round_fun = signif, round_par = 3) {
+round_result <- function(result, round_fun = signif, round_par = 3, bias_limit = NULL) {
     if (is.null(result)) return(NULL)
     for (col in intersect(c('conc', 'conc.lower', 'conc.upper'), names(result))) {
         result[[col]] <- round_fun(result[[col]], round_par)
     }
-    if ('recovery' %in% names(result)) result$recovery <- round(result$recovery, 1)
+    if ('recovery' %in% names(result)) {
+        digits <- if (is.null(bias_limit)) 1 else limit_digits(result$recovery, bias_limit, center = 100)
+        result$recovery <- round(result$recovery, digits)
+    }
     result
 }
 

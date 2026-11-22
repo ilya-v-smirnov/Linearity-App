@@ -252,7 +252,7 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
         ggplot2::geom_text(data = cv_failed, ggplot2::aes(.data$conc, .data$bias), label = 'CV', vjust = -1.3,
                            size = 3, colour = '#c62828') +
         ggplot2::geom_text(data = uncalculated, ggplot2::aes(.data$conc, .data$y, label = .data$label),
-                           inherit.aes = FALSE, angle = 90, hjust = -0.1, size = 3, colour = '#c62828') +
+                           inherit.aes = FALSE, angle = 90, hjust = -0.1, size = 4, colour = '#c62828') +
         ggplot2::scale_fill_manual(values = c(pass = '#1b5e20', fail = '#c62828', other = 'white'), guide = 'none') +
         ggplot2::scale_colour_manual(values = c(pass = 'black', fail = 'black', other = '#c62828'), guide = 'none') +
         ggplot2::labs(x = xtitle, y = tr('plot.bias', lang)) +

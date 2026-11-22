@@ -4,7 +4,7 @@
 \alias{round_result}
 \title{Round a Result Table for Display and Export}
 \usage{
-round_result(result, round_fun = signif, round_par = 3)
+round_result(result, round_fun = signif, round_par = 3, bias_limit = NULL)
 }
 \arguments{
 \item{result}{Result or QC table from \code{\link[=calculate]{calculate()}}.}
@@ -12,6 +12,11 @@ round_result(result, round_fun = signif, round_par = 3)
 \item{round_fun, round_par}{Rounding of the concentrations (\code{conc},
 \code{conc.lower}, \code{conc.upper}); the recovery of the quality controls is
 rounded to 0.1 \%.}
+
+\item{bias_limit}{Allowed bias (\%) of each quality control, in the order
+of the rows (\code{bias.limit} of the wells of \code{\link[=assess_qc]{assess_qc()}}): a recovery that
+would read as 100 \% +- the limit while it is not gets more decimals (see
+\code{\link[=limit_digits]{limit_digits()}}).}
 }
 \value{
 The table with rounded values; \code{NULL} for \code{NULL}.
