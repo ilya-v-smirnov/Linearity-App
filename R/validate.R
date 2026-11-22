@@ -20,8 +20,7 @@ rows_location <- function(data, i) {
 #' Find All Problems in Input Data
 #'
 #' Checks mandatory and numeric columns, values of `type`, presence of
-#' standards, samples and background wells (reagent blank, zero calibrator or
-#' negative control), dilution factors,
+#' standards and samples, dilution factors,
 #' concentrations of standards and QC, the number of standard wells and
 #' duplicated wells. Unlike [check_assay()], it does not stop at the first
 #' problem.
@@ -57,9 +56,8 @@ validate_assay <- function(data) {
     if (length(missing_types) > 0) {
         err(NULL, 'error.type_missing', values = missing_types)
     }
-    if (!any(is_background(type))) {
-        err(NULL, 'error.no_background')
-    }
+    # Background wells are not required: without them nothing is subtracted ("No background subtraction",
+    # e.g. for OD corrected before the import), which the import summary and the notes of the result say
 
     check_rows <- function(condition, key) {
         i <- which(condition)

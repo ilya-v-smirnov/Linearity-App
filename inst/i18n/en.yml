@@ -543,7 +543,6 @@ error:
   std_conc_missing: "Not all standard wells have concentrations specified"
   std_conc_positive: "All standard concentrations must be positive"
   few_standard_wells: "Insufficient number of standard wells: {n}"
-  no_background: "There are no background wells (reagent blank, zero calibrator or negative control): the background cannot be estimated"
   qc_conc_missing: "Not all QC wells have nominal concentrations specified"
   qc_conc_positive: "All QC nominal concentrations must be positive"
   duplicate_well: "The well occurs more than once"

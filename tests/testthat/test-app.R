@@ -12,6 +12,23 @@ test_that('import module reads, validates and reports errors', {
     })
 })
 
+test_that('a file without background wells is imported for the calculation without subtraction', {
+    # standards and samples, no reagent blank, zero calibrator or negative control (OD corrected before)
+    lv <- c(1, 2, 4, 8, 16, 32)
+    path <- tempfile(fileext = '.csv')
+    utils::write.csv(data.frame(sample.name = c(rep(NA, 6), 'X'), type = c(rep('standard', 6), 'sample'),
+                                dilution = c(rep(NA, 6), 1), conc = c(lv, NA), OD = c(0.02 * lv, 0.3)),
+                     path, row.names = FALSE, na = '')
+    shiny::testServer(LinearityApp:::mod_import_server, args = list(lang = 'en'), {
+        session$setInputs(file = list(datapath = path, name = 'bare.csv'))
+        expect_equal(nrow(session$returned$data()), 7)
+        expect_match(output$summary$html, 'The plate has no background wells: nothing is subtracted.', fixed = TRUE)
+    })
+    r <- calculate(check_input_file(utils::read.csv(path)), 'LIN')
+    expect_equal(r$background$status, 'none')
+    expect_equal(r$result$conc, 15, tolerance = 1e-8)
+})
+
 test_that('import errors are shown in Russian', {
     shiny::testServer(LinearityApp:::mod_import_server, args = list(lang = 'ru'), {
         session$setInputs(file = list(datapath = sample_path('invalid', '06_zero_dilution.xlsx')))

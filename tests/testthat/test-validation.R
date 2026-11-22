@@ -34,6 +34,17 @@ test_that('standards must have positive concentrations', {
     expect_error(check_input_file(bad), 'must be positive')
 })
 
+test_that('background wells are not required, standards and samples are', {
+    data <- load_sample('bca')
+    keys <- function(tab) vapply(validate_assay(tab), function(p) p$message$key, '')
+    # without background wells nothing is subtracted (no background subtraction)
+    bare <- data[!data$type %in% LinearityApp:::background_roles(), ]
+    expect_length(validate_assay(bare), 0)
+    expect_s3_class(check_assay(bare), 'data.frame')
+    # a plate without samples is still rejected
+    expect_equal(keys(bare[bare$type != 'sample', ]), 'error.type_missing')
+})
+
 test_that('unknown type values are reported', {
     data <- load_sample('bca')
     data$type[1] <- 'calibrator'
