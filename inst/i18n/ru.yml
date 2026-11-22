@@ -292,6 +292,8 @@ exclusion:
 
 plot:
   bias: "Смещение, %"
+  bias_uncalculated: "{n}/{planned} рассчитано"
+  bias_unavailable: "Смещение недоступно: ни для одной лунки калибратора не удалось обратно рассчитать концентрацию"
   residuals: "Остатки"
   curve_original: "Исходная (все стандарты)"
   curve_refitted: "Перестроенная"

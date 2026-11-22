@@ -195,23 +195,38 @@ plot_fitted_resid <- function(result, xtitle = '', lang = 'en') {
 #' the limit, white with a red outline when it is rejected for another reason;
 #' "CV" above a rejected level whose CV exceeds the limit) and the limits
 #' applied to the levels (dashed: the allowed bias, wider at the boundary
-#' calibrators). The concentration axis is the same as on the standard curve
-#' (see [conc_axis()]).
+#' calibrators). Every level of the plate plan stays on the concentration
+#' axis: a level without a back-calculated well has no bias to show, so it
+#' is labelled at the bottom of the panel with its count against the plan
+#' ("0/2 calculated") rather than placed on the line of zero bias. The
+#' concentration axis is the same as on the standard curve (see
+#' [conc_axis()]), extended to the levels of the plan.
 #'
 #' @param result Output of [calculate()].
 #' @param xtitle Title of the concentration axis.
-#' @param lang Language of the axis title.
+#' @param lang Language of the axis title and the labels.
 #'
-#' @return A ggplot2 object, or `NULL` without back-calculated wells.
+#' @return A ggplot2 object; without any back-calculated well, a panel that
+#'   says the bias is unavailable.
 #' @keywords internal
 plot_bias <- function(result, xtitle = '', lang = 'en') {
     bc <- back_calculate(result$fit)
     wells <- data.frame(conc = bc$conc, bias = bc$recovery - 100)
     wells <- wells[!is.na(wells$bias), , drop = FALSE]
-    if (nrow(wells) == 0) return(NULL)
+    if (nrow(wells) == 0) {
+        return(ggplot2::ggplot() +
+               ggplot2::annotate('text', x = 0, y = 0, label = tr('plot.bias_unavailable', lang),
+                                 size = 4, colour = '#c62828') +
+               ggplot2::theme_void())
+    }
     st <- result$quality$standards
-    st <- st[st$n > 0, , drop = FALSE]
     st <- st[order(st$conc), , drop = FALSE]
+    # Levels of the plan without a back-calculated well: a count at the bottom, not a point at zero bias
+    uncalculated <- st[st$n.calc == 0, , drop = FALSE]
+    uncalculated$y <- rep(-Inf, nrow(uncalculated))
+    uncalculated$label <- vapply(seq_len(nrow(uncalculated)), function(i) {
+        tr('plot.bias_uncalculated', lang, n = uncalculated$n.calc[i], planned = uncalculated$n.planned[i])
+    }, character(1))
     means <- st[!is.na(st$bias), , drop = FALSE]
     # Red where the mean bias is the failure; a white diamond where the level fails by another criterion
     means$state <- ifelse(means$pass, 'pass', ifelse(abs(means$bias) > means$bias.limit, 'fail', 'other'))
@@ -220,6 +235,7 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
     # Wells beyond the limit of their level, as in the table of individual points
     beyond <- wells[(abs(wells$bias) > st$bias.limit[match(wells$conc, st$conc)]) %in% TRUE, , drop = FALSE]
     axis <- conc_axis(result)
+    axis$range <- range(c(axis$range, st$conc))
 
     plot <-
         ggplot2::ggplot(wells, ggplot2::aes(.data$conc, .data$bias)) +
@@ -235,6 +251,8 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
         ggplot2::geom_point(data = beyond, shape = 1, size = 3.4, stroke = 0.8, colour = '#c62828') +
         ggplot2::geom_text(data = cv_failed, ggplot2::aes(.data$conc, .data$bias), label = 'CV', vjust = -1.3,
                            size = 3, colour = '#c62828') +
+        ggplot2::geom_text(data = uncalculated, ggplot2::aes(.data$conc, .data$y, label = .data$label),
+                           inherit.aes = FALSE, angle = 90, hjust = -0.1, size = 3, colour = '#c62828') +
         ggplot2::scale_fill_manual(values = c(pass = '#1b5e20', fail = '#c62828', other = 'white'), guide = 'none') +
         ggplot2::scale_colour_manual(values = c(pass = 'black', fail = 'black', other = '#c62828'), guide = 'none') +
         ggplot2::labs(x = xtitle, y = tr('plot.bias', lang)) +

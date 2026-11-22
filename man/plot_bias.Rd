@@ -11,10 +11,11 @@ plot_bias(result, xtitle = "", lang = "en")
 
 \item{xtitle}{Title of the concentration axis.}
 
-\item{lang}{Language of the axis title.}
+\item{lang}{Language of the axis title and the labels.}
 }
 \value{
-A ggplot2 object, or \code{NULL} without back-calculated wells.
+A ggplot2 object; without any back-calculated well, a panel that
+says the bias is unavailable.
 }
 \description{
 Where the curve over- or underestimates: the signed bias (\%) of every
@@ -24,7 +25,11 @@ in red beyond the limit of their level), the mean bias of each level
 the limit, white with a red outline when it is rejected for another reason;
 "CV" above a rejected level whose CV exceeds the limit) and the limits
 applied to the levels (dashed: the allowed bias, wider at the boundary
-calibrators). The concentration axis is the same as on the standard curve
-(see \code{\link[=conc_axis]{conc_axis()}}).
+calibrators). Every level of the plate plan stays on the concentration
+axis: a level without a back-calculated well has no bias to show, so it
+is labelled at the bottom of the panel with its count against the plan
+("0/2 calculated") rather than placed on the line of zero bias. The
+concentration axis is the same as on the standard curve (see
+\code{\link[=conc_axis]{conc_axis()}}), extended to the levels of the plan.
 }
 \keyword{internal}

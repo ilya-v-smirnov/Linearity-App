@@ -692,6 +692,38 @@ test_that('the bias plot tells a level failing by its CV from one failing by its
     expect_true(all(b$data[[7]]$label == 'CV'))
 })
 
+test_that('the bias plot keeps a level without back-calculated wells and says it is unavailable without any', {
+    truth <- function(x) 0.05 + 2 / (1 + (1 / x)^3)
+    data <- synthetic_data(truth, conc = c(0.25, 0.5, 1, 2, 4, 8, 16, 32), sample_od = 0.5)
+    # both wells of the top level read above the plateau of the curve
+    data$OD[data$type == 'standard' & data$conc == 32] <- c(2.3, 2.35)
+    r <- calculate(data, '4PL')
+    st <- r$quality$standards
+    expect_equal(st$n.calc[st$conc == 32], 0)
+    p <- LinearityApp:::plot_bias(r)
+    b <- ggplot2::ggplot_build(p)
+    # no well and no mean at the level, which is labelled at the bottom of the panel, not placed at zero
+    expect_false(32 %in% p$data$conc)
+    expect_false(any(abs(b$data[[5]]$x - log10(32)) < 1e-9))
+    label <- b$data[[8]]
+    expect_equal(nrow(label), 1)
+    expect_equal(label$x, log10(32))
+    expect_equal(label$y, -Inf)
+    expect_equal(label$label, '0/2 calculated')
+    expect_equal(LinearityApp:::plot_bias(r, lang = 'ru')$layers[[8]]$data$label, '0/2 рассчитано')
+    # the level stays inside the concentration axis
+    expect_true(log10(32) <= b$layout$panel_params[[1]]$x.range[2])
+
+    # no level back-calculated: a panel that says so instead of no plot
+    f <- function(x) 1 + (x - 3)^2
+    q <- calculate(synthetic_data(f, conc = c(1, 2, 3, 4, 5), sample_od = c(2, 10)), 'QUAD', round_fun = no_round)
+    p <- LinearityApp:::plot_bias(q)
+    expect_s3_class(p, 'ggplot')
+    expect_equal(p$layers[[1]]$aes_params$label,
+                 'Bias unavailable: no calibrator wells could be back-calculated')
+    expect_match(LinearityApp:::plot_bias(q, lang = 'ru')$layers[[1]]$aes_params$label, '^Смещение недоступно')
+})
+
 test_that('standards are sorted by decreasing concentration and failures are highlighted', {
     r <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
     plain <- quality_tables(r$quality, 'en')$standards

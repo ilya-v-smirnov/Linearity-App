@@ -294,6 +294,8 @@ plot:
   residuals: "Residuals"
   weighted_residuals: "Weighted residuals"
   bias: "Bias, %"
+  bias_uncalculated: "{n}/{planned} calculated"
+  bias_unavailable: "Bias unavailable: no calibrator wells could be back-calculated"
   curve_original: "Original (all standards)"
   curve_refitted: "Refitted"
 
