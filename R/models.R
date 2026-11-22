@@ -506,7 +506,10 @@ logistic_vcov <- function(model, par, x, w, sigma) {
 #'   `y`, `w`, `keys` (well IDs from `.key`, `NULL` without them),
 #'   `interval` (monotonic interval for the inverse of a quadratic curve,
 #'   `NULL` until [calculate()] sets it), `conc_range`, `weight_fun`, `w_scale`, `theta`, `notes` and, for the
-#'   polynomial models, the underlying `lm` object in `object`.
+#'   polynomial models, the underlying `lm` object in `object`. Stops with
+#'   `error.coef_not_estimable` when a coefficient of a polynomial model
+#'   cannot be estimated (rank-deficient design, as over a range of
+#'   concentrations too narrow to separate the linear and quadratic terms).
 #' @export
 fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'none') {
     x <- standard_data$conc
@@ -525,6 +528,11 @@ fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'n
                          w = w)
         formula <- if (degree == 1) v ~ u else v ~ u + I(u^2)
         object <- lm(formula, data = df, weights = w)
+        # lm() drops a term it cannot separate from the others (NA coefficient, as over a
+        # narrow range of concentrations) instead of stopping
+        if (object$rank < degree + 1 || !all(is.finite(coef(object)))) {
+            lin_abort('error.coef_not_estimable', model = model)
+        }
         # Intercept a, linear b and quadratic c, as in the equation of the model
         par <- stats::setNames(unname(coef(object)), c('a', 'b', 'c')[seq_len(degree + 1)])
         # summary.lm warns about essentially perfect fits (synthetic data); the matrix is still valid
@@ -810,7 +818,9 @@ information_criteria <- function(fit) {
 #'   fit), `n.failed` (wells of the fit without a back-calculated
 #'   concentration), `n.available` (wells of the common set), `status`
 #'   (`"ok"`, `"too_few_levels"`, `"not_converged"` (no start of the
-#'   optimiser converged, see [fit_logistic()]) or `"fit_failed"`), `n.levels` (standard
+#'   optimiser converged, see [fit_logistic()]), `"not_estimable"` (a
+#'   polynomial whose terms cannot be separated on these concentrations, see
+#'   [fit_curve()]) or `"fit_failed"`), `n.levels` (standard
 #'   levels the model can use) and `n.levels.required` (the number of
 #'   parameters plus one, as for the calibration), the list columns `wells`
 #'   (IDs of the wells used; `NULL` if not fitted) and `dropped` (IDs left
@@ -834,7 +844,10 @@ compare_models <- function(standard_data, linear = FALSE, weights = 'none') {
         fit <- tryCatch(fit_curve(std, m, linear, weights), error = function(e) e)
         if (inherits(fit, 'error')) {
             # No statistics: a fit stopped by a limit has no AIC to compare
-            row$stats$status <- if (identical(fit$key, 'error.fit_not_converged')) 'not_converged' else 'fit_failed'
+            row$stats$status <- switch(if (is.null(fit$key)) '' else fit$key,
+                                       error.fit_not_converged = 'not_converged',
+                                       error.coef_not_estimable = 'not_estimable',
+                                       'fit_failed')
             return(row)
         }
         stats$status <- 'ok'

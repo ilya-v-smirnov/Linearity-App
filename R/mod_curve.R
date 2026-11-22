@@ -241,8 +241,8 @@ comparison_table <- function(cmp, lang) {
 #'
 #' @return Character vector, one text per model: empty for the fitted
 #'   models, otherwise the reason (too few standard levels, with the numbers
-#'   available and required, a fit that did not converge or a fit that
-#'   failed).
+#'   available and required, a fit that did not converge, coefficients that
+#'   cannot be estimated or a fit that failed).
 #' @keywords internal
 comparison_status <- function(cmp, lang) {
     if (is.null(cmp$status)) return(rep('', nrow(cmp)))
@@ -251,6 +251,7 @@ comparison_status <- function(cmp, lang) {
                too_few_levels = tr('compare.too_few_levels', lang, n = cmp$n.levels[i],
                                    needed = cmp$n.levels.required[i]),
                not_converged = tr('compare.not_converged', lang),
+               not_estimable = tr('compare.not_estimable', lang),
                fit_failed = tr('compare.fit_failed', lang),
                '')
     }, '')

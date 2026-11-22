@@ -24,7 +24,10 @@ intercept, \code{b} the linear and \code{c} the quadratic coefficient), \code{vc
 \code{y}, \code{w}, \code{keys} (well IDs from \code{.key}, \code{NULL} without them),
 \code{interval} (monotonic interval for the inverse of a quadratic curve,
 \code{NULL} until \code{\link[=calculate]{calculate()}} sets it), \code{conc_range}, \code{weight_fun}, \code{w_scale}, \code{theta}, \code{notes} and, for the
-polynomial models, the underlying \code{lm} object in \code{object}.
+polynomial models, the underlying \code{lm} object in \code{object}. Stops with
+\code{error.coef_not_estimable} when a coefficient of a polynomial model
+cannot be estimated (rank-deficient design, as over a range of
+concentrations too narrow to separate the linear and quadratic terms).
 }
 \description{
 Fit a Calibration Curve

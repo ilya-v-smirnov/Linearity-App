@@ -418,6 +418,44 @@ test_that('only converged starts of the logistic fits are compared', {
     expect_equal(LinearityApp:::comparison_table(cmp, 'en')$Note[logistic], rep('Fit did not converge', 2))
 })
 
+test_that('a quadratic model with a coefficient that cannot be estimated does not stop the comparison', {
+    # Seven levels 100.00-100.06: u and u^2 cannot be separated, lm() returns c = NA
+    std <- data.frame(conc = rep(seq(100, 100.06, by = 0.01), each = 2),
+                      OD = rep(seq(0.10, 0.16, by = 0.01), each = 2) + rep(c(-0.001, 0.001), 7))
+    for (model in c('QUAD', 'QRM')) {
+        expect_error(fit_curve(std, model), class = 'lin_error')
+        err <- tryCatch(fit_curve(std, model), error = function(e) e)
+        expect_equal(err$key, 'error.coef_not_estimable')
+        expect_match(conditionMessage(err), model, fixed = TRUE)
+    }
+
+    quadratic_rows <- function(cmp) cmp$model %in% c('QUAD', 'QRM')
+    for (linear in c(FALSE, TRUE)) {
+        expect_no_error(cmp <- compare_models(std, linear = linear))
+        quad <- quadratic_rows(cmp)
+        expect_equal(cmp$status[quad], rep('not_estimable', 2), info = linear)
+        expect_true(all(is.na(cmp$AIC[quad])))
+        expect_true(all(is.na(cmp$BIC[quad])))
+        expect_true(all(vapply(cmp$wells[quad], is.null, logical(1))))
+        expect_false(any(cmp$lowest.aic[quad]))
+        # the other models stay available
+        expect_equal(cmp$status[!quad], rep('ok', sum(!quad)), info = linear)
+        expect_true(all(is.finite(cmp$AIC[!quad])))
+        # with linear = TRUE, LRM is LIN and shares its AIC
+        expect_true(any(cmp$lowest.aic[!quad]))
+        for (lang in supported_languages()) {
+            tab <- LinearityApp:::comparison_table(cmp, lang)
+            expect_equal(tab[[tr('compare.note_column', lang)]][quad], rep(tr('compare.not_estimable', lang), 2))
+            expect_equal(tab[[tr('compare.aic', lang)]][quad], c('', ''))
+        }
+    }
+    expect_equal(LinearityApp:::comparison_table(cmp, 'en')$Note[quadratic_rows(cmp)],
+                 rep('Coefficients not estimable', 2))
+    expect_equal(LinearityApp:::comparison_status(data.frame(status = 'not_estimable', n.levels = 7,
+                                                             n.levels.required = 4), 'ru'),
+                 'Коэффициенты не оцениваются')
+})
+
 test_that('the common set of wells does not depend on the model', {
     data <- load_sample('bca')
     keys <- well_keys(data)[data$type == 'standard']
