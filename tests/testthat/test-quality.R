@@ -835,7 +835,8 @@ test_that('the equation of each model uses the names of its coefficients', {
     expect_match(eq('4PL'), 'eq-frac', fixed = TRUE)
     expect_match(eq('5PL'), ']<sup><i>g</i></sup>', fixed = TRUE)
     for (m in calibration_models()) {
-        coefs <- get_coef_ci(calculate(d, m)$fit)$coef
+        # the parameters of the model; C50 of the 5PL is derived from them, not in the equation
+        coefs <- setdiff(get_coef_ci(calculate(d, m)$fit)$coef, 'C50')
         html <- eq(m)
         for (k in coefs) expect_match(html, paste0('<i>', k, '</i>'), fixed = TRUE)
     }

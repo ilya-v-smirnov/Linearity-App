@@ -17,8 +17,13 @@
 #' * `5PL`: five-parameter logistic OD = d + (a - d) / (1 + (C/c)^b)^g.
 #'
 #' In the logistic models `a` is the response at zero concentration, `d` at
-#' infinite concentration, `c` the inflection point (EC50), `b` the slope and
-#' `g` the asymmetry.
+#' infinite concentration, `b` the slope factor and `g` the asymmetry. In the
+#' 4PL `c` is the concentration at the midpoint of the response, (a + d) / 2
+#' (the EC50, and the inflection point on the log scale of the concentration).
+#' In the 5PL `c` is a scale parameter: the response at C = c is
+#' d + (a - d) / 2^g, the midpoint only when g = 1; the concentration at the
+#' midpoint of the response is C50 = c (2^(1/g) - 1)^(1/b), given as a row of
+#' its own in the coefficients (see [get_coef_ci()]).
 #'
 #' @return Character vector of model codes.
 #' @export
@@ -437,7 +442,7 @@ fit_logistic <- function(model, x, y, w) {
 #' sigma^2 (J' W J)^-1 with the Jacobian J of the curve computed numerically.
 #' Parameters are considered not identifiable from the standards when the
 #' condition number of J' W J exceeds 1e10 (typically the upper asymptote is
-#' not reached; the standard error of log EC50 is then > 10). If the matrix
+#' not reached; the standard error of log c is then > 10). If the matrix
 #' cannot be inverted at all, a pseudo-inverse is used (`exact = FALSE`) so
 #' that concentrations still get confidence intervals.
 #'
@@ -621,7 +626,32 @@ inverse_predict_ci <- function(fit, od, level = 0.95) {
 }
 
 
+#' Concentration at the Midpoint of the Response of a 5PL
+#'
+#' C50 = c (2^(1/g) - 1)^(1/b), where the 5PL reads (a + d) / 2; its
+#' parameter `c` is a scale parameter, the midpoint only when g = 1.
+#'
+#' @param par Internal parameters of a 5PL (`a`, `b`, `lc`, `d`, `g`).
+#'
+#' @return log(C50), `NA` when it is not defined.
+#' @keywords internal
+log_c50 <- function(par) {
+    v <- par[['lc']] + log(2^(1 / par[['g']]) - 1) / par[['b']]
+    if (is.finite(v)) v else NA_real_
+}
+
+
 #' Coefficients and Confidence Intervals of a Fit
+#'
+#' The parameters of the model (for the logistic models `c` rather than its
+#' logarithm) and, for a 5PL, the concentration at the midpoint of the response
+#' `C50` (see [log_c50()]), whose interval comes from the delta method on
+#' log(C50).
+#'
+#' @param fit A `lin_fit` object.
+#' @param level Confidence level.
+#'
+#' @return A data.frame with `coef`, `est`, `ci.lower`, `ci.upper`.
 #' @keywords internal
 coef_table_fit <- function(fit, level = 0.95) {
     se <- sqrt(pmax(diag(fit$vcov), 0))
@@ -643,7 +673,21 @@ coef_table_fit <- function(fit, level = 0.95) {
     }
     tab <- data.frame(coef = names(est), est = unname(est),
                       ci.lower = unname(lower), ci.upper = unname(upper))
-    tab[order(tab$coef), ]
+    tab <- tab[order(tab$coef), ]
+    if (identical(fit$model, '5PL')) {
+        # A derived quantity after the parameters: the midpoint of the response, which c is not
+        l50 <- log_c50(fit$par)
+        ci <- c(NA_real_, NA_real_)
+        if (!is.na(l50) && !isFALSE(fit$vcov_exact)) {
+            g <- num_grad(log_c50, fit$par)
+            var_l50 <- drop(t(g) %*% fit$vcov %*% g)
+            if (is.finite(var_l50) && var_l50 >= 0) ci <- exp(l50 + c(-1, 1) * t_q * sqrt(var_l50))
+            # A bound of 0 or infinity (exp() out of range) says only that C50 is not determined
+            ci[!is.finite(ci) | ci <= 0] <- NA_real_
+        }
+        tab <- rbind(tab, data.frame(coef = 'C50', est = exp(l50), ci.lower = ci[1], ci.upper = ci[2]))
+    }
+    tab
 }
 
 

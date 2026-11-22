@@ -14,7 +14,9 @@ get_coef_ci(fit, round_fun = NULL, round_par = NULL)
 \item{round_par}{Optional rounding parameter.}
 }
 \value{
-A data.frame with columns \code{coef}, \code{est}, \code{ci.lower}, \code{ci.upper}.
+A data.frame with columns \code{coef}, \code{est}, \code{ci.lower}, \code{ci.upper};
+for a 5PL the last row \code{C50} is the concentration at the midpoint of the
+response, which \code{c} is not (see \code{\link[=coef_table_fit]{coef_table_fit()}}).
 }
 \description{
 Extract Coefficients and Confidence Intervals

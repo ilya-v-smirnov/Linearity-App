@@ -530,6 +530,7 @@ mod_curve_ui <- function(id, lang) {
                        shiny::uiOutput(ns('equation')),
                        shiny::h5(t('curve.section_coefs')),
                        shiny::tableOutput(ns('coefs')),
+                       shiny::uiOutput(ns('coef_note')),
                        # The table and the plot of the bias share the width of the table
                        shiny::div(class = 'std-block',
                                   shiny::h5(with_tooltip(t('quality.section_standards'), t('quality.backcalc_legend'))),
@@ -725,6 +726,11 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             tab <- coef_table()
             tab[-1] <- lapply(tab[-1], as.character)
             tab
+        })
+        # The c of a 5PL is not the EC50: the row C50 is explained under the table
+        output$coef_note <- shiny::renderUI({
+            if (!identical(result()$fit$model, '5PL')) return(NULL)
+            shiny::p(class = 'text-muted small', t('curve.c50_note'))
         })
         # The background does not depend on the fit: it is shown even if the curve cannot be fitted
         background_info <- shiny::reactive({

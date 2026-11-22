@@ -143,6 +143,7 @@ curve:
   section_equation: "Model equation"
   coefs: "Model parameters"
   section_coefs: "Coefficients"
+  c50_note: "C50 is the concentration at the midpoint of the response, (a + d) / 2: C50 = c · (2^(1/g) − 1)^(1/b). In the 5PL c is a scale parameter, the midpoint only when g = 1, so c is not the EC50."
   model: "Choose regression model"
   xtitle: "X-axis title:"
   xunits: "X units:"

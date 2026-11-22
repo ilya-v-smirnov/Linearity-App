@@ -6,7 +6,18 @@
 \usage{
 coef_table_fit(fit, level = 0.95)
 }
+\arguments{
+\item{fit}{A \code{lin_fit} object.}
+
+\item{level}{Confidence level.}
+}
+\value{
+A data.frame with \code{coef}, \code{est}, \code{ci.lower}, \code{ci.upper}.
+}
 \description{
-Coefficients and Confidence Intervals of a Fit
+The parameters of the model (for the logistic models \code{c} rather than its
+logarithm) and, for a 5PL, the concentration at the midpoint of the response
+\code{C50} (see \code{\link[=log_c50]{log_c50()}}), whose interval comes from the delta method on
+log(C50).
 }
 \keyword{internal}

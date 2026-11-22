@@ -31,6 +31,11 @@ Logistic models on the original OD scale:
 }
 
 In the logistic models \code{a} is the response at zero concentration, \code{d} at
-infinite concentration, \code{c} the inflection point (EC50), \code{b} the slope and
-\code{g} the asymmetry.
+infinite concentration, \code{b} the slope factor and \code{g} the asymmetry. In the
+4PL \code{c} is the concentration at the midpoint of the response, (a + d) / 2
+(the EC50, and the inflection point on the log scale of the concentration).
+In the 5PL \code{c} is a scale parameter: the response at C = c is
+d + (a - d) / 2^g, the midpoint only when g = 1; the concentration at the
+midpoint of the response is C50 = c (2^(1/g) - 1)^(1/b), given as a row of
+its own in the coefficients (see \code{\link[=get_coef_ci]{get_coef_ci()}}).
 }

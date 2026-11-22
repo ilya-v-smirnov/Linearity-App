@@ -22,7 +22,7 @@ A list with \code{vcov}, \code{identifiable} and \code{exact}.
 sigma^2 (J' W J)^-1 with the Jacobian J of the curve computed numerically.
 Parameters are considered not identifiable from the standards when the
 condition number of J' W J exceeds 1e10 (typically the upper asymptote is
-not reached; the standard error of log EC50 is then > 10). If the matrix
+not reached; the standard error of log c is then > 10). If the matrix
 cannot be inverted at all, a pseudo-inverse is used (\code{exact = FALSE}) so
 that concentrations still get confidence intervals.
 }

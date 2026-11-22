@@ -506,7 +506,9 @@ is_monotonic <- function(fit) {
 #' @param round_fun Optional rounding function (e.g. `signif`).
 #' @param round_par Optional rounding parameter.
 #'
-#' @return A data.frame with columns `coef`, `est`, `ci.lower`, `ci.upper`.
+#' @return A data.frame with columns `coef`, `est`, `ci.lower`, `ci.upper`;
+#'   for a 5PL the last row `C50` is the concentration at the midpoint of the
+#'   response, which `c` is not (see [coef_table_fit()]).
 #' @export
 get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
     if (!inherits(fit, 'lin_fit')) {

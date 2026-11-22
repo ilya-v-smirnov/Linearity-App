@@ -25,6 +25,47 @@ test_that('4PL and 5PL recover known parameters and invert exactly', {
     expect_equal(inverse_fun(fit5, logistic(5, 0.05, 1.1, 10, 2.5, 0.5)), 5, tolerance = 1e-4)
 })
 
+test_that('the coefficients of a 5PL give the midpoint of the response apart from c', {
+    std5 <- make_standards(function(x) logistic(x, 0.05, 1.1, 10, 2.5, g = 0.5), sd = 0.01,
+                           conc = c(0.5, 1, 2, 4, 8, 16, 32, 64, 128))
+    fit5 <- fit_curve(std5, '5PL')
+    tab <- get_coef_ci(fit5)
+    expect_equal(tab$coef, c('a', 'b', 'c', 'd', 'g', 'C50'))
+    p <- setNames(tab$est, tab$coef)
+    # c is not the midpoint: the curve reads d + (a - d) / 2^g there
+    expect_equal(LinearityApp:::curve_fun(fit5, p[['c']]), p[['d']] + (p[['a']] - p[['d']]) / 2^p[['g']],
+                 tolerance = 1e-8)
+    expect_gt(abs(LinearityApp:::curve_fun(fit5, p[['c']]) - (p[['a']] + p[['d']]) / 2), 0.1)
+    # C50 is, close to the true 10 * 3^(1/1.1)
+    expect_equal(p[['C50']], p[['c']] * (2^(1 / p[['g']]) - 1)^(1 / p[['b']]))
+    expect_equal(LinearityApp:::curve_fun(fit5, p[['C50']]), (p[['a']] + p[['d']]) / 2, tolerance = 1e-8)
+    exact <- make_standards(function(x) logistic(x, 0.05, 1.1, 10, 2.5, g = 0.5),
+                            conc = c(0.5, 1, 2, 4, 8, 16, 32, 64, 128))
+    exact_tab <- get_coef_ci(fit_curve(exact, '5PL'))
+    expect_equal(exact_tab$est[exact_tab$coef == 'C50'], 10 * 3^(1 / 1.1), tolerance = 1e-3)
+    c50 <- tab[tab$coef == 'C50', ]
+    expect_true(c50$ci.lower < c50$est && c50$est < c50$ci.upper)
+    # and goes to the comparison of the original and refitted calibrations
+    std5$.key <- paste0('w', seq_len(nrow(std5)))
+    expect_true('C50' %in% exclusion_effect(fit5, fit5, std5, character(0))$coefs$coef)
+
+    # with g = 1 the midpoint is c; the 4PL has no such row
+    p1 <- fit5$par
+    p1[['g']] <- 1
+    expect_equal(exp(LinearityApp:::log_c50(p1)), exp(p1[['lc']]))
+    expect_false('C50' %in% get_coef_ci(fit_curve(std5, '4PL'))$coef)
+    # without an exact covariance matrix, no interval
+    fake <- fit5
+    fake$vcov_exact <- FALSE
+    expect_true(is.na(get_coef_ci(fake)$ci.lower[6]))
+    # a C50 far from determined: bounds of 0 and infinity are not shown
+    vague <- fit5
+    vague$vcov <- vague$vcov * 1e8
+    c50 <- tail(get_coef_ci(vague), 1)
+    expect_true(is.finite(c50$est))
+    expect_true(all(is.na(c(c50$ci.lower, c50$ci.upper))))
+})
+
 test_that('a 5PL gives no concentration for an OD beyond its asymptotes, whatever g', {
     std <- make_standards(function(x) logistic(x, 0.05, 1.1, 10, 2.5, g = 0.5),
                           conc = c(0.5, 1, 2, 4, 8, 16, 32, 64, 128))

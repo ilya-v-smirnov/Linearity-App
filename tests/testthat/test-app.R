@@ -46,6 +46,13 @@ test_that('curve module recalculates when the model changes', {
         expect_equal(session$returned$result()$model, '4PL')
         expect_equal(session$returned$weights(), '1/y2')
         expect_equal(nrow(session$returned$coef_table()), 4)
+        expect_null(output$coef_note)
+
+        # the 5PL adds its midpoint C50, explained under the table: c is not the EC50
+        session$setInputs(model = '5PL')
+        expect_equal(session$returned$result()$model, '5PL')
+        expect_equal(tail(session$returned$coef_table()$coef, 1), 'C50')
+        expect_match(output$coef_note$html, 'so c is not the EC50', fixed = TRUE)
     })
 })
 
