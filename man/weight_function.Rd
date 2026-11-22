@@ -4,16 +4,21 @@
 \alias{weight_function}
 \title{Weight Function for a Calibration}
 \usage{
-weight_function(weights, x, y)
+weight_function(weights, x, y, log_scale = FALSE)
 }
 \arguments{
 \item{weights}{Weighting code (see \code{\link[=weighting_schemes]{weighting_schemes()}}).}
 
 \item{x, y}{Concentrations and ODs of the standards used in the fit.}
+
+\item{log_scale}{Whether the model is fitted on log10(OD) (see
+\code{\link[=model_log_scale]{model_log_scale()}}): the scale on which the variances of the replicates
+are estimated for \code{power}.}
 }
 \value{
 A list with \code{fun(x, y)} returning unnormalised weights, \code{theta}
-(for \code{power}) and \code{notes}.
+(for \code{power}; within 0-4 on the OD scale and the equivalent -2-2 on log
+scales) and \code{notes}.
 }
 \description{
 Weight Function for a Calibration

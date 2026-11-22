@@ -54,7 +54,10 @@ model_log_scale <- function(model, linear = FALSE) model %in% c('LRM', 'QRM') &&
 #' * `1/y`, `1/y2`: weights 1/OD and 1/OD^2 (mean OD of the level);
 #' * `1/x`, `1/x2`: weights 1/conc and 1/conc^2;
 #' * `power`: 1/OD^theta, where theta is estimated from the variances of
-#'   replicates (variance function var = k * mean^theta).
+#'   replicates on the scale of the residuals of the model (variance function
+#'   var = k * mean^theta, the mean on the OD scale): the variance of OD for
+#'   the models on the OD scale, of log10(OD) for the log-log models, so that
+#'   a constant CV gives theta near 2 on the OD scale and near 0 on log scales.
 #'
 #' Weights are normalised to a mean of 1.
 #'
@@ -85,11 +88,15 @@ n_params <- function(model) c(LIN = 2, QUAD = 3, LRM = 2, QRM = 3, '4PL' = 4, '5
 #'
 #' @param weights Weighting code (see [weighting_schemes()]).
 #' @param x,y Concentrations and ODs of the standards used in the fit.
+#' @param log_scale Whether the model is fitted on log10(OD) (see
+#'   [model_log_scale()]): the scale on which the variances of the replicates
+#'   are estimated for `power`.
 #'
 #' @return A list with `fun(x, y)` returning unnormalised weights, `theta`
-#'   (for `power`) and `notes`.
+#'   (for `power`; within 0-4 on the OD scale and the equivalent -2-2 on log
+#'   scales) and `notes`.
 #' @keywords internal
-weight_function <- function(weights, x, y) {
+weight_function <- function(weights, x, y, log_scale = FALSE) {
     if (!weights %in% weighting_schemes()) lin_abort('error.weights_unknown', weights = weights)
     notes <- list()
     level_mean <- stats::ave(y, x)
@@ -100,15 +107,18 @@ weight_function <- function(weights, x, y) {
 
     if (weights == 'power') {
         groups <- split(y, x)
+        # The variance on the scale of the residuals: the weights must be inverse to it. For a fit on
+        # log10(OD), var(log10 OD) ~ var(OD) / OD^2, so the same data give theta lower by 2
         stats <- do.call(rbind, lapply(groups, function(g) {
-            if (length(g) < 2) return(NULL)
-            data.frame(m = mean(g), v = stats::var(g))
+            if (length(g) < 2 || (log_scale && any(g <= 0))) return(NULL)
+            data.frame(m = mean(g), v = stats::var(if (log_scale) log10(g) else g))
         }))
         ok <- !is.null(stats) && sum(stats$m > 0 & stats$v > 0) >= 3
         if (ok) {
             stats <- stats[stats$m > 0 & stats$v > 0, ]
             theta <- unname(coef(lm(log(stats$v) ~ log(stats$m)))[2])
-            theta <- min(max(theta, 0), 4)
+            bounds <- if (log_scale) c(-2, 2) else c(0, 4)
+            theta <- min(max(theta, bounds[1]), bounds[2])
         } else {
             theta <- 0
             notes <- list(lin_message('note.power_fallback'))
@@ -487,7 +497,7 @@ fit_curve <- function(standard_data, model = 'LRM', linear = FALSE, weights = 'n
     log_scale <- model_log_scale(model, linear)
     degree <- poly_degree(model)
 
-    wf <- weight_function(weights, x, y)
+    wf <- weight_function(weights, x, y, log_scale)
     w_raw <- wf$fun(x, wf$level_mean)
     w_scale <- mean(w_raw)
     w <- w_raw / w_scale

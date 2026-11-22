@@ -191,6 +191,39 @@ test_that('weights follow the chosen scheme', {
     expect_match(message_text(fit$notes), 'Too few replicates')
 })
 
+test_that('power weights are estimated on the scale of the residuals of the model', {
+    set.seed(5)
+    x <- rep(c(1, 2, 4, 8, 16, 32), each = 6)
+    level_ratio <- function(fit) {
+        w <- tapply(fit$w, fit$x, mean)
+        max(w) / min(w)
+    }
+    # constant CV: the variance grows as OD^2 on the OD scale, the log10(OD) scatter is constant
+    cv <- data.frame(conc = x, OD = 0.05 * x * exp(stats::rnorm(length(x), 0, 0.05)))
+    log_fit <- fit_curve(cv, 'LRM', weights = 'power')
+    expect_lt(abs(log_fit$theta), 0.5)
+    # levels 32-fold apart: nearly equal weights, not the ~1000-fold of 1/OD^2
+    expect_lt(level_ratio(log_fit), 3)
+    od_fit <- fit_curve(cv, 'LRM', linear = TRUE, weights = 'power')
+    expect_equal(od_fit$theta, 2, tolerance = 0.5)
+    expect_gt(level_ratio(od_fit), 100)
+
+    # constant SD: equal weights on the OD scale, the high levels weigh more on log scales
+    sd <- data.frame(conc = x, OD = 0.05 * x + stats::rnorm(length(x), 0, 0.005))
+    expect_lt(abs(fit_curve(sd, 'LRM', linear = TRUE, weights = 'power')$theta), 0.5)
+    log_fit <- fit_curve(sd, 'LRM', weights = 'power')
+    expect_equal(log_fit$theta, -2, tolerance = 0.5)
+    expect_gt(log_fit$w[x == 32][1], log_fit$w[x == 1][1])
+
+    # too few replicates: unweighted on both scales
+    single <- data.frame(conc = c(1, 2, 4, 8), OD = c(0.1, 0.2, 0.4, 0.8))
+    for (linear in c(FALSE, TRUE)) {
+        fit <- fit_curve(single, 'LRM', linear = linear, weights = 'power')
+        expect_equal(fit$theta, 0, info = linear)
+        expect_match(message_text(fit$notes), 'Too few replicates', info = linear)
+    }
+})
+
 test_that('lack-of-fit test detects a wrong model', {
     std <- make_standards(function(x) 0.002 * x^2 + 0.05 * x, sd = 0.002)
     expect_lt(lack_of_fit(fit_curve(std, 'LRM', linear = TRUE))$p, 0.001)

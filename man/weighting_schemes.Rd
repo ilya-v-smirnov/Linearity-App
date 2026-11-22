@@ -15,7 +15,10 @@ Character vector of weighting codes.
 \item \code{1/y}, \code{1/y2}: weights 1/OD and 1/OD^2 (mean OD of the level);
 \item \code{1/x}, \code{1/x2}: weights 1/conc and 1/conc^2;
 \item \code{power}: 1/OD^theta, where theta is estimated from the variances of
-replicates (variance function var = k * mean^theta).
+replicates on the scale of the residuals of the model (variance function
+var = k * mean^theta, the mean on the OD scale): the variance of OD for
+the models on the OD scale, of log10(OD) for the log-log models, so that
+a constant CV gives theta near 2 on the OD scale and near 0 on log scales.
 }
 }
 \details{

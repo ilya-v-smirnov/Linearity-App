@@ -152,7 +152,7 @@ curve:
   unit_none: "None"
   save_plot: "Save plot"
   weights: "Weighting"
-  weights_help: "Weighting is usually not needed for the log–log models; for Linear, Quadratic, 4PL and 5PL use 1/y² or 1/y^θ when the scatter grows with the signal."
+  weights_help: "Weighting is usually not needed for the log–log models; for Linear, Quadratic, 4PL and 5PL use 1/y² or 1/y^θ when the scatter grows with the signal. θ is estimated from the scatter of the replicates on the scale of the model: of log10(OD) for the log–log models, where a constant CV gives nearly equal weights."
   compare: "Comparison of models"
   exclusions: "Excluded standard points"
   click_hint: "Click a standard point on the curve to exclude it from the fit; click a red cross to restore it."
