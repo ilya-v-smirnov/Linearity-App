@@ -610,11 +610,40 @@ num_grad <- function(f, p) {
 }
 
 
+#' Gradient of log(Concentration) of a Polynomial Inverse
+#'
+#' For a root u of a + b u + c u^2 = y (implicit differentiation, with the
+#' local slope s = b + 2 c u): du/da = -1/s, du/db = -u/s, du/dc = -u^2/s,
+#' du/dy = 1/s. Unlike a numerical gradient with a fixed step, it does not
+#' depend on the units of concentration, whose change rescales b and c.
+#'
+#' @param fit A `lin_fit` object of a polynomial model.
+#' @param conc A back-calculated concentration (> 0).
+#'
+#' @return A list with `par` (gradient over `fit$par`, in its order) and `y`
+#'   (derivative over the OD on the scale of the fit); `NULL` where the slope
+#'   is zero (the vertex of a parabola, a flat line): no interval there.
+#' @keywords internal
+poly_inverse_grad <- function(fit, conc) {
+    par <- fit$par
+    u <- if (fit$log_scale) log10(conc) else conc
+    q <- if (poly_degree(fit$model) == 2) par[['c']] else 0
+    s <- par[['b']] + 2 * q * u
+    if (!is.finite(s) || s == 0) return(NULL)
+    # d log(C) / du
+    dlog <- if (fit$log_scale) log(10) else 1 / u
+    du <- c(a = -1, b = -u, c = -u^2)[names(par)] / s
+    list(par = unname(dlog * du), y = dlog / s)
+}
+
+
 #' Inverse Prediction with Confidence Intervals
 #'
 #' The standard error of log(concentration) is obtained with the delta method
 #' from the uncertainty of the curve parameters and of a single OD
-#' measurement (residual variance divided by the weight of that OD).
+#' measurement (residual variance divided by the weight of that OD). The
+#' gradient is analytic for the polynomial models (see [poly_inverse_grad()]),
+#' numerical for the logistic ones.
 #'
 #' @param fit A `lin_fit` object.
 #' @param od Background-subtracted ODs.
@@ -628,12 +657,19 @@ inverse_predict_ci <- function(fit, od, level = 0.95) {
     out <- data.frame(conc = conc, lower = NA_real_, upper = NA_real_, cv = NA_real_)
     t_q <- stats::qt(1 - (1 - level) / 2, max(fit$df, 1))
     for (i in which(!is.na(conc) & conc > 0)) {
-        g_par <- num_grad(function(p) log(inverse_fun(fit, od[i], p)), fit$par)
-        y_fit <- fit_scale(fit, od[i])
-        g_y <- num_grad(function(v) {
-            o <- if (fit$log_scale) 10^v else v
-            log(inverse_fun(fit, o))
-        }, y_fit)
+        if (poly_degree(fit$model) > 0) {
+            g <- poly_inverse_grad(fit, conc[i])
+            if (is.null(g)) next
+            g_par <- g$par
+            g_y <- g$y
+        } else {
+            g_par <- num_grad(function(p) log(inverse_fun(fit, od[i], p)), fit$par)
+            y_fit <- fit_scale(fit, od[i])
+            g_y <- num_grad(function(v) {
+                o <- if (fit$log_scale) 10^v else v
+                log(inverse_fun(fit, o))
+            }, y_fit)
+        }
         w_new <- fit$weight_fun(conc[i], od[i]) / fit$w_scale
         var_log <- drop(t(g_par) %*% fit$vcov %*% g_par) + g_y^2 * fit$sigma^2 / w_new
         if (!is.finite(var_log) || var_log < 0) next

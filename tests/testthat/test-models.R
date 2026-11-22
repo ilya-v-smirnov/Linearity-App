@@ -834,3 +834,43 @@ test_that('decreasing (competitive) curves are inverted', {
     r <- calculate(data, '4PL')
     expect_equal(r$back_calc$recovery, rep(100, 14), tolerance = 1e-4)
 })
+
+test_that('the inverse intervals of the polynomial models do not depend on the units of concentration', {
+    # A monotonic parabola: in pg/mL (x 1000) its quadratic coefficient falls from 1e-2 to 1e-8
+    conc <- rep(1:7, each = 2)
+    od <- 0.1 + 0.2 * conc + 0.01 * conc^2 + rep(c(-0.01, 0.01), 7)
+    probe <- c(0.35, 1.06, 1.5)
+    for (model in c('QUAD', 'QRM', 'LIN', 'LRM')) {
+        ref <- inverse_predict_ci(fit_curve(data.frame(conc = conc, OD = od), model), probe)
+        expect_true(all(is.finite(c(ref$lower, ref$upper, ref$cv))), info = model)
+        for (k in c(1000, 1e-3)) {
+            res <- inverse_predict_ci(fit_curve(data.frame(conc = conc * k, OD = od), model), probe)
+            info <- paste(model, k)
+            expect_equal(res$conc / k, ref$conc, tolerance = 1e-8, info = info)
+            expect_equal(res$lower / k, ref$lower, tolerance = 1e-8, info = info)
+            expect_equal(res$upper / k, ref$upper, tolerance = 1e-8, info = info)
+            expect_equal(res$cv, ref$cv, tolerance = 1e-8, info = info)
+        }
+    }
+    fit <- fit_curve(data.frame(conc = conc, OD = od), 'QUAD')
+    expect_equal(inverse_predict_ci(fit, 1.06)$conc, 4, tolerance = 1e-6)
+
+    # in units where a numerical gradient is accurate, the analytic one agrees with it
+    for (model in c('QUAD', 'QRM', 'LIN', 'LRM')) {
+        fit <- fit_curve(data.frame(conc = conc, OD = od), model)
+        c0 <- inverse_fun(fit, 1.06)
+        g <- LinearityApp:::poly_inverse_grad(fit, c0)
+        num_par <- LinearityApp:::num_grad(function(p) log(inverse_fun(fit, 1.06, p)), fit$par)
+        num_y <- LinearityApp:::num_grad(function(v) {
+            log(inverse_fun(fit, if (fit$log_scale) 10^v else v))
+        }, LinearityApp:::fit_scale(fit, 1.06))
+        expect_equal(g$par, num_par, tolerance = 1e-6, info = model)
+        expect_equal(g$y, num_y, tolerance = 1e-6, info = model)
+    }
+
+    # no interval at the vertex of the parabola, where the slope is zero
+    vertex_fit <- fit_curve(data.frame(conc = conc, OD = od), 'QUAD')
+    vertex_fit$par <- c(a = 0.1, b = -0.2, c = 0.01)
+    expect_null(LinearityApp:::poly_inverse_grad(vertex_fit, 10))
+    expect_false(is.null(LinearityApp:::poly_inverse_grad(vertex_fit, 9)))
+})

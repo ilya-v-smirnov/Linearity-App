@@ -20,5 +20,7 @@ standard error of log concentration).
 \description{
 The standard error of log(concentration) is obtained with the delta method
 from the uncertainty of the curve parameters and of a single OD
-measurement (residual variance divided by the weight of that OD).
+measurement (residual variance divided by the weight of that OD). The
+gradient is analytic for the polynomial models (see \code{\link[=poly_inverse_grad]{poly_inverse_grad()}}),
+numerical for the logistic ones.
 }
