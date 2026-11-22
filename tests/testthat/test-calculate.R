@@ -344,18 +344,13 @@ test_that('files of earlier versions with NC wells are analysed visibly', {
     expect_match(html, 'Background by default: Negative control (2 well(s)).', fixed = TRUE)
     expect_match(html, 'as in earlier versions', fixed = TRUE)
 
-    # the mean differs from the geometric mean of earlier versions by more than 1 %: noticed
+    # the background is the arithmetic mean of its wells, without a comparison with another mean
     odd <- data
     odd$OD[odd$type == 'NC'] <- c(0.02, 0.10)
     changed <- calculate(odd, 'LRM')
-    expect_equal(changed$background$legacy, sqrt(0.02 * 0.10))
-    expect_match(message_text(changed$notes), 'differs from that of earlier versions of the app (0.04472',
-                 fixed = TRUE, all = FALSE)
-    # the value of earlier versions is not repeated under the background table
-    expect_false(any(grepl('Earlier versions', LinearityApp:::background_notes(changed$background, 'en'))))
-    # a difference below 1 % is shown with the background only
-    expect_false(any(grepl('earlier versions', message_text(r$notes), fixed = TRUE) &
-                     grepl('differs', message_text(r$notes), fixed = TRUE)))
+    expect_equal(changed$background$value, 0.06)
+    expect_null(changed$background$legacy)
+    expect_false(any(grepl('geometric mean|differs from that of earlier versions', message_text(changed$notes))))
 })
 
 test_that('single background wells are excluded from the background', {

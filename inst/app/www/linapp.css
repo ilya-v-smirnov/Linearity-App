@@ -523,6 +523,22 @@
     margin-bottom: 0.2rem;
 }
 
+/* One line per standard level that needs attention; it opens on the wells of the level */
+.quality-verdict .verdict-level {
+    margin: 0.15rem 0 0.2rem;
+}
+
+.quality-verdict .verdict-level summary {
+    cursor: pointer;
+}
+
+.quality-verdict .verdict-wells {
+    width: auto;
+    margin: 0.3rem 0 0.4rem 1.2rem;
+    font-size: 0.875rem;
+    --bs-table-bg: transparent;
+}
+
 /* Summary step: quick grouping choices and the preview of the rows */
 .summary-presets {
     display: flex;

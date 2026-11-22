@@ -4,12 +4,14 @@
 \alias{comparison_table}
 \title{Comparison of Models for Display}
 \usage{
-comparison_table(cmp, lang)
+comparison_table(cmp, lang, acceptance = NULL)
 }
 \arguments{
 \item{cmp}{Output of \code{\link[=compare_models]{compare_models()}}.}
 
 \item{lang}{Language code.}
+
+\item{acceptance}{Optional output of \code{\link[=model_acceptance]{model_acceptance()}}.}
 }
 \value{
 A data.frame with translated column names and rounded values.
@@ -23,5 +25,10 @@ used (\code{15/16}: wells in the fit / wells of the common set) instead of the
 mark, and the attribute \code{note} explains the difference (see
 \code{\link[=comparison_note]{comparison_note()}}). When a model cannot be fitted, a last column says
 why (see \code{\link[=comparison_status]{comparison_status()}}).
+}
+\details{
+With \code{acceptance}, a last column gives the standard levels
+passed by each model and the decision on its calibration (see
+\code{\link[=model_acceptance]{model_acceptance()}}).
 }
 \keyword{internal}

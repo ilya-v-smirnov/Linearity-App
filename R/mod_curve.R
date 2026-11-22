@@ -197,12 +197,17 @@ weight_labels <- function(weights, lang) {
 #' [comparison_note()]). When a model cannot be fitted, a last column says
 #' why (see [comparison_status()]).
 #'
+#' With `acceptance`, a last column gives the standard levels
+#' passed by each model and the decision on its calibration (see
+#' [model_acceptance()]).
+#'
 #' @param cmp Output of [compare_models()].
 #' @param lang Language code.
+#' @param acceptance Optional output of [model_acceptance()].
 #'
 #' @return A data.frame with translated column names and rounded values.
 #' @keywords internal
-comparison_table <- function(cmp, lang) {
+comparison_table <- function(cmp, lang, acceptance = NULL) {
     fmt <- function(x, pattern) ifelse(is.na(x), '', sprintf(pattern, x))
     same <- same_wells(cmp)
     out <- data.frame(
@@ -217,15 +222,18 @@ comparison_table <- function(cmp, lang) {
         max = fmt(cmp$max.abs.error, '%.1f'),
         lof = ifelse(is.na(cmp$lof.p), '', format(signif(cmp$lof.p, 2))),
         rec = ifelse(cmp$lowest.aic, tr('compare.mark', lang), ''),
-        note = comparison_status(cmp, lang)
+        note = comparison_status(cmp, lang),
+        levels = acceptance_text(acceptance, cmp$model)
     )
     # Optional columns: the wells used when they differ (instead of the mark), failed inversions and
     # the reasons why a model is not fitted when there are any
-    drop <- c(if (same) 'wells' else 'rec', if (all(out$failed == '')) 'failed', if (all(out$note == '')) 'note')
+    drop <- c(if (same) 'wells' else 'rec', if (is.null(acceptance)) 'levels', if (all(out$failed == '')) 'failed',
+              if (all(out$note == '')) 'note')
     keys <- c(model = 'compare.model', n.par = 'compare.n_par', wells = 'compare.wells_used',
               failed = 'compare.n_failed', AIC = 'compare.aic', BIC = 'compare.bic', R2 = 'compare.r2',
               mean = 'compare.mean_error', max = 'compare.max_error', lof = 'compare.lof',
-              rec = 'compare.lowest_aic', note = 'compare.note_column')
+              rec = 'compare.lowest_aic', note = 'compare.note_column',
+              levels = 'compare.levels_passed')
     out <- out[, setdiff(names(out), drop), drop = FALSE]
     names(out) <- vapply(keys[names(out)], tr, '', lang = lang)
     rownames(out) <- NULL
@@ -687,6 +695,23 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             compare_models(pool(), weights = if (is.null(input$weights)) 'none' else input$weights)
         })
 
+        # The decision on the calibration with each model: the chosen one is the result itself, the others
+        # are calculated with the same data, background, exclusions and criteria (no monotonic interval)
+        acceptance <- shiny::reactive({
+            shiny::req(!isTRUE(background_info()$empty))
+            d <- data()
+            s <- settings()
+            chosen <- tryCatch(result(), error = function(e) NULL)
+            results <- lapply(calibration_models(), function(m) {
+                if (identical(m, s$model)) return(chosen)
+                tryCatch(calculate(d, model = m, weights = s$weights, background = s$background,
+                                   subtract_background = s$subtract, at_blank = s$at_blank, exclude = exclusions(),
+                                   exclude_background = bg_exclusions(), criteria = criteria()),
+                         error = function(e) NULL)
+            })
+            model_acceptance(stats::setNames(results, calibration_models()))
+        })
+
         # Original (all standards) and refitted (without the excluded points) calibrations
         effect_tables <- shiny::reactive({
             r <- rounding()
@@ -804,7 +829,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
         shiny::outputOptions(output, 'points', suspendWhenHidden = FALSE)
         shiny::outputOptions(output, 'wells', suspendWhenHidden = FALSE)
         output$curve_quality <- shiny::renderTable(quality()$curve, na = '')
-        output$compare <- shiny::renderTable(comparison_table(comparison(), lang), na = '')
+        output$compare <- shiny::renderTable(comparison_table(comparison(), lang, acceptance()), na = '')
         # Without the background the table alone says why there is no comparison
         output$compare_note <- shiny::renderUI({
             shiny::req(!isTRUE(background_info()$empty))
@@ -828,11 +853,13 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
 
         # The same dialog excludes or restores a standard point or a background well
         store <- function(target) if (identical(target, 'background')) bg_exclusions else exclusions
-        point_dialog <- function(text, reason = NULL, codes = exclusion_reasons(), section = 'curve') {
+        point_dialog <- function(text, reason = NULL, codes = exclusion_reasons(), section = 'curve',
+                                 context = NULL) {
             if (!is.null(reason)) {
                 return(shiny::showModal(shiny::modalDialog(
                     title = t(paste0(section, '.restore_title')),
                     shiny::p(text),
+                    context,
                     shiny::p(t('exclusion.reason'), ': ', reason),
                     footer = shiny::tagList(shiny::modalButton(t('curve.cancel')),
                                             shiny::actionButton(ns('confirm_restore'), t('curve.restore')))
@@ -841,6 +868,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shiny::showModal(shiny::modalDialog(
                 title = t(paste0(section, '.exclude_title')),
                 shiny::p(text),
+                context,
                 shiny::radioButtons(ns('reason_choice'), t('curve.reason'),
                                     choices = stats::setNames(c(codes, 'other'),
                                                               c(exclusion_reasons(lang)[codes], t('reason.other'))),
@@ -869,7 +897,9 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             if (is.null(p) || nrow(p) == 0) return()
             p <- p[1, ]
             clicked(list(key = p$key, target = 'standard'))
-            point_dialog(point_text(p), if (p$excluded) exclusions()$reason[exclusions()$key == p$key])
+            # The well and its level against the criteria, and what an exclusion leaves to the level
+            point_dialog(point_text(p), if (p$excluded) exclusions()$reason[exclusions()$key == p$key],
+                         context = point_context_ui(result(), p$key, p$excluded, lang))
         }
         # Background wells: those subtracted and those excluded by the user, not those of a role left out
         open_background <- function(w) {

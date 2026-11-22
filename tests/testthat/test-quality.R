@@ -73,8 +73,9 @@ test_that('all standard levels of the run count for the acceptance of the calibr
     expect_equal(tab[['Bias, %']][empty], rep('—', 3))
     expect_equal(tab[['CV of back-calculated, %']][empty], rep('—', 3))
     html <- as.character(LinearityApp:::verdict_ui(r, 'en'))
-    expect_match(html, 'Calibration not accepted', fixed = TRUE)
-    expect_match(html, '4 of 7 (6 required)', fixed = TRUE)
+    expect_match(html, 'Calibration rejected · 4 of 7 levels passed (6 required)', fixed = TRUE)
+    # a level without wells in the fit says which wells were lost
+    expect_match(html, 'has no wells in the fit (', fixed = TRUE)
 
     # fewer levels than the minimum: not accepted even if all of them pass
     few <- calculate(data, 'LRM', criteria = qc_criteria(min_levels = 8))
@@ -96,7 +97,7 @@ test_that('a calibration without replicates is accepted with the CV not assessed
     for (lang in supported_languages()) {
         html <- as.character(LinearityApp:::verdict_ui(r, lang))
         expect_match(html, 'alert-warning', fixed = TRUE)
-        expect_match(html, tr('quality.calibration_accepted_no_cv', lang), fixed = TRUE)
+        expect_match(html, tr('verdict.title_no_cv', lang, levels = paste0('S', 1:7)), fixed = TRUE)
     }
     # with replicates the status is a plain acceptance
     expect_equal(calculate(data, 'LRM')$quality$calibration$status, 'accepted')
@@ -108,13 +109,18 @@ test_that('a calibration without replicates is accepted with the CV not assessed
     cal <- r5$quality$calibration
     expect_equal(c(cal$n_pass, cal$n_no_cv, cal$n_cv), c(7, 2, 5))
     expect_equal(cal$status, 'accepted')
-    expect_match(as.character(LinearityApp:::verdict_ui(r5, 'en')), 'alert-success', fixed = TRUE)
+    html <- as.character(LinearityApp:::verdict_ui(r5, 'en'))
+    expect_match(html, 'alert-success', fixed = TRUE)
+    # the levels accepted by their bias alone are named all the same
+    expect_length(gregexpr('passed on bias alone under the documented-exclusion rule', html, fixed = TRUE)[[1]], 2)
     expect_false(any(grepl('was checked for only', message_text(r5$quality$warnings), fixed = TRUE)))
     # 3 without replicates, 4 with a CV: accepted with the exception
     r4 <- calculate(data, 'LRM', criteria = cr, exclude = data.frame(key = single[1:3], reason = 'test'))
     expect_equal(r4$quality$calibration$status, 'accepted_no_cv')
-    expect_match(as.character(LinearityApp:::verdict_ui(r4, 'en')),
-                 'checked for only 4 accepted standard levels (5 required): 3 accepted levels', fixed = TRUE)
+    html <- as.character(LinearityApp:::verdict_ui(r4, 'en'))
+    expect_match(html, '7 of 7 levels passed (at least 6 required); the CV was measured at 4 of them.', fixed = TRUE)
+    # the number of levels with a CV is not a requirement of the acceptance
+    expect_false(grepl('CV[^<]*required', html))
 })
 
 test_that('failing end levels narrow the quantification range', {
@@ -531,20 +537,26 @@ test_that('the criteria of the samples have their own presets that follow the st
 test_that('the verdict of the calibration is shown with the model parameters', {
     r <- calculate(run_data(bias = c('3' = 1.5, '5' = 0.6)), 'LRM')
     html <- as.character(LinearityApp:::verdict_ui(r, 'ru'))
-    expect_match(html, tr('quality.calibration_rejected', 'ru'), fixed = TRUE)
+    expect_match(html, 'Калибровка отклонена', fixed = TRUE)
     expect_match(html, 'alert-danger', fixed = TRUE)
     ok <- calculate(run_data(), 'LRM')
     html <- as.character(LinearityApp:::verdict_ui(ok, 'en', unit = '\u00b5M'))
-    expect_match(html, 'Calibration accepted', fixed = TRUE)
-    expect_match(html, 'Accepted calibration range: 1\u201364 \u00b5M', fixed = TRUE)
-    expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'range: 1\u201364</p>', fixed = TRUE)
+    expect_match(html, 'Calibration accepted \u00b7 7 of 7 levels passed', fixed = TRUE)
+    expect_match(html, 'Accepted calibration range: 1\u201364 \u00b5M.', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::verdict_ui(ok, 'en')), 'range: 1\u201364.</p>', fixed = TRUE)
+    # no level needs attention
+    expect_false(grepl('<details', html, fixed = TRUE))
 
-    # a level not accepted inside an accepted range is named
-    expect_false(grepl('Not accepted', html, fixed = TRUE))
+    # a level not accepted inside an accepted range: the criterion with its value and limit, and the wells of the fit
     gap <- calculate(run_data(bias = c('4' = 1.4)), 'LRM')
     expect_true(gap$quality$calibration$accepted)
-    expect_match(as.character(LinearityApp:::verdict_ui(gap, 'en')), '<p>Not accepted inside the range: 8</p>',
+    html <- as.character(LinearityApp:::verdict_ui(gap, 'en'))
+    expect_match(html, 'Calibration accepted \u00b7 6 of 7 levels passed', fixed = TRUE)
+    expect_match(html, 'S4 (8) failed accuracy. Mean bias of the back-calculated concentrations was +', fixed = TRUE)
+    expect_match(html, '(limit \u00b120%). Both wells, row 5 and row 12, were included in the fit.</summary>',
                  fixed = TRUE)
+    # the line opens on the wells of the level
+    expect_match(html, '<td>row 12</td>', fixed = TRUE)
 
     # failing quality controls reject the run, not the calibration
     qc <- calculate(run_data(qc = data.frame(id = 'QC-M', nominal = 10, od = 0.9)), 'LRM')
@@ -603,14 +615,20 @@ test_that('a rejected calibration has no range, and its concentrations are not r
     expect_false(cal$accepted)
     expect_equal(c(cal$lloq, cal$uloq), c(3.125, 50))
     html <- as.character(LinearityApp:::verdict_ui(r, 'en', unit = 'nM'))
-    expect_match(html, 'Calibration not accepted', fixed = TRUE)
+    expect_match(html, 'Calibration rejected · 2 of 7 levels passed (6 required)', fixed = TRUE)
     expect_false(grepl('Accepted calibration range', html, fixed = TRUE))
+    expect_match(html, '<p>Acceptance requires at least 6 of the 7 levels to pass. Levels not accepted:</p>',
+                 fixed = TRUE)
+    # one line for each level not accepted, from the highest, with the criterion failed
+    levels <- regmatches(html, gregexpr('<summary>S[0-9]', html))[[1]]
+    expect_equal(sub('<summary>', '', levels), c('S1', 'S3', 'S4', 'S5', 'S7'))
+    expect_match(html, 'S1 (100) failed accuracy. Mean bias of the back-calculated concentrations was +46.3%',
+                 fixed = TRUE)
+    expect_match(html, '+46.3% (limit ±25%).', fixed = TRUE)
+    # where a rejected calibration has no range, the levels say nothing about it
+    expect_false(grepl('range ends|range starts|included in the fit', html))
     expect_match(html, '<p>Calibration range: not established</p>', fixed = TRUE)
-    expect_match(html, '<p>Accepted standard levels: 2 of 7 (6 required)</p>', fixed = TRUE)
-    expect_match(html, '<p>Not accepted: 1.56, 6.25, 12.5, 25, 100</p>', fixed = TRUE)
     expect_match(html, '<p>Range applied to the samples: 3.12–50 nM (not reportable)</p>', fixed = TRUE)
-    # the levels are not repeated as a bullet
-    expect_false(grepl('<li>', html, fixed = TRUE))
     ru <- as.character(LinearityApp:::verdict_ui(r, 'ru'))
     expect_match(ru, 'Диапазон калибровки: не установлен', fixed = TRUE)
 

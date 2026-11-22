@@ -28,8 +28,7 @@ of the wells used; \code{"none"}: no subtraction was chosen; \code{"unavailable"
 subtraction was chosen, but no well is usable or no role is ticked),
 \code{empty} (\code{TRUE} when \code{status} is \code{"unavailable"}), \code{value} (the value
 subtracted: the mean; 0 otherwise), \code{unused} (a named vector with
-the number of wells of the roles left out), \code{legacy} (see
-\code{\link[=legacy_background]{legacy_background()}}), \code{wells} (all wells of the background roles:
+the number of wells of the roles left out), \code{wells} (all wells of the background roles:
 \code{role}, \code{key}, \code{OD}, \code{used}, \code{excluded}, \code{reason}) and \code{scatter} (see
 \code{\link[=blank_scatter]{blank_scatter()}}).
 }

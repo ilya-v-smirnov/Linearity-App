@@ -41,18 +41,6 @@ FLAGS <- list(ok = 'OK',
 
 ##################### BACKGROUND ###############################################
 
-#' Geometric Mean of Positive Values
-#'
-#' @param x Numeric vector; missing values are ignored.
-#'
-#' @return A numeric value, `NA` if `x` is empty or has non-positive values.
-#' @keywords internal
-geom_mean <- function(x) {
-    x <- x[!is.na(x)]
-    if (length(x) == 0 || any(x <= 0)) return(NA_real_)
-    10^mean(log10(x))
-}
-
 
 #' Roles of Background Wells
 #'
@@ -115,23 +103,6 @@ background_value <- function(od) {
         lin_abort('error.no_nc')
     }
     list(value = mean(od), notes = list())
-}
-
-
-#' Background of Earlier Versions
-#'
-#' Earlier versions subtracted the geometric mean of all blank and NC wells
-#' (the arithmetic mean if some were zero or negative). Kept to show when a
-#' plate is analysed again with a different background.
-#'
-#' @param data A data.frame with columns `type` and `OD`.
-#'
-#' @return A numeric value, `NA` without blank or NC wells.
-#' @keywords internal
-legacy_background <- function(data) {
-    od <- data$OD[data$type %in% c('blank', 'NC') & !is.na(data$OD)]
-    if (length(od) == 0) return(NA_real_)
-    if (any(od <= 0)) mean(od) else geom_mean(od)
 }
 
 
@@ -211,8 +182,7 @@ blank_scatter <- function(od, value, standards) {
 #'   subtraction was chosen, but no well is usable or no role is ticked),
 #'   `empty` (`TRUE` when `status` is `"unavailable"`), `value` (the value
 #'   subtracted: the mean; 0 otherwise), `unused` (a named vector with
-#'   the number of wells of the roles left out), `legacy` (see
-#'   [legacy_background()]), `wells` (all wells of the background roles:
+#'   the number of wells of the roles left out), `wells` (all wells of the background roles:
 #'   `role`, `key`, `OD`, `used`, `excluded`, `reason`) and `scatter` (see
 #'   [blank_scatter()]).
 #' @keywords internal
@@ -245,7 +215,7 @@ background_summary <- function(data, roles, exclude = NULL, subtract = length(ro
          empty = empty,
          mean = if (length(od) > 0) mean(od) else NA_real_,
          sd = if (length(od) >= 2) stats::sd(od) else NA_real_,
-         value = value, unused = unused[unused > 0], legacy = legacy_background(data), wells = wells,
+         value = value, unused = unused[unused > 0], wells = wells,
          scatter = blank_scatter(od, value, data[data$type %in% 'standard', c('conc', 'OD'), drop = FALSE]))
 }
 
@@ -658,11 +628,6 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         notes <- c(notes, list(lin_message('note.background_nc_legacy', n = bg$n)))
     }
     if (isTRUE(bg$scatter$warn)) notes <- c(notes, list(background_scatter_message(bg)))
-    # A plate analysed again: the background of earlier versions differs by more than 1 %
-    if (bg$status == 'ok' && !is.na(bg$legacy) && abs(bg$value - bg$legacy) > 0.01 * abs(bg$legacy)) {
-        notes <- c(notes, list(lin_message('note.background_changed', value = signif(bg$value, 4),
-                                           legacy = signif(bg$legacy, 4))))
-    }
     # Common set of calibration wells for the comparison of models (the same in the app)
     pool <- calibration_pool(data, bg$value, exclude, at_blank)
     data$.od_raw <- data$OD
