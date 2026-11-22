@@ -25,6 +25,21 @@ test_that('4PL and 5PL recover known parameters and invert exactly', {
     expect_equal(inverse_fun(fit5, logistic(5, 0.05, 1.1, 10, 2.5, 0.5)), 5, tolerance = 1e-4)
 })
 
+test_that('a 5PL gives no concentration for an OD beyond its asymptotes, whatever g', {
+    std <- make_standards(function(x) logistic(x, 0.05, 1.1, 10, 2.5, g = 0.5),
+                          conc = c(0.5, 1, 2, 4, 8, 16, 32, 64, 128))
+    fit <- fit_curve(std, '5PL')
+    # OD between 0 and 1; with 1/g = 2 the power would turn the negative ratio of OD 1.5 positive
+    fit$par[c('a', 'b', 'lc', 'd', 'g')] <- c(0, 1, log(10), 1, 0.5)
+    expect_equal(LinearityApp:::curve_fun(fit, 30), 0.5)
+    expect_equal(inverse_fun(fit, 0.5), 30)
+    expect_true(is.na(inverse_fun(fit, 1.5)))
+    calc <- inverse_fun(fit, c(-0.2, 0, 1, 1.5, 0.5))
+    expect_equal(calc, c(NA, NA, NA, NA, 30))
+    expect_equal(LinearityApp:::inverse_reason(fit, c(1.5, -0.2, 0.5)),
+                 c('outside_asymptotes', 'outside_asymptotes', NA))
+})
+
 test_that('Linear and Quadratic models are fitted on the original scale', {
     f <- function(x) 0.08 + 0.02 * x
     std <- make_standards(f, conc = c(1, 2, 5, 10, 20, 50))

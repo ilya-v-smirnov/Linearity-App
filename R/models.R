@@ -232,13 +232,19 @@ inverse_fun <- function(fit, od, par = fit$par) {
         return(out)
     }
 
-    ok <- !is.na(od)
+    # Only an OD strictly between the asymptotes is reached by the curve; checked before the power
+    # of the 5PL, which turns a negative ratio positive when 1/g is an even integer
+    lo <- min(par[['a']], par[['d']])
+    hi <- max(par[['a']], par[['d']])
+    ok <- !is.na(od) & od > lo & od < hi
     ratio <- (par[['a']] - par[['d']]) / (od[ok] - par[['d']])
     if (fit$model == '5PL') ratio <- ratio^(1 / par[['g']])
     inner <- ratio - 1
     val <- rep(NA_real_, length(inner))
     good <- !is.na(inner) & is.finite(inner) & inner > 0
     val[good] <- exp(par[['lc']] + log(inner[good]) / par[['b']])
+    # exp() can overflow or underflow near the asymptotes
+    val[!is.finite(val) | val <= 0] <- NA_real_
     out[ok] <- val
     out
 }
