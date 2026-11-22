@@ -232,6 +232,30 @@ test_that('weights follow the chosen scheme', {
     expect_match(message_text(fit$notes), 'Too few replicates')
 })
 
+test_that('power weights fall back to equal weights when the replicated levels share their mean', {
+    # three replicated levels, each with mean OD 0.25; three singlets
+    d <- data.frame(conc = c(1, 1, 2, 2, 4, 4, 8, 16, 32),
+                    OD = c(0.125, 0.375, 0.125, 0.375, 0.125, 0.375, 0.6, 0.8, 1.0))
+    for (model in c('LIN', 'LRM')) {
+        fit <- fit_curve(d, model, weights = 'power')
+        expect_equal(fit$theta, 0, info = model)
+        expect_equal(fit$w, rep(1, nrow(d)), info = model)
+        expect_equal(fit$par, fit_curve(d, model)$par, info = model)
+        expect_equal(message_text(fit$notes),
+                     'Equal weights used: replicated levels have indistinguishable mean signals.', info = model)
+    }
+    expect_match(message_text(fit$notes, 'ru'), '^Использованы равные веса')
+    # means equal up to rounding: no meaningless slope either
+    d$OD[2] <- 0.375 + 1e-12
+    expect_equal(fit_curve(d, 'LIN', weights = 'power')$theta, 0)
+
+    # two distinct means among the three levels: the slope is estimated
+    d$OD[5:6] <- c(0.5, 1.0)
+    fit <- fit_curve(d, 'LIN', weights = 'power')
+    expect_true(is.finite(fit$theta))
+    expect_length(fit$notes, 0)
+})
+
 test_that('power weights are estimated on the scale of the residuals of the model', {
     set.seed(5)
     x <- rep(c(1, 2, 4, 8, 16, 32), each = 6)

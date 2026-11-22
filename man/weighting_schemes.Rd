@@ -19,6 +19,9 @@ replicates on the scale of the residuals of the model (variance function
 var = k * mean^theta, the mean on the OD scale): the variance of OD for
 the models on the OD scale, of log10(OD) for the log-log models, so that
 a constant CV gives theta near 2 on the OD scale and near 0 on log scales.
+Equal weights (theta = 0) are used, with a note, when fewer than three
+levels have replicates or when their mean signals are indistinguishable
+(the slope is then not determined).
 }
 }
 \details{

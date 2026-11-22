@@ -63,6 +63,9 @@ model_log_scale <- function(model, linear = FALSE) model %in% c('LRM', 'QRM') &&
 #'   var = k * mean^theta, the mean on the OD scale): the variance of OD for
 #'   the models on the OD scale, of log10(OD) for the log-log models, so that
 #'   a constant CV gives theta near 2 on the OD scale and near 0 on log scales.
+#'   Equal weights (theta = 0) are used, with a note, when fewer than three
+#'   levels have replicates or when their mean signals are indistinguishable
+#'   (the slope is then not determined).
 #'
 #' Weights are normalised to a mean of 1.
 #'
@@ -121,9 +124,18 @@ weight_function <- function(weights, x, y, log_scale = FALSE) {
         ok <- !is.null(stats) && sum(stats$m > 0 & stats$v > 0) >= 3
         if (ok) {
             stats <- stats[stats$m > 0 & stats$v > 0, ]
-            theta <- unname(coef(lm(log(stats$v) ~ log(stats$m)))[2])
-            bounds <- if (log_scale) c(-2, 2) else c(0, 4)
-            theta <- min(max(theta, bounds[1]), bounds[2])
+            # The slope needs replicated levels with different mean signals: with equal means it is not
+            # determined (NA), with means equal up to rounding it is huge and meaningless
+            log_m <- log(stats$m)
+            spread <- diff(range(log_m)) > 1e-8
+            theta <- if (spread) unname(coef(lm(log(stats$v) ~ log_m))[2]) else NA_real_
+            if (is.finite(theta)) {
+                bounds <- if (log_scale) c(-2, 2) else c(0, 4)
+                theta <- min(max(theta, bounds[1]), bounds[2])
+            } else {
+                theta <- 0
+                notes <- list(lin_message('note.power_flat_means'))
+            }
         } else {
             theta <- 0
             notes <- list(lin_message('note.power_fallback'))

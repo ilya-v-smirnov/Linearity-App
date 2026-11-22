@@ -425,6 +425,7 @@ note:
   not_quantified: "{n} of {total} sample wells were not quantified: {details}."
   lack_of_fit: "The lack-of-fit test is significant (p = {p}): the model may not describe the standards well; see the comparison of models."
   power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
+  power_flat_means: "Equal weights used: replicated levels have indistinguishable mean signals."
   par_unidentifiable: "Some parameters of the {model} model are not determined by the standards (e.g. the upper asymptote is not reached): the curve and the concentrations are valid, but the confidence intervals of the parameters are not reliable."
   no_accepted_standards: "No standard level meets the acceptance criteria: the full range of standards is used for quantification."
   range_narrowed: "The quantification range is limited to the accepted standard levels: lowest accepted calibrator {lloq}, highest accepted calibrator {uloq}."
