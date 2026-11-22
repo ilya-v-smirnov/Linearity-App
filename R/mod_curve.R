@@ -9,7 +9,9 @@
 #' @param id Module id.
 #' @param lang Language code.
 #' @param data Reactive with validated input data.
-#' @param rounding Reactive from [mod_rounding_server()].
+#' @param rounding Reactive from [mod_rounding_server()]: the rounding of the
+#'   coefficients and of the effect of the exclusions shown (not of the
+#'   calculation, which keeps full precision).
 #' @param criteria Reactive with acceptance criteria (see [qc_criteria()]).
 #' @param options Reactive from [mod_quant_options_server()]: handling of
 #'   samples outside the quantification range.
@@ -634,14 +636,12 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
 
         result <- shiny::reactive({
             d <- data()
-            r <- rounding()
             s <- settings()
             o <- options()
             with_validation(
                 calculate(d, model = s$model, weights = s$weights, interval = s$interval, background = s$background,
                           subtract_background = s$subtract, at_blank = s$at_blank, exclude = exclusions(),
                           exclude_background = bg_exclusions(),
-                          round_fun = r$fun, round_par = r$par,
                           criteria = criteria(),
                           extrapolate = if (is.null(o$extrapolate)) character(0) else o$extrapolate,
                           blank_zero = isTRUE(o$blank_zero)),

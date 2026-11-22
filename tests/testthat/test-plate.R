@@ -79,7 +79,7 @@ test_that('plate template can be filled in and read back in any language', {
         openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
 
         data <- check_assay(read_assay(path))
-        r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+        r <- calculate(data, 'LRM', linear = TRUE)
         expect_equal(r$result$conc, c(5, 5, 10, 10, 20, 20), tolerance = 1e-8, info = lang)
     }
 })
@@ -101,7 +101,7 @@ test_that('grid may be offset; decimal commas and text values are handled', {
     expect_match(tab$Problem, 'ignored: G4', fixed = TRUE, all = FALSE)
 
     data <- check_assay(data)
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$result$flag[r$result$well == 'B4'], 'Missing OD')
     expect_equal(r$result$conc[r$result$well == 'A3'], 10)
     expect_equal(r$result$conc[r$result$well == 'B3'], 20)   # dilution 2

@@ -50,7 +50,7 @@ test_that('filled plate maps are read and calculated', {
     expect_equal(sum(data$type == 'blank'), 2)
     expect_equal(data$OD[data$well == 'A3'], 0.55)
     expect_equal(data$conc[data$well == 'B1'], 16)
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$result$conc, c(5, 10, 40, 2.5), tolerance = 1e-8)
     expect_equal(r$result$sample.name, c('A', 'A', 'B', 'C'))
     # sample.date was not filled in: placeholders are reported and ignored
@@ -134,7 +134,7 @@ test_that('quality controls are written with their nominal concentrations and re
 
     data <- check_assay(read_assay(path))
     expect_equal(LinearityApp:::data_counts(data)[['qc']], 2)
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = function(x, ...) x)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$qc$nominal, c(3, 3, 24, 24))
     expect_equal(r$qc$recovery, c(100, 100, 100, 100))
 })

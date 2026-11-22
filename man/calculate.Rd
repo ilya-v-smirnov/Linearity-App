@@ -10,8 +10,6 @@ calculate(
   linear = FALSE,
   weights = "none",
   exclude = NULL,
-  round_fun = signif,
-  round_par = 3,
   level = 0.95,
   criteria = qc_criteria(),
   extrapolate = character(0),
@@ -35,8 +33,6 @@ log10 scales (as LIN and QUAD).}
 
 \item{exclude}{Standard points excluded by the user: a data.frame with
 columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}.}
-
-\item{round_fun, round_par}{Rounding applied to the final concentrations only.}
 
 \item{level}{Confidence level of the concentration intervals.}
 
@@ -127,6 +123,11 @@ The background is the arithmetic mean of the wells of the chosen roles
 (argument \code{background}): reagent blank, zero calibrator and negative
 control are kept apart. Columns \code{well} and \code{id} are kept in the results
 when they contain values.
+
+Concentrations and recoveries are kept at full precision, so that the
+rounding chosen for display cannot change the assessment of the quality
+controls and the samples; tables round them for display and export (see
+\code{\link[=round_result]{round_result()}}).
 }
 \description{
 Subtracts the background, fits the calibration curve OD = f(conc) on the

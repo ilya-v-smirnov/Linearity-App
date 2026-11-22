@@ -8,7 +8,13 @@
 \usage{
 mod_report_ui(id, lang)
 
-mod_report_server(id, lang, curve, summary)
+mod_report_server(
+  id,
+  lang,
+  curve,
+  summary,
+  rounding = shiny::reactive(list(fun = signif, par = 3))
+)
 }
 \arguments{
 \item{id}{Module id.}
@@ -19,6 +25,9 @@ mod_report_server(id, lang, curve, summary)
 
 \item{summary}{List of reactives returned by \code{\link[=mod_summary_server]{mod_summary_server()}}: the
 aggregated table and the assessment of the samples.}
+
+\item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}: the rounding of the
+concentrations in the tables of the report (see \code{\link[=round_result]{round_result()}}).}
 }
 \description{
 The sidebar holds the experiment (date chosen with a calendar, title,

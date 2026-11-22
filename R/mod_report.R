@@ -10,6 +10,8 @@
 #' @param curve List of reactives returned by [mod_curve_server()].
 #' @param summary List of reactives returned by [mod_summary_server()]: the
 #'   aggregated table and the assessment of the samples.
+#' @param rounding Reactive from [mod_rounding_server()]: the rounding of the
+#'   concentrations in the tables of the report (see [round_result()]).
 #'
 #' @name mod_report
 #' @keywords internal
@@ -57,7 +59,7 @@ mod_report_ui <- function(id, lang) {
 }
 
 #' @rdname mod_report
-mod_report_server <- function(id, lang, curve, summary) {
+mod_report_server <- function(id, lang, curve, summary, rounding = shiny::reactive(list(fun = signif, par = 3))) {
     shiny::moduleServer(id, function(input, output, session) {
         type <- shiny::reactive(if (is.null(input$type)) 'short' else input$type)
         # The date of the experiment; today until the calendar answers or when it is cleared
@@ -94,9 +96,9 @@ mod_report_server <- function(id, lang, curve, summary) {
                           at_blank = blank_rule_text(r, lang),
                           equation = model_equation_text(r$fit),
                           model_table = curve$coef_table(),
-                          result_table = localize_result(r$result, lang),
+                          result_table = localize_result(round_result(r$result, rounding()$fun, rounding()$par), lang),
                           means_table = summary$table(),
-                          qc_table = localize_result(r$qc, lang),
+                          qc_table = localize_result(round_result(r$qc, rounding()$fun, rounding()$par), lang),
                           exclusions = exclusions_table(r$exclusions, lang),
                           comparison = comparison_table(curve$comparison(), lang),
                           quality = list(summary = quality_summary(r, lang, sample_warnings),

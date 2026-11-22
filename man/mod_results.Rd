@@ -8,7 +8,13 @@
 \usage{
 mod_results_ui(id, lang)
 
-mod_results_server(id, lang, curve, by = shiny::reactive("column"))
+mod_results_server(
+  id,
+  lang,
+  curve,
+  by = shiny::reactive("column"),
+  rounding = shiny::reactive(list(fun = signif, par = 3))
+)
 }
 \arguments{
 \item{id}{Module id.}
@@ -19,6 +25,9 @@ mod_results_server(id, lang, curve, by = shiny::reactive("column"))
 
 \item{by}{Reactive with the filling direction of the plate (\code{"column"} or
 \code{"row"}): the initial order of the wells.}
+
+\item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}: the rounding of the
+concentrations shown and exported (see \code{\link[=round_result]{round_result()}}).}
 }
 \value{
 \code{mod_results_server()} returns a reactive with the translated result table.

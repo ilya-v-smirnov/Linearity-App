@@ -11,6 +11,8 @@
 #' @param curve List of reactives returned by [mod_curve_server()].
 #' @param by Reactive with the filling direction of the plate (`"column"` or
 #'   `"row"`): the initial order of the wells.
+#' @param rounding Reactive from [mod_rounding_server()]: the rounding of the
+#'   concentrations shown and exported (see [round_result()]).
 #'
 #' @return `mod_results_server()` returns a reactive with the translated result table.
 #' @name mod_results
@@ -209,12 +211,18 @@ mod_results_ui <- function(id, lang) {
 }
 
 #' @rdname mod_results
-mod_results_server <- function(id, lang, curve, by = shiny::reactive('column')) {
+mod_results_server <- function(id, lang, curve, by = shiny::reactive('column'),
+                               rounding = shiny::reactive(list(fun = signif, par = 3))) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
 
-        full <- shiny::reactive(order_result(localize_result(curve$result()$result, lang), by()))
-        qc <- shiny::reactive(order_result(localize_result(curve$result()$qc, lang), by()))
+        # Rounded for display and export only: the statuses are assessed at full precision
+        shown <- function(tab) {
+            r <- rounding()
+            order_result(localize_result(round_result(tab, r$fun, r$par), lang), by())
+        }
+        full <- shiny::reactive(shown(curve$result()$result))
+        qc <- shiny::reactive(shown(curve$result()$qc))
 
         # Column choices follow the data; the user's choice is kept, new columns are shown
         known <- shiny::reactiveVal(character(0))

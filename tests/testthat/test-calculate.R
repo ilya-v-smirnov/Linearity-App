@@ -3,14 +3,12 @@ scenarios <- expand.grid(dataset = names(sample_files),
                          linear = c(FALSE, TRUE),
                          stringsAsFactors = FALSE)
 
-no_rounding <- function(x, ...) x
-
 test_that('sample concentrations lie on the plotted calibration curve', {
     for (i in seq_len(nrow(scenarios))) {
         s <- scenarios[i, ]
         info <- paste(s, collapse = ' / ')
         data <- load_sample(s$dataset)
-        r <- calculate(data, s$model, linear = s$linear, round_fun = no_rounding)
+        r <- calculate(data, s$model, linear = s$linear)
         ok <- r$result$flag == 'OK'
         expect_gt(sum(ok), 0)
 
@@ -25,8 +23,7 @@ test_that('only concentrations within the calibration range are reported', {
     for (i in seq_len(nrow(scenarios))) {
         s <- scenarios[i, ]
         info <- paste(s, collapse = ' / ')
-        r <- calculate(load_sample(s$dataset), s$model, linear = s$linear,
-                       round_fun = no_rounding)
+        r <- calculate(load_sample(s$dataset), s$model, linear = s$linear)
         res <- r$result
         ok <- res$flag == 'OK'
 
@@ -60,13 +57,13 @@ test_that('standards with missing OD are excluded from the fit and reported', {
 test_that('linear model is inverted exactly', {
     f <- function(x) 0.1 * x
     data <- synthetic_data(f, sample_od = c(0.25, 1, 2.5, 0.05, 5, -0.01))
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_rounding)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$result$conc[1:3], c(2.5, 10, 25))
     # on the original scale an OD below the blank is inverted, the range decides
     expect_equal(r$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', '< LLOQ'))
     expect_equal(r$result$OD.le.blank, c(rep(FALSE, 5), TRUE))
     # not reportable by the rule of the method
-    ex <- calculate(data, 'LRM', linear = TRUE, round_fun = no_rounding, at_blank = 'exclude')
+    ex <- calculate(data, 'LRM', linear = TRUE, at_blank = 'exclude')
     expect_equal(ex$result$flag, c('OK', 'OK', 'OK', '< LLOQ', '> ULOQ', 'OD <= blank'))
     expect_error(calculate(data, 'LIN', at_blank = 'zero'), 'Unknown rule')
 })
@@ -78,8 +75,7 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     data <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'QC', 'sample'),
                        conc = c(conc, conc, NA, NA, 1, NA), dilution = c(rep(NA, 13), 1),
                        OD = c(od, od, 0.10, 0.10, 0.09, 0.09))
-    no_round <- function(x, ...) x
-    r <- calculate(data, 'LIN', round_fun = no_round)
+    r <- calculate(data, 'LIN')
     # the calibrator at -0.01 is in the fit and its level is accepted ...
     expect_equal(nrow(r$standard_data), 10)
     expect_true(r$quality$standards$pass[r$quality$standards$conc == 1])
@@ -92,7 +88,7 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     expect_equal(r$result$flag, 'OK')
     expect_true(r$result$OD.le.blank)
     # a concentration within the range is not replaced by zero
-    expect_equal(calculate(data, 'LIN', round_fun = no_round, blank_zero = TRUE)$result$conc, 1, tolerance = 1e-8)
+    expect_equal(calculate(data, 'LIN', blank_zero = TRUE)$result$conc, 1, tolerance = 1e-8)
     # the three properties are kept apart
     cls <- LinearityApp:::classify_wells(r$fit, c(-0.01, -0.05, 0.1, NA), c(1, -1, 6.5, NA), c(1, 16))
     expect_equal(cls$at.blank, c(TRUE, TRUE, FALSE, FALSE))
@@ -106,7 +102,7 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     expect_equal(LinearityApp:::result_columns(names(r$result))[ncol(r$result)], 'OD.le.blank')
 
     # not reportable: the calibrators at the background leave the fit, the QC and the sample get no value
-    ex <- calculate(data, 'LIN', round_fun = no_round, at_blank = 'exclude')
+    ex <- calculate(data, 'LIN', at_blank = 'exclude')
     expect_equal(nrow(ex$standard_data), 8)
     expect_equal(ex$excluded_standards$reason, rep('OD <= blank', 2))
     expect_match(message_text(ex$notes), 'excluded from the fit: OD <= blank (2)', fixed = TRUE, all = FALSE)
@@ -145,7 +141,7 @@ test_that('a weak signal on a decreasing curve is a high concentration, not zero
     expect_match(message_text(r$notes), 'the curve decreases with the concentration', ignore.case = TRUE,
                  all = FALSE)
     # extrapolated above the highest calibrator: 21
-    up <- calculate(data, 'LIN', extrapolate = 'above', round_fun = function(x, ...) x)
+    up <- calculate(data, 'LIN', extrapolate = 'above')
     expect_equal(up$result$conc, 21, tolerance = 1e-8)
     # without a signal at the background the column is left out
     data$OD[13] <- 0.5
@@ -157,7 +153,7 @@ test_that('quadratic model uses the branch that contains the standards', {
     f <- function(x) -0.002 * x^2 + 0.1 * x + 0.02
     data <- synthetic_data(f, conc = c(1, 2, 4, 8, 12, 16), sample_od = f(c(3, 10, 15)) - 0.02)
     data$OD[data$type == 'sample'] <- f(c(3, 10, 15)) + 0.05
-    r <- calculate(data, 'QRM', linear = TRUE, round_fun = no_rounding)
+    r <- calculate(data, 'QRM', linear = TRUE)
     expect_equal(r$result$conc, c(3, 10, 15), tolerance = 1e-8)
     expect_true(is_monotonic(r$fit))
 })
@@ -166,7 +162,7 @@ test_that('a quadratic curve that turns within the range gives no concentration'
     # OD = 1 + (C - 3)^2: OD 2 matches C = 2 and C = 4
     f <- function(x) 1 + (x - 3)^2
     data <- synthetic_data(f, conc = c(1, 2, 3, 4, 5), sample_od = c(2, 10))
-    r <- calculate(data, 'QUAD', round_fun = no_rounding)
+    r <- calculate(data, 'QUAD')
     expect_equal(unname(r$fit$par), c(10, -6, 1), tolerance = 1e-8)
     expect_false(r$monotonic)
     expect_false(is_monotonic(r$fit))
@@ -185,7 +181,7 @@ test_that('a quadratic curve that turns within the range gives no concentration'
     expect_s3_class(LinearityApp:::plot_fitted_resid(r), 'ggplot')
 
     # an explicit interval on one side of the vertex chooses the branch
-    left <- calculate(data, 'QUAD', round_fun = no_rounding, interval = c(1, 3))
+    left <- calculate(data, 'QUAD', interval = c(1, 3))
     expect_true(left$monotonic)
     expect_equal(left$result$conc[1], 2, tolerance = 1e-8)
     expect_equal(left$calibration_range, c(1, 3))
@@ -193,7 +189,7 @@ test_that('a quadratic curve that turns within the range gives no concentration'
     expect_equal(st$status[st$conc > 3], rep('outside_interval', 2))
     expect_match(message_text(left$notes), 'within the monotonic interval 1\u20133', fixed = TRUE, all = FALSE)
 
-    right <- calculate(data, 'QUAD', round_fun = no_rounding, interval = c(3, 5))
+    right <- calculate(data, 'QUAD', interval = c(3, 5))
     expect_equal(right$result$conc[1], 4, tolerance = 1e-8)
     # the bounds also apply to the range check: OD 10 is C = 6 on this branch
     expect_equal(right$result$flag, c(FLAGS$ok, FLAGS$above))
@@ -209,11 +205,11 @@ test_that('the log-log quadratic curve is checked on the log scale of the concen
     # log10(OD) = -0.5 + 1 * u - 1 * u^2 with u = log10(C): vertex at C = 10^0.5
     f <- function(x) 10^(-0.5 + log10(x) - log10(x)^2)
     data <- synthetic_data(f, conc = c(1, 2, 4, 8, 10), sample_od = f(1.5))
-    r <- calculate(data, 'QRM', round_fun = no_rounding)
+    r <- calculate(data, 'QRM')
     expect_false(r$monotonic)
     expect_equal(LinearityApp:::quad_vertex(r$fit)$conc, sqrt(10), tolerance = 1e-6)
     expect_true(is.na(r$result$conc))
-    low <- calculate(data, 'QRM', round_fun = no_rounding, interval = c(1, sqrt(10)))
+    low <- calculate(data, 'QRM', interval = c(1, sqrt(10)))
     expect_equal(low$result$conc, 1.5, tolerance = 1e-6)
 })
 
@@ -236,7 +232,7 @@ test_that('dilution is applied after inverse prediction', {
     f <- function(x) 0.1 * x
     data <- synthetic_data(f, sample_od = c(1, 1))
     data$dilution[data$type == 'sample'] <- c(1, 7)
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = signif, round_par = 3)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$result$conc, c(10, 70))
 })
 
@@ -298,8 +294,7 @@ test_that('the background is the mean of the chosen background wells', {
                    dilution = c(rep(NA, 10 + length(bg_types)), 1),
                    OD = c(0.02 * conc + 0.10, 0.02 * conc + 0.10, bg_od, 0.30))
     }
-    no_round <- function(x, ...) x
-    blank <- calculate(make(c('blank', 'blank'), c(0.04, 0.16)), 'LIN', round_fun = no_round)
+    blank <- calculate(make(c('blank', 'blank'), c(0.04, 0.16)), 'LIN')
     expect_equal(blank$nc_value, 0.10)
     expect_equal(blank$background$roles, 'blank')
     expect_equal(blank$background$n, 2)
@@ -314,14 +309,14 @@ test_that('the background is the mean of the chosen background wells', {
 
     # a negative control does not change the result until it is chosen
     with_nc <- make(c('blank', 'blank', 'NC'), c(0.04, 0.16, 0.40))
-    plain <- calculate(with_nc, 'LIN', round_fun = no_round)
+    plain <- calculate(with_nc, 'LIN')
     expect_equal(plain$nc_value, 0.10)
     expect_equal(plain$result$conc, blank$result$conc)
     expect_equal(plain$background$unused, c(NC = 1))
-    both <- calculate(with_nc, 'LIN', round_fun = no_round, background = c('blank', 'NC'))
+    both <- calculate(with_nc, 'LIN', background = c('blank', 'NC'))
     expect_equal(both$nc_value, 0.20)
     expect_equal(both$background$n, 3)
-    nothing <- calculate(with_nc, 'LIN', round_fun = no_round, background = character(0))
+    nothing <- calculate(with_nc, 'LIN', background = character(0))
     expect_equal(nothing$nc_value, 0)
     expect_match(message_text(nothing$notes), 'No background is subtracted', all = FALSE)
     expect_error(calculate(with_nc, 'LIN', background = 'buffer'), 'Unknown background roles')
@@ -579,10 +574,10 @@ test_that('residuals are plotted against the concentrations of the standard curv
 
 test_that('samples outside the range can be extrapolated and below-blank samples set to zero', {
     data <- load_sample('griess')
-    plain <- calculate(data, 'LRM', round_fun = function(x, ...) x)
+    plain <- calculate(data, 'LRM')
     expect_true(all(is.na(plain$result$conc[plain$result$flag != 'OK'])))
 
-    below <- calculate(data, 'LRM', round_fun = function(x, ...) x, extrapolate = 'below')
+    below <- calculate(data, 'LRM', extrapolate = 'below')
     low <- below$result$flag == '< LLOQ'
     expect_true(all(below$result$conc[low] > 0))
     expect_true(all(below$result$conc[low] < min(below$standard_data$conc)))

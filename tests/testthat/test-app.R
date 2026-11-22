@@ -426,6 +426,29 @@ test_that('results module shows quality controls', {
     })
 })
 
+test_that('the rounding changes the cells of the results, not the calculation', {
+    curve <- fake_curve()
+    r <- shiny::isolate(curve$result())
+    r$qc <- data.frame(id = 'QC-M', nominal = 10, conc = 12.004, recovery = 120.04, OD = 0.3, flag = 'OK')
+    r$result$conc <- r$result$conc + 1e-4
+    exact <- r$result$conc
+    curve$result <- shiny::reactive(r)
+    rounding <- shiny::reactiveVal(list(fun = signif, par = 3))
+    shiny::testServer(LinearityApp:::mod_results_server,
+                      args = list(lang = 'en', curve = curve, rounding = rounding), {
+        qc_cell <- function() readxl::read_excel(output$download, sheet = 'Quality controls')
+        expect_equal(qc_cell()$conc, 12)
+        expect_equal(qc_cell()$recovery, 120)
+        expect_equal(sort(session$returned()$conc), sort(signif(exact, 3)))
+        rounding(list(fun = signif, par = 5))
+        session$flushReact()
+        expect_equal(qc_cell()$conc, 12.004)
+        expect_equal(sort(session$returned()$conc), sort(signif(exact, 5)))
+        # the result itself keeps full precision
+        expect_equal(shiny::isolate(curve$result())$result$conc, exact)
+    })
+})
+
 test_that('results are ordered by well, columns are chosen and exported to Excel', {
     r <- calculate(check_assay(read_assay(sample_path('bca_plate.xlsx'))), 'LRM')
     curve <- fake_curve()

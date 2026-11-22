@@ -77,7 +77,7 @@ test_that('Linear and Quadratic models are fitted on the original scale', {
 test_that('calculate() inverts the Linear model and keeps standards below the blank', {
     f <- function(x) 0.08 + 0.02 * x
     data <- synthetic_data(f, sample_od = f(c(3, 10, 25)))
-    r <- calculate(data, 'LIN', round_fun = function(x, ...) x)
+    r <- calculate(data, 'LIN')
     expect_equal(r$fit$model, 'LIN')
     expect_true(r$linear_scale)
     expect_equal(r$result$conc, c(3, 10, 25), tolerance = 1e-10)
@@ -423,8 +423,7 @@ test_that('the effect of the exclusions tells the wells within their limits from
     # a well of another level is excluded by the user
     keys <- well_keys(data)
     out <- keys[data$type == 'standard' & data$conc == 40][1]
-    r <- calculate(data, 'LIN', exclude = data.frame(key = out, reason = 'bubble'),
-                   round_fun = function(x, ...) x)
+    r <- calculate(data, 'LIN', exclude = data.frame(key = out, reason = 'bubble'))
     st <- r$quality$standards
     expect_equal(st$calc.cv[st$conc == 10], 100 * stats::sd(c(8.1, 11.9)) / 10, tolerance = 1e-6)
     expect_equal(st$status[st$conc == 10], 'fail')
@@ -512,7 +511,7 @@ test_that('the original curve is dashed on the plot after exclusions, not in the
 test_that('logistic curves have no solution beyond the asymptotes', {
     f <- function(x) logistic(x, 0, 1.2, 10, 2)
     data <- synthetic_data(f, conc = levels_7, sample_od = c(f(5), 2.5, 0.5))
-    r <- calculate(data, '4PL', round_fun = function(x, ...) x)
+    r <- calculate(data, '4PL')
     expect_equal(r$result$conc[1], 5, tolerance = 1e-4)
     expect_equal(r$result$flag[2], 'No solution')
     expect_true(r$result$conc.lower[1] <= 5 && 5 <= r$result$conc.upper[1])
@@ -692,10 +691,10 @@ test_that('decreasing (competitive) curves are inverted', {
     conc <- c(0.5, 1, 2, 4, 8, 16, 32)
     data <- synthetic_data(truth, conc = conc, sample_od = truth(c(3, 10)))
     for (m in c('4PL', '5PL')) {
-        r <- calculate(data, m, round_fun = function(x, ...) x)
+        r <- calculate(data, m)
         expect_equal(r$result$conc, c(3, 10), tolerance = 1e-4, info = m)
         expect_equal(r$result$flag, rep(FLAGS$ok, 2), info = m)
     }
-    r <- calculate(data, '4PL', round_fun = function(x, ...) x)
+    r <- calculate(data, '4PL')
     expect_equal(r$back_calc$recovery, rep(100, 14), tolerance = 1e-4)
 })

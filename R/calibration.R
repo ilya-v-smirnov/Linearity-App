@@ -538,7 +538,6 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' @param weights Weighting code (see [weighting_schemes()]).
 #' @param exclude Standard points excluded by the user: a data.frame with
 #'   columns `key` (see [well_keys()]) and `reason`.
-#' @param round_fun,round_par Rounding applied to the final concentrations only.
 #' @param level Confidence level of the concentration intervals.
 #' @param criteria Acceptance criteria (see [qc_criteria()]).
 #' @param extrapolate Samples outside the quantification range that still get
@@ -618,6 +617,11 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' (argument `background`): reagent blank, zero calibrator and negative
 #' control are kept apart. Columns `well` and `id` are kept in the results
 #' when they contain values.
+#'
+#' Concentrations and recoveries are kept at full precision, so that the
+#' rounding chosen for display cannot change the assessment of the quality
+#' controls and the samples; tables round them for display and export (see
+#' [round_result()]).
 #' @export
 #' @examples
 #' path <- system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp')
@@ -626,7 +630,7 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' head(res$result)
 #' message_text(res$notes, 'en')
 calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exclude = NULL,
-                      round_fun = signif, round_par = 3, level = 0.95, criteria = qc_criteria(),
+                      level = 0.95, criteria = qc_criteria(),
                       extrapolate = character(0), blank_zero = FALSE, interval = NULL, background = NULL,
                       exclude_background = NULL, subtract_background = NULL, at_blank = 'range') {
     if (length(model) != 1 || !model %in% calibration_models()) {
@@ -772,9 +776,11 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         ok <- flag == FLAGS$ok |
             (flag == FLAGS$below & 'below' %in% extrapolate) |
             (flag == FLAGS$above & 'above' %in% extrapolate)
-        rows$conc <- ifelse(ok, round_fun(pred$conc * rows$dilution, round_par), NA_real_)
-        rows$conc.lower <- ifelse(ok, round_fun(pred$lower * rows$dilution, round_par), NA_real_)
-        rows$conc.upper <- ifelse(ok, round_fun(pred$upper * rows$dilution, round_par), NA_real_)
+        # Full precision: the statuses of the QC and the samples are assessed on it, the tables
+        # round only what they show (see round_result())
+        rows$conc <- ifelse(ok, pred$conc * rows$dilution, NA_real_)
+        rows$conc.lower <- ifelse(ok, pred$lower * rows$dilution, NA_real_)
+        rows$conc.upper <- ifelse(ok, pred$upper * rows$dilution, NA_real_)
         # A concentration within the range is kept even if the signal is at the background
         if (blank_zero) rows$conc[cls$at.blank & flag != FLAGS$ok] <- 0
         at_blank_well <- cls$at.blank
@@ -811,7 +817,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         qc <- measured[, intersect(c('well', 'id'), names(measured)), drop = FALSE]
         qc$nominal <- qc_rows$conc
         qc$conc <- measured$conc
-        qc$recovery <- round(100 * measured$conc / qc_rows$conc, 1)
+        qc$recovery <- 100 * measured$conc / qc_rows$conc
         qc$OD <- measured$OD
         qc$flag <- measured$flag
         qc$OD.le.blank <- measured$OD.le.blank

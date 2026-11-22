@@ -21,8 +21,6 @@ run_data <- function(bias = c(), samples = data.frame(name = 'A', dilution = 1, 
     check_assay(normalize_table(rows))
 }
 
-no_round <- function(x, ...) x
-
 test_that('criteria have ICH M10 defaults and are validated', {
     cr <- qc_criteria()
     expect_s3_class(cr, 'lin_criteria')
@@ -122,7 +120,7 @@ test_that('a calibration without replicates is accepted with the CV not assessed
 test_that('failing end levels narrow the quantification range', {
     data <- run_data(bias = c('1' = 2), samples = data.frame(name = c('lo', 'mid'), dilution = 1,
                                                              od = c(0.025, 0.4)))
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(data, 'LRM', linear = TRUE)
     expect_equal(r$calibration_range[1], 2)
     expect_equal(r$standard_range, c(1, 64))
     expect_equal(r$result$flag, c('< LLOQ', 'OK'))
@@ -158,7 +156,7 @@ test_that('a calibration with too few accepted levels rejects the run', {
 
 test_that('replicates are summarised and high CV is flagged', {
     samples <- data.frame(name = c('A', 'A', 'B', 'B'), dilution = 1, od = c(0.40, 0.42, 0.30, 0.60))
-    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
     s <- r$quality$samples
     expect_equal(s$sample.name, c('A', 'B'))
     expect_equal(s$n, c(2, 2))
@@ -172,7 +170,7 @@ test_that('replicates are summarised and high CV is flagged', {
 test_that('dilution linearity is checked across dilutions of a sample', {
     samples <- data.frame(name = c('A', 'A', 'B', 'B'), dilution = c(2, 4, 2, 4),
                           od = c(0.4, 0.2, 0.4, 0.3))
-    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
     d <- r$quality$dilution
     expect_equal(nrow(d), 4)
     expect_equal(d$pass, c(TRUE, TRUE, FALSE, FALSE))
@@ -210,7 +208,7 @@ test_that('dilution linearity is checked across dilutions of a sample', {
 test_that('each sample of the dilution plot has its own colour', {
     samples <- data.frame(name = rep(c('A', 'B', 'C'), each = 2), dilution = rep(c(2, 4), 3),
                           od = c(0.4, 0.2, 0.4, 0.3, 0.3, 0.15))
-    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
     p <- plot_dilution_linearity(r$quality$dilution)
     built <- ggplot2::ggplot_build(p)
     colours <- unique(built$data[[3]]$colour)
@@ -226,7 +224,7 @@ test_that('each sample of the dilution plot has its own colour', {
 test_that('quality controls follow the 4-6-X rule', {
     qc <- data.frame(id = c('QC-L', 'QC-L', 'QC-H', 'QC-H'), nominal = c(4, 4, 40, 40),
                      od = 0.02 * c(4, 4.6, 40, 41))
-    r <- calculate(run_data(qc = qc), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(qc = qc), 'LRM', linear = TRUE)
     q <- r$quality$qc
     expect_equal(q$levels$id, c('QC-L', 'QC-H'))
     expect_equal(q$levels$n.pass, c(2, 2))     # 4.6 / 4 = +15 %, within the 20 % limit
@@ -238,6 +236,34 @@ test_that('quality controls follow the 4-6-X rule', {
     expect_false(r$quality$qc$accepted)
     expect_false(r$quality$accepted)
     expect_match(message_text(r$quality$reasons), 'quality controls do not meet', all = FALSE)
+})
+
+test_that('the rounding shown cannot change the status of a quality control or a sample', {
+    # nominal 10 read at 12.004: +20.04 % fails the limit of 20 %, which 12.0 would pass
+    qc <- data.frame(id = 'QC-M', nominal = 10, od = 0.02 * 12.004)
+    r <- calculate(run_data(qc = qc), 'LRM', linear = TRUE)
+    expect_equal(r$qc$conc, 12.004, tolerance = 1e-9)
+    w <- r$quality$qc$wells
+    expect_equal(w$bias.limit, 20)
+    expect_equal(w$bias, 20.04, tolerance = 1e-6)
+    expect_false(w$pass)
+    expect_false(r$quality$qc$accepted)
+    # only the cells follow the rounding
+    expect_equal(round_result(r$qc, signif, 3)$conc, 12)
+    expect_equal(round_result(r$qc, signif, 5)$conc, 12.004)
+    expect_equal(round_result(r$qc, signif, 3)$recovery, 120)
+    expect_equal(round_result(r$qc, round, 1)$recovery, 120)
+    expect_null(round_result(NULL))
+
+    # duplicates of 9.9996 and 13.294: CV 20.001 % fails the limit of 20 %; shown with four significant
+    # digits (10 and 13.29) they would pass
+    samples <- data.frame(name = 'A', dilution = 1, od = 0.02 * c(9.9996, 13.294))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
+    expect_gt(r$quality$samples$cv[1], 20)
+    expect_equal(r$quality$samples$flag[1], 'High CV')
+    shown <- round_result(r$result, signif, 4)$conc
+    expect_equal(shown, c(10, 13.29))
+    expect_lt(cv_percent(shown), 20)
 })
 
 test_that('quality tables and summary are translated', {
@@ -716,7 +742,7 @@ test_that('the bias plot keeps a level without back-calculated wells and says it
 
     # no level back-calculated: a panel that says so instead of no plot
     f <- function(x) 1 + (x - 3)^2
-    q <- calculate(synthetic_data(f, conc = c(1, 2, 3, 4, 5), sample_od = c(2, 10)), 'QUAD', round_fun = no_round)
+    q <- calculate(synthetic_data(f, conc = c(1, 2, 3, 4, 5), sample_od = c(2, 10)), 'QUAD')
     p <- LinearityApp:::plot_bias(q)
     expect_s3_class(p, 'ggplot')
     expect_equal(p$layers[[1]]$aes_params$label,
@@ -816,7 +842,7 @@ test_that('criteria of the standards are in the curve step, those of the samples
 test_that('replicates follow the grouping chosen by the user', {
     # A: two dilutions that agree; B: two dilutions that do not; one well each
     samples <- data.frame(name = c('A', 'A', 'B', 'B'), dilution = c(2, 4, 2, 4), od = c(0.4, 0.2, 0.4, 0.3))
-    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
 
     by_sample <- assess_samples(r$result, r$calibration_range, group_vars = 'sample.name')
     expect_equal(by_sample$samples$sample.name, c('A', 'B'))
@@ -843,7 +869,7 @@ test_that('replicates follow the grouping chosen by the user', {
 test_that('the CV limit of samples near the ends of the range follows the concentration in the well', {
     samples <- data.frame(name = c('lo', 'lo', 'mid', 'mid'), dilution = c(10, 10, 1, 1),
                           od = c(0.022, 0.026, 0.40, 0.42))
-    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
     s <- assess_samples(r$result, r$calibration_range, qc_criteria(sample_cv = 10, sample_cv_edge = 30),
                         group_vars = 'sample.name')$samples
     expect_equal(s$cv.limit, c(30, 10))
@@ -853,7 +879,7 @@ test_that('quality controls without a code are grouped by their nominal concentr
     qc <- data.frame(id = c('QC-L', NA, NA, NA), nominal = c(4, 4, 40, 40), od = 0.02 * c(4, 4, 40, 40))
     data <- run_data(qc = qc)
     data$id[data$type == 'QC'] <- qc$id
-    r <- calculate(data, 'LRM', linear = TRUE, round_fun = no_round)
+    r <- calculate(data, 'LRM', linear = TRUE)
     lv <- r$quality$qc$levels
     expect_equal(lv$id, c('QC-L', 'QC 4', 'QC 40'))
     expect_equal(lv$n, c(1, 1, 2))

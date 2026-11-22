@@ -24,7 +24,9 @@ mod_curve_server(
 
 \item{data}{Reactive with validated input data.}
 
-\item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}.}
+\item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}: the rounding of the
+coefficients and of the effect of the exclusions shown (not of the
+calculation, which keeps full precision).}
 
 \item{criteria}{Reactive with acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
 

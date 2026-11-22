@@ -30,6 +30,30 @@ aggregate_result <- function(result, group_vars = 'sample.name',
 }
 
 
+#' Round a Result Table for Display and Export
+#'
+#' [calculate()] keeps the concentrations at full precision, on which the
+#' quality controls and the samples are assessed; the rounding chosen by the
+#' user applies only to what the tables show and export, so that it cannot
+#' change a status.
+#'
+#' @param result Result or QC table from [calculate()].
+#' @param round_fun,round_par Rounding of the concentrations (`conc`,
+#'   `conc.lower`, `conc.upper`); the recovery of the quality controls is
+#'   rounded to 0.1 %.
+#'
+#' @return The table with rounded values; `NULL` for `NULL`.
+#' @export
+round_result <- function(result, round_fun = signif, round_par = 3) {
+    if (is.null(result)) return(NULL)
+    for (col in intersect(c('conc', 'conc.lower', 'conc.upper'), names(result))) {
+        result[[col]] <- round_fun(result[[col]], round_par)
+    }
+    if ('recovery' %in% names(result)) result$recovery <- round(result$recovery, 1)
+    result
+}
+
+
 #' Translate the Flag Column of a Result Table
 #'
 #' @param result Result table from [calculate()].
