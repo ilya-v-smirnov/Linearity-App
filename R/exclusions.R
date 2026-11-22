@@ -80,7 +80,7 @@ exclusion_effect <- function(original, refit, standards, excluded, criteria = qc
         limit <- st$bias.limit[match(standards$conc[used], st$conc)]
         c(mean_error = if (all(is.na(e))) NA_real_ else mean(e, na.rm = TRUE),
           max_error = if (all(is.na(e))) NA_real_ else max(e, na.rm = TRUE),
-          n_within = sum(!is.na(e) & e <= limit, na.rm = TRUE),
+          n_within = sum(within_limit(e, limit)),
           n_total = sum(used))
     }
     s_orig <- stats(bc$error.original, rep(TRUE, nrow(bc)), st_orig)

@@ -229,11 +229,11 @@ plot_bias <- function(result, xtitle = '', lang = 'en') {
     }, character(1))
     means <- st[!is.na(st$bias), , drop = FALSE]
     # Red where the mean bias is the failure; a white diamond where the level fails by another criterion
-    means$state <- ifelse(means$pass, 'pass', ifelse(abs(means$bias) > means$bias.limit, 'fail', 'other'))
-    cv_failed <- means[!means$pass & !is.na(means$calc.cv) & means$calc.cv > means$cv.limit, , drop = FALSE]
+    means$state <- ifelse(means$pass, 'pass', ifelse(exceeds_limit(means$bias, means$bias.limit), 'fail', 'other'))
+    cv_failed <- means[!means$pass & exceeds_limit(means$calc.cv, means$cv.limit), , drop = FALSE]
     limits <- data.frame(conc = st$conc, upper = st$bias.limit, lower = -st$bias.limit)
     # Wells beyond the limit of their level, as in the table of individual points
-    beyond <- wells[(abs(wells$bias) > st$bias.limit[match(wells$conc, st$conc)]) %in% TRUE, , drop = FALSE]
+    beyond <- wells[exceeds_limit(wells$bias, st$bias.limit[match(wells$conc, st$conc)]), , drop = FALSE]
     axis <- conc_axis(result)
     axis$range <- range(c(axis$range, st$conc))
 

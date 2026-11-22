@@ -266,6 +266,54 @@ test_that('the rounding shown cannot change the status of a quality control or a
     expect_lt(cv_percent(shown), 20)
 })
 
+test_that('a value exactly on an inclusive limit passes whatever its last binary digit', {
+    within_limit <- LinearityApp:::within_limit
+    exceeds_limit <- LinearityApp:::exceeds_limit
+    on_limit <- 100 * (0.84 - 0.70) / 0.70
+    expect_gt(on_limit, 20)                 # 20.000000000000004 in floating point
+    expect_true(within_limit(on_limit, 20))
+    expect_false(exceeds_limit(on_limit, 20))
+    expect_true(within_limit(-on_limit, 20))
+    # the limit stays strict for any real difference
+    expect_equal(within_limit(c(20.0001, 20.04, -20.04, NA), 20), c(FALSE, FALSE, FALSE, FALSE))
+    expect_equal(exceeds_limit(c(20.0001, 19.99, NA), 20), c(TRUE, FALSE, FALSE))
+
+    # the calibration OD = C with an inner level of 0.70 read at 0.84 in both replicates: +20 %, CV 0
+    lv <- c(0.1, 0.35, 0.7, 1.4, 2.8, 5.6)
+    std <- data.frame(conc = rep(lv, each = 2), OD = rep(lv, each = 2))
+    std$OD[std$conc == 0.7] <- 0.84
+    fit <- fit_curve(std, 'LIN')
+    fit$par[c('a', 'b')] <- c(0, 1)
+    st <- assess_standards(fit, wells = data.frame(conc = fit$x, OD = fit$y))
+    level <- st[st$conc == 0.7, ]
+    expect_equal(level$bias.limit, 20)
+    expect_gt(level$bias, 20)
+    expect_equal(level$calc.cv, 0)
+    expect_equal(level$status, 'pass')
+    expect_true(level$pass)
+    # shown as 20.0 next to its pass, not highlighted, a green diamond
+    tab <- quality_tables(list(standards = st), 'en', highlight = TRUE)$standards
+    row <- tab[tab$Concentration == '0.7', ]
+    expect_equal(row[['Bias, %']], '20.0')
+    expect_false(any(grepl('crit-fail', unlist(row), fixed = TRUE)))
+    expect_equal(LinearityApp:::pct_limit(on_limit, 20), '20.0')
+    r <- list(fit = fit, quality = list(standards = st), standard_data = std, exclusions = NULL)
+    b <- ggplot2::ggplot_build(LinearityApp:::plot_bias(r))
+    means <- b$data[[5]]
+    expect_equal(means$fill[abs(means$x - 0.7) < 1e-9], '#1b5e20')     # LIN: linear concentration axis
+    expect_equal(nrow(b$data[[6]]), 0)       # no well circled beyond its limit
+
+    # a QC of 0.70 read at 0.84 passes as well
+    qc <- assess_qc(data.frame(nominal = 0.7, conc = 0.84), range(lv))
+    expect_true(qc$wells$pass)
+    expect_true(qc$accepted)
+
+    # 7 of 10 levels with min_fraction 0.7: 0.7 * 10 is 7.000000000000001, 7 levels are needed, not 8
+    levels <- data.frame(conc = 1:10, pass = rep(c(TRUE, FALSE), c(7, 3)), calc.cv = 5)
+    acc <- LinearityApp:::calibration_acceptance(levels, qc_criteria(min_fraction = 0.7, min_levels = 1))
+    expect_true(acc$accepted)
+})
+
 test_that('a value next to its verdict is never shown equal to the limit it is not', {
     limit_digits <- LinearityApp:::limit_digits
     pct_limit <- LinearityApp:::pct_limit

@@ -38,7 +38,9 @@ limit_digits <- function(x, limit, center = 0, digits = 1L, max_digits = 4L) {
     center <- rep_len(center, n)
     on_threshold <- function(i, d) {
         th <- center[i] + c(-1, 1) * limit[i]
-        any(abs(round(x[i], d) - th) < 1e-9 * max(1, abs(th))) && !any(x[i] == th)
+        # Equal to the threshold within the tolerance of the criteria (see within_limit()): shown as equal
+        any(abs(round(x[i], d) - th) < 1e-9 * max(1, abs(th))) &&
+            !any(abs(x[i] - th) <= limit_tolerance(limit[i]))
     }
     for (i in which(!is.na(x) & !is.na(limit) & !is.na(center))) {
         while (out[i] < max_digits && on_threshold(i, out[i])) out[i] <- out[i] + 1L
@@ -115,8 +117,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         st <- st[order(st$conc, decreasing = TRUE), , drop = FALSE]
         # Values that cannot be computed (no points, one point for the CV) as dashes
         dash <- function(x) ifelse(x == '', '\u2014', x)
-        bias_failed <- is.na(st$bias) | abs(st$bias) > st$bias.limit
-        cv_failed <- !is.na(st$calc.cv) & st$calc.cv > st$cv.limit
+        bias_failed <- !within_limit(st$bias, st$bias.limit)
+        cv_failed <- exceeds_limit(st$calc.cv, st$cv.limit)
         # A level planned in replicate without two back-calculated results: the CV is unavailable
         cv_text <- pct_limit(st$calc.cv, st$cv.limit)
         cv_text[cv_text == '' & st$n.planned >= 2 & st$n > 0] <- t('quality.cv_unavailable')
@@ -170,8 +172,9 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
         dilution <- name(data.frame(as_text(d[id_cols]), as.character(d$dilution),
                                     counts('n'), counts('n.quantified'), num(d$mean),
                                     fail(pct_limit(d$deviation, criteria$dilution_bias),
-                                         abs(d$deviation) > criteria$dilution_bias),
-                                    fail(pct_limit(d$cv, criteria$dilution_cv), d$cv > criteria$dilution_cv),
+                                         exceeds_limit(d$deviation, criteria$dilution_bias)),
+                                    fail(pct_limit(d$cv, criteria$dilution_cv),
+                                         exceeds_limit(d$cv, criteria$dilution_cv)),
                                     fail(mark(d$pass), !d$pass)),
                          c(id_keys(id_cols), 'col.dilution', 'col.count', 'col.n_quant', 'col.mean', 'col.deviation',
                            'col.cv_dil', 'col.pass'))
@@ -329,7 +332,7 @@ standard_points_table <- function(result, lang = 'en', highlight = FALSE) {
     }
     bias_text <- pct_limit(bias, limit)
     if (highlight) {
-        failed <- !pts$excluded & (is.na(bias) | abs(bias) > limit)
+        failed <- !pts$excluded & !within_limit(bias, limit)
         bias_text <- ifelse(failed, paste0('<span class="crit-fail">', bias_text, '</span>'), bias_text)
     }
     # The IDs of the levels of the whole plan, as in every other table

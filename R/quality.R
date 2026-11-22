@@ -1,3 +1,32 @@
+#' Is a Value Within Its Limit?
+#'
+#' The limits of the acceptance criteria are inclusive: a bias of exactly
+#' +20 % passes a limit of 20 %. Computed in binary floating point, such a
+#' value can exceed the limit by its last digit (100 * (0.84 - 0.70) / 0.70 is
+#' 20.000000000000004), so the comparison allows a tolerance of 1e-9 of the
+#' limit, far above rounding errors and far below any meaningful difference.
+#' Every status, highlight and plot compares with the limits through these
+#' functions, so that they agree.
+#'
+#' @param x Values (a bias or a deviation is taken in absolute value).
+#' @param limit Limits (recycled).
+#'
+#' @return `within_limit()`: `TRUE` where `|x|` is within the limit, `FALSE`
+#'   where it exceeds it or is `NA`. `exceeds_limit()`: `TRUE` where `|x|`
+#'   exceeds the limit, `FALSE` where it is within it or is `NA`.
+#'   `limit_tolerance()`: the tolerance of each limit.
+#' @keywords internal
+within_limit <- function(x, limit) !is.na(x) & abs(x) <= limit + limit_tolerance(limit)
+
+#' @rdname within_limit
+#' @keywords internal
+exceeds_limit <- function(x, limit) !is.na(x) & abs(x) > limit + limit_tolerance(limit)
+
+#' @rdname within_limit
+#' @keywords internal
+limit_tolerance <- function(limit) 1e-9 * pmax(1, abs(limit))
+
+
 #' Acceptance Criteria
 #'
 #' Default values follow ICH M10 (2022) for ligand binding assays: standards
@@ -244,7 +273,7 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
         calc_mean <- if (n_calc > 0) mean(calc) else NA_real_
         bias <- 100 * (calc_mean - lv) / lv
         calc_cv <- cv_percent(calc)
-        within <- !is.na(bias) && abs(bias) <= bias_limit && (is.na(calc_cv) || calc_cv <= cv_limit)
+        within <- within_limit(bias, bias_limit) && (is.na(calc_cv) || within_limit(calc_cv, cv_limit))
         outside <- !is.null(fit$interval) &&
             (lv < fit$interval[1] * (1 - 1e-9) || lv > fit$interval[2] * (1 + 1e-9))
         status <- if (n_fit == 0) {
@@ -309,7 +338,8 @@ assess_standards <- function(fit, criteria = qc_criteria(), levels = NULL, wells
 calibration_acceptance <- function(standards, criteria = qc_criteria()) {
     n_levels <- nrow(standards)
     n_pass <- sum(standards$pass)
-    needed <- max(ceiling(criteria$min_fraction * n_levels), criteria$min_levels)
+    # 0.7 * 10 is 7.000000000000001 in floating point: without the tolerance 8 levels would be needed
+    needed <- max(ceiling(criteria$min_fraction * n_levels - 1e-9), criteria$min_levels)
     passed <- standards$conc[standards$pass]
     accepted <- n_pass >= needed
     n_no_cv <- sum(standards$pass & is.na(standards$calc.cv))
@@ -384,7 +414,7 @@ summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), gr
         edge <- !is.null(range) && near_edge(measured, range, criteria$edge)
         cv_limit <- if (edge) criteria$sample_cv_edge else criteria$sample_cv
         flags <- unique(flag[i][!is.na(flag[i]) & flag[i] != FLAGS$ok])
-        if (!is.na(cv) && cv > cv_limit) flags <- c(FLAGS$high_cv, flags)
+        if (exceeds_limit(cv, cv_limit)) flags <- c(FLAGS$high_cv, flags)
         out <- result[i[1], id_cols, drop = FALSE]
         out$n <- length(i)
         out$n.quantified <- length(conc)
@@ -453,7 +483,7 @@ dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NUL
         out$mean <- by_dil$x
         out$deviation <- dev
         out$cv <- cv
-        out$pass <- all(abs(dev) <= criteria$dilution_bias) && (is.na(cv) || cv <= criteria$dilution_cv)
+        out$pass <- all(within_limit(dev, criteria$dilution_bias)) && !exceeds_limit(cv, criteria$dilution_cv)
         out
     })
     out <- do.call(rbind, rows)
@@ -542,14 +572,14 @@ assess_qc <- function(qc, range, criteria = qc_criteria()) {
     qc$bias.limit <- ifelse(near_edge(qc$nominal, range, criteria$edge),
                             criteria$qc_bias_edge, criteria$qc_bias)
     qc$bias <- 100 * (qc$conc - qc$nominal) / qc$nominal
-    qc$pass <- !is.na(qc$bias) & abs(qc$bias) <= qc$bias.limit
+    qc$pass <- within_limit(qc$bias, qc$bias.limit)
     levels <- do.call(rbind, lapply(unique(qc$id), function(i) {
         q <- qc[qc$id == i, ]
         m <- if (all(is.na(q$conc))) NA_real_ else mean(q$conc, na.rm = TRUE)
         data.frame(id = i, nominal = q$nominal[1], n = nrow(q), n.pass = sum(q$pass),
                    mean = m, cv = cv_percent(q$conc), bias = 100 * (m - q$nominal[1]) / q$nominal[1],
                    bias.limit = q$bias.limit[1],
-                   pass = sum(q$pass) / nrow(q) >= criteria$qc_level_fraction)
+                   pass = sum(q$pass) / nrow(q) >= criteria$qc_level_fraction - 1e-9)
     }))
     accepted <- mean(qc$pass) >= criteria$qc_fraction - 1e-9 && all(levels$pass)
     list(levels = levels, wells = qc, accepted = accepted)

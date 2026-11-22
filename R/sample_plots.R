@@ -69,7 +69,7 @@ sample_figure_data <- function(result, samples, group_vars) {
     levels <- rev(unique(labels))
     groups <- data.frame(label = factor(labels, levels = levels),
                          samples[c('n', 'n.quantified', 'mean', 'sd', 'cv', 'cv.limit')])
-    groups$cv.pass <- is.na(groups$cv) | groups$cv <= groups$cv.limit
+    groups$cv.pass <- !exceeds_limit(groups$cv, groups$cv.limit)
     key <- replicate_groups(result, group_vars)
     group_key <- replicate_groups(samples, group_vars)
     wells <- data.frame(label = factor(labels[match(key, group_key)], levels = levels),
