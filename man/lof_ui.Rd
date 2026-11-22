@@ -4,10 +4,10 @@
 \alias{lof_ui}
 \title{Lack-of-Fit Test of the Standard Curve}
 \usage{
-lof_ui(p, lang = "en")
+lof_ui(lof, lang = "en")
 }
 \arguments{
-\item{p}{P-value of the test.}
+\item{lof}{Output of \code{\link[=lack_of_fit]{lack_of_fit()}}.}
 
 \item{lang}{Language code.}
 }
@@ -17,7 +17,8 @@ A shiny tag.
 \description{
 The p-value of the lack-of-fit F test (see \code{\link[=lack_of_fit]{lack_of_fit()}}) with zones: up
 to 0.05 (red, the model does not describe the standards), up to 0.10
-(orange, borderline) and above 0.10 (green). Without replicates of the
-standards the test cannot be done, which the line says.
+(orange, borderline) and above 0.10 (green). When the test cannot be done,
+the line says why (no replicates, too few levels for the model, or zero
+variance within the levels).
 }
 \keyword{internal}

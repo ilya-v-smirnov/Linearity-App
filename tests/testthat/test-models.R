@@ -182,11 +182,37 @@ test_that('lack-of-fit test detects a wrong model', {
     expect_gt(lack_of_fit(fit_curve(std, 'QRM', linear = TRUE))$p, 0.01)
     no_reps <- make_standards(function(x) 0.1 * x, reps = 1)
     expect_true(is.na(lack_of_fit(fit_curve(no_reps, 'LRM', linear = TRUE))$p))
+    expect_equal(lack_of_fit(fit_curve(no_reps, 'LRM', linear = TRUE))$reason, 'no_replicates')
+    expect_true(is.na(lack_of_fit(fit_curve(std, 'QRM', linear = TRUE))$reason))
 
     data <- synthetic_data(function(x) 0.002 * x^2 + 0.05 * x, conc = levels_7)
     data$OD[1:7] <- data$OD[1:7] + 0.003
     r <- calculate(data, 'LRM', linear = TRUE)
     expect_match(message_text(r$notes), 'lack-of-fit test is significant', all = FALSE)
+})
+
+test_that('lack-of-fit test is unavailable with too few levels or identical replicates', {
+    f <- function(x) 0.05 + 2 / (1 + (8 / x)^1.2)
+    # as many levels as parameters of the 4PL
+    four <- make_standards(f, conc = c(1, 4, 16, 64), sd = 0.01)
+    lof <- lack_of_fit(fit_curve(four, '4PL'))
+    expect_true(is.na(lof$p))
+    expect_equal(lof$reason, 'too_few_levels')
+
+    # rounded OD: replicates read the same OD in every level; the pure error is zero up to rounding
+    # errors, which must not turn into a huge F and a significant lack of fit
+    rounded <- make_standards(f, reps = 3)
+    rounded$OD <- round(rounded$OD, 3)
+    for (w in c('none', '1/y2', 'power')) {
+        for (model in c('LRM', '4PL')) {
+            lof <- lack_of_fit(fit_curve(rounded, model, weights = w))
+            expect_true(is.na(lof$p))
+            expect_equal(lof$reason, 'zero_pure_error')
+        }
+    }
+    # one level with scatter: the test is done
+    rounded$OD[1] <- rounded$OD[1] + 0.002
+    expect_false(is.na(lack_of_fit(fit_curve(rounded, 'LRM'))$p))
 })
 
 test_that('models are compared on a common scale', {

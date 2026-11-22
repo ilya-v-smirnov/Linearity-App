@@ -178,7 +178,10 @@ infographic:
   lof_good: "не выявлена"
   lof_fair: "пограничная"
   lof_poor: "значимая"
-  lof_na: "Для теста нужны повторы стандартов."
+  lof_unavailable: "Тест неадекватности недоступен: {reason}"
+  lof_na_no_replicates: "нет повторов стандартов"
+  lof_na_too_few_levels: "слишком мало уровней для модели"
+  lof_na_zero_pure_error: "нулевая дисперсия внутри уровней"
 
 reason:
   outlier: "Выброс"

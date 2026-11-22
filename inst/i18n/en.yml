@@ -178,7 +178,10 @@ infographic:
   lof_good: "not detected"
   lof_fair: "borderline"
   lof_poor: "significant"
-  lof_na: "The test needs replicates of the standards."
+  lof_unavailable: "Lack-of-fit test unavailable: {reason}"
+  lof_na_no_replicates: "no replicates of the standards"
+  lof_na_too_few_levels: "too few levels for the model"
+  lof_na_zero_pure_error: "zero within-level variance"
 
 reason:
   outlier: "Outlier"

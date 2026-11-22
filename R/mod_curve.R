@@ -719,7 +719,7 @@ mod_curve_server <- function(id, lang, data, rounding, criteria = shiny::reactiv
             shiny::div(class = 'curve-stats',
                        r2_ui(r$quality$curve$r2, lang),
                        mean_error_ui(r$fit, lang),
-                       lof_ui(r$lack_of_fit$p, lang))
+                       lof_ui(r$lack_of_fit, lang))
         })
         output$coefs <- shiny::renderTable({
             tab <- coef_table()

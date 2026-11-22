@@ -10,9 +10,15 @@ lack_of_fit(fit)
 \item{fit}{A \code{lin_fit} object.}
 }
 \value{
-A list with \code{F}, \code{df1}, \code{df2} and \code{p} (\code{NA} without replicates).
+A list with \code{F}, \code{df1}, \code{df2}, \code{p} and \code{reason}: \code{NA} when the
+test is done, otherwise why \code{p} is \code{NA}: \code{"no_replicates"},
+\code{"too_few_levels"} or \code{"zero_pure_error"}.
 }
 \description{
 Compares the residual variance with the variance of replicates (pure error).
+The test is unavailable without replicates, with no more levels than
+parameters of the model, and when the replicates of every level read the
+same OD (as after importing rounded OD): the pure error is then zero, up to
+rounding errors relative to the total scatter of the OD.
 }
 \keyword{internal}

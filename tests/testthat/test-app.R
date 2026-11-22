@@ -565,13 +565,18 @@ test_that('infographics count the sample wells and place R2 on its scale', {
     expect_match(r2(0.5), 'descriptive, not an acceptance criterion', fixed = TRUE)
     expect_null(LinearityApp:::r2_ui(NA))
 
-    lof <- function(p) as.character(LinearityApp:::lof_ui(p, 'en'))
+    lof <- function(p, reason = NA_character_) as.character(LinearityApp:::lof_ui(list(p = p, reason = reason), 'en'))
     expect_match(lof(0.47), 'Lack-of-fit: p = <strong class="zone-good">0.47</strong>', fixed = TRUE)
     expect_match(lof(0.08), 'zone-fair', fixed = TRUE)
     expect_match(lof(0.10), 'zone-fair', fixed = TRUE)
     expect_match(lof(0.05), 'zone-poor', fixed = TRUE)
     expect_match(lof(1e-6), '>&lt; 0.001</strong>', fixed = TRUE)
-    expect_match(lof(NA), 'needs replicates', fixed = TRUE)
+    # an unavailable test says why
+    expect_match(lof(NA, 'no_replicates'), 'Lack-of-fit test unavailable: no replicates of the standards', fixed = TRUE)
+    expect_match(lof(NA, 'too_few_levels'), 'Lack-of-fit test unavailable: too few levels for the model', fixed = TRUE)
+    expect_match(lof(NA, 'zero_pure_error'), 'Lack-of-fit test unavailable: zero within-level variance', fixed = TRUE)
+    expect_match(as.character(LinearityApp:::lof_ui(list(p = NA, reason = 'zero_pure_error'), 'ru')),
+                 'Тест неадекватности недоступен: нулевая дисперсия внутри уровней', fixed = TRUE)
 })
 
 test_that('the mean error of the back-calculated standards matches the comparison of models', {

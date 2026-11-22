@@ -634,10 +634,16 @@ coef_table_fit <- function(fit, level = 0.95) {
 #' Lack-of-Fit F Test
 #'
 #' Compares the residual variance with the variance of replicates (pure error).
+#' The test is unavailable without replicates, with no more levels than
+#' parameters of the model, and when the replicates of every level read the
+#' same OD (as after importing rounded OD): the pure error is then zero, up to
+#' rounding errors relative to the total scatter of the OD.
 #'
 #' @param fit A `lin_fit` object.
 #'
-#' @return A list with `F`, `df1`, `df2` and `p` (`NA` without replicates).
+#' @return A list with `F`, `df1`, `df2`, `p` and `reason`: `NA` when the
+#'   test is done, otherwise why `p` is `NA`: `"no_replicates"`,
+#'   `"too_few_levels"` or `"zero_pure_error"`.
 #' @keywords internal
 lack_of_fit <- function(fit) {
     v <- fit_scale(fit, fit$y)
@@ -648,14 +654,26 @@ lack_of_fit <- function(fit) {
         m <- stats::weighted.mean(v[i], fit$w[i])
         sum(fit$w[i] * (v[i] - m)^2)
     }, 0))
+    ss_total <- sum(fit$w * (v - stats::weighted.mean(v, fit$w))^2)
     m <- length(groups)
     n <- length(v)
     p <- length(fit$par)
     df1 <- m - p
     df2 <- n - m
-    if (df1 <= 0 || df2 <= 0 || ss_pe <= 0) return(list(F = NA_real_, df1 = df1, df2 = df2, p = NA_real_))
+    reason <- if (df2 <= 0) {
+        'no_replicates'
+    } else if (df1 <= 0) {
+        'too_few_levels'
+    } else if (ss_pe <= 1e-12 * ss_total) {
+        # Identical replicates leave only rounding errors, which would make F huge
+        'zero_pure_error'
+    } else {
+        NA_character_
+    }
+    if (!is.na(reason)) return(list(F = NA_real_, df1 = df1, df2 = df2, p = NA_real_, reason = reason))
     f_stat <- ((rss - ss_pe) / df1) / (ss_pe / df2)
-    list(F = f_stat, df1 = df1, df2 = df2, p = stats::pf(f_stat, df1, df2, lower.tail = FALSE))
+    list(F = f_stat, df1 = df1, df2 = df2, p = stats::pf(f_stat, df1, df2, lower.tail = FALSE),
+         reason = NA_character_)
 }
 
 

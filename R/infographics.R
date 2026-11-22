@@ -175,20 +175,24 @@ mean_error_ui <- function(fit, lang = 'en') {
 #'
 #' The p-value of the lack-of-fit F test (see [lack_of_fit()]) with zones: up
 #' to 0.05 (red, the model does not describe the standards), up to 0.10
-#' (orange, borderline) and above 0.10 (green). Without replicates of the
-#' standards the test cannot be done, which the line says.
+#' (orange, borderline) and above 0.10 (green). When the test cannot be done,
+#' the line says why (no replicates, too few levels for the model, or zero
+#' variance within the levels).
 #'
-#' @param p P-value of the test.
+#' @param lof Output of [lack_of_fit()].
 #' @param lang Language code.
 #'
 #' @return A shiny tag.
 #' @keywords internal
-lof_ui <- function(p, lang = 'en') {
-    label <- paste0(tr('infographic.lof_title', lang), ': ')
+lof_ui <- function(lof, lang = 'en') {
+    p <- lof$p
     if (length(p) != 1 || is.na(p)) {
-        return(shiny::div(class = 'curve-stat', label,
-                          shiny::span(class = 'text-muted', tr('infographic.lof_na', lang))))
+        reason <- if (is.null(lof$reason) || is.na(lof$reason)) 'no_replicates' else lof$reason
+        return(shiny::div(class = 'curve-stat text-muted',
+                          tr('infographic.lof_unavailable', lang,
+                             reason = tr(paste0('infographic.lof_na_', reason), lang))))
     }
+    label <- paste0(tr('infographic.lof_title', lang), ': ')
     zone <- if (p <= 0.05) 'poor' else if (p <= 0.10) 'fair' else 'good'
     value <- if (p < 1e-3) '< 0.001' else format(signif(p, 2))
     curve_stat_ui(paste0(label, 'p = '), value, zone, tr(paste0('infographic.lof_', zone), lang))
