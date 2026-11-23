@@ -21,8 +21,10 @@ mod_summary_server(id, lang, curve, rounding)
 }
 \value{
 \code{mod_summary_server()} returns a list of reactives: \code{table} (the
-aggregated table shown), \code{assessment} (see \code{\link[=assess_samples]{assess_samples()}}) and
-\code{warnings} (translated warnings of the samples).
+aggregated table shown, with the short column names, see
+\code{\link[=column_abbreviations]{column_abbreviations()}}), \code{assessment} (see \code{\link[=assess_samples]{assess_samples()}}),
+\code{included} (the wells used in the sample result, see \code{\link[=included_wells]{included_wells()}})
+and \code{warnings} (translated warnings of the samples).
 }
 \description{
 The sidebar holds the grouping columns (with the number of distinct values

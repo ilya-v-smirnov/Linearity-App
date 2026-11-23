@@ -16,7 +16,7 @@ app_server <- function(input, output, session, default_lang = 'en') {
     criteria <- mod_criteria_server('criteria', lang)
     options <- mod_quant_options_server('results-options')
     curve <- mod_curve_server('curve', lang, data, rounding, criteria, options)
-    mod_results_server('results', lang, curve, by = template$by, rounding = rounding)
     summary <- mod_summary_server('summary', lang, curve, rounding)
+    mod_results_server('results', lang, curve, by = template$by, rounding = rounding, included = summary$included)
     mod_report_server('report', lang, curve, summary, rounding)
 }

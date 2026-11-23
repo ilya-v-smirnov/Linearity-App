@@ -259,6 +259,10 @@ crit:
   edge_levels_help: "Which standard levels use the limits of the boundary calibrators. Plate plan: the lowest and the highest level of the plan, whatever wells are excluded or lost; a level keeps its limits when the fit gets narrower (as ICH M10 requires). Fit: the lowest and the highest level with wells in the fit, after the exclusions; use it only when the method says so."
   edge_levels_plan: "Lowest and highest level of the plate plan"
   edge_levels_fit: "Lowest and highest level in the fit"
+  single_replicate: "Sample with one usable replicate"
+  single_replicate_help: "A sample set planned in two or more wells at one dilution, of which one well has a value within the accepted range. Report the value: that value is the result and its precision is not assessable. Withhold the result: the sample gets no concentration from this set. The rule belongs to the method. A well planned as single is not affected."
+  single_replicate_report: "Report the value"
+  single_replicate_withhold: "Withhold the result"
   title_standards: "Acceptance criteria"
   note_standards: "ICH M10 – LBA: ICH M10 (2022) requirements for ligand binding assays. Colorimetric assay: tighter limits for BCA, Griess and similar assays. Custom: editable values, starting from those of ICH M10. Boundary calibrators are the lowest and the highest standard level of the plate plan: they keep their limits, as the other levels keep theirs, when wells are excluded."
   preset: "Criteria set"
@@ -309,7 +313,7 @@ results:
   download: "Download results (xlsx)"
   qc: "Quality controls"
   range_title: "Outside the curve"
-  range_help: "Samples outside the quantification range are flagged and get no concentration by default. Extrapolated concentrations and zeros keep their flags (Below: below the lowest calibrator, Above: above the highest calibrator, OD <= blank), so they can be told apart. The options apply to samples, not to quality controls, and affect the quality assessment, the summary and the report."
+  range_help: "Samples outside the quantification range get no concentration (C) by default. The column C.est holds every calculated value, and the options add exploratory ones to it: extrapolated concentrations and zeros keep their Range status (RS: Below, Above, OD <= blank) and are marked in the Value source (VS). They are not used for the sample result, its statistics, the comparison of dilutions or the axis of the plots. The options apply to samples, not to quality controls."
   extrapolate_below: "Extrapolate below the lowest calibrator"
   extrapolate_above: "Extrapolate above the highest calibrator"
   flags_title: "Flags of the sample wells: {total} wells"
@@ -334,7 +338,7 @@ dt:
 
 summary:
   group_title: "Group results by"
-  group_help: "Wells with the same values in the ticked columns form one row of the summary: the number of wells, the mean, SD, CV, minimum and maximum of their concentrations. The rows are also the replicates of the quality assessment: the CV of each row is checked against the limit and dilutions are compared within the rows without the dilution column. \"Samples\" groups by the sample name, date and additional columns, so that replicates and dilutions of a sample are averaged together; \"Samples and dilutions\" keeps the dilutions apart. The number next to a column is the number of its distinct values."
+  group_help: "Wells with the same values in the ticked columns form one row of the summary: the number of wells and the mean, SD, minimum and maximum of the wells used in the result. The precision is assessed within a row and a dilution, because wells at different dilutions are not replicates; a row with several dilutions shows the worst of them. Dilutions are compared within the rows without the dilution column. \"Samples\" groups by the sample name, date and additional columns, so that the dilutions of a sample are averaged together; \"Samples and dilutions\" keeps the dilutions apart. The number next to a column is the number of its distinct values."
   preset_samples: "Samples"
   preset_dilutions: "Samples and dilutions"
   values: " · {n} values"
@@ -342,7 +346,7 @@ summary:
   choose: "Choose at least one column to group the results by."
   stats_title: "Statistics"
   stat_n: "n (all wells)"
-  stat_n.quantified: "n quantified"
+  stat_n.quantified: "n within the accepted range"
   stat_mean: "Mean"
   stat_sd: "SD"
   stat_cv: "CV, %"
@@ -355,7 +359,7 @@ summary:
   tab_infographics: "Infographics"
   dilution_help: "Each line is a sample (a row of the summary without the dilution column) measured at two or more dilutions; its colour and name are in the legend on the right. A point is the mean concentration at a dilution, corrected for the dilution, shown as its deviation (%) from the mean over all dilutions of the sample. The grey band is the allowed deviation (±{bias} %). Solid lines with circles: the dilutions agree. Dashed lines with triangles (also in the legend): a deviation outside the band or a CV between dilutions above {cv} %."
   dilution_table: "Agreement between sample dilutions"
-  dilution_table_help: "Mean concentration of a sample at each dilution (corrected for the dilution) and its deviation from the mean over all dilutions of the sample. The dilutions agree if every deviation is within ±{bias} % and the CV between dilutions is at most {cv} %; values outside the limits are highlighted. Samples are the rows of the summary without the dilution column."
+  dilution_table_help: "Mean concentration of the wells used in the result at each dilution (corrected for the dilution) and its deviation from the mean over those dilutions of the sample; at least two dilutions with used wells are needed. The dilutions agree if every deviation is within ±{bias} % and the CV between dilutions is at most {cv} %; values outside the limits are highlighted. Samples are the rows of the summary without the dilution column."
   download: "Download summary (xlsx)"
 
 report:
@@ -411,6 +415,36 @@ flag:
   high_cv: "High CV"
   nonlinear: "Dilution non-linear"
   no_background: "Background unavailable"
+  no_range: "Range not accepted"
+
+value:
+  inc_yes: "Yes"
+  inc_no: "No"
+  not_assessable: "Not assessable"
+
+abbr:
+  title: "Abbreviations"
+  sheet: "Legend"
+  name: "Abbreviation"
+  meaning: "Meaning"
+  term_DF: "dilution factor"
+  term_OD_net: "OD after background subtraction"
+  term_C: "concentration within the accepted range, used for the sample result"
+  term_C_est: "every value of the well, for exploration: C, extrapolated values, assigned zeros and values from a calibration not accepted (origin in VS); not used for the sample result"
+  term_C_low: "lower confidence limit of C.est"
+  term_C_up: "upper confidence limit of C.est"
+  term_RS: "Range status: position against the accepted range, or why it cannot be determined"
+  term_VS: "Value source: Interp (interpolated), Extrap (extrapolated), Zero (assigned zero), None (no estimate)"
+  term_Inc: "Included in sample result under the selected rule"
+  term_Nom: "nominal concentration"
+  term_Rec: "recovery, %"
+  term_In_N: "wells with a value within the accepted range / all wells of the group"
+  term_N: "all wells of the group"
+  term_N_in: "wells with a value within the accepted range"
+  term_SD: "standard deviation of the wells used"
+  term_CV: "replicate CV within a dilution, %; for several dilutions, the one closest to or farthest above its limit"
+  term_Prec: "replicate precision against the CV limit"
+  term_Lin: "agreement between dilutions"
 
 note:
   blank_range: "Blank OD range ({range} OD, maximum minus minimum) exceeds the net signal of the lowest calibrator {level} ({conc}): {signal} OD above the background. Check the background wells in Standard curve → Background."
@@ -423,7 +457,7 @@ note:
   incomplete_backcalc: "Incomplete back-calculation of standard {level} ({conc}): {n} of {total} wells in the fit back-calculated; {wells}. The level is not accepted."
   standards_excluded: "{n} standard well(s) excluded from the fit: {details}."
   not_monotonic: "Non-monotonic within calibration range: the quadratic curve turns at {vertex}, inside {lo}–{hi}, so an OD can match two concentrations. Concentrations are not calculated; choose another model or set a monotonic interval on one side of the turning point."
-  not_quantified: "{n} of {total} sample wells were not quantified: {details}."
+  not_quantified: "{n} of {total} sample wells have no concentration within the accepted range: {details}."
   lack_of_fit: "The lack-of-fit test is significant (p = {p}): the model may not describe the standards well; see the comparison of models."
   power_fallback: "Too few replicates to estimate the variance function: an unweighted fit was used."
   power_flat_means: "Equal weights used: replicated levels have indistinguishable mean signals."
@@ -434,7 +468,7 @@ note:
   edge_plan_highest: "The fit ends at {conc}: the higher levels of the plate plan have no wells in the fit. Level {conc} keeps the limits of an inner calibrator of the plan (bias ±{bias} %, CV {cv} %)."
   edge_fit_lowest: "The fit begins at {conc}: the lower levels of the plate plan have no wells in the fit. By the rule of the criteria (boundary calibrators of the fit), level {conc} is judged as a boundary calibrator (bias ±{bias} %, CV {cv} %)."
   edge_fit_highest: "The fit ends at {conc}: the higher levels of the plate plan have no wells in the fit. By the rule of the criteria (boundary calibrators of the fit), level {conc} is judged as a boundary calibrator (bias ±{bias} %, CV {cv} %)."
-  not_reportable: "The calibration is not accepted: the concentrations are shown for inspection only and are not reportable (range applied to the samples: {lloq}–{uloq})."
+  not_reportable: "The calibration is not accepted: the concentrations are shown for inspection only (column C.est) and are not reportable (range applied to the samples: {lloq}–{uloq})."
 
 quality:
   status_outside_interval: "✗ outside the interval"
@@ -483,6 +517,8 @@ quality:
   background_unavailable_hint: "The verdict and the concentrations are suspended. Restore a background well or tick another role in Standard curve → Background, or choose “No background subtraction” there to calculate without a correction."
   warn_cv: "Replicate CV above the limit in {n} sample(s)."
   warn_dilution: "Non-linear dilutions in {n} sample(s)."
+  warn_single: "One usable replicate in {n} replicate set(s): the value of that well is reported and the replicate precision is not assessable."
+  warn_withheld: "One usable replicate in {n} replicate set(s): the result of these sets is withheld by the rule of the method."
 
 plate:
   sheet_instructions: "Instructions"
@@ -574,8 +610,10 @@ samples:
   panel_status: "Wells"
   axis_conc: "Concentration"
   axis_cv: "CV, %"
-  not_quantified: "no wells quantified"
+  not_quantified: "no wells in the result"
   axis_wells: "Number of wells"
+  legend_estimate: "Not in the result"
+  legend_estimate_edge: "Not in the result, beyond the axis"
   legend_mean: "Mean ± SD"
   legend_cv_pass: "CV within limit"
   legend_cv_fail: "CV above limit"
@@ -584,7 +622,7 @@ samples:
   legend_qc_pass: "Within limits"
   legend_qc_fail: "Outside limits"
   tile_groups: "groups (rows)"
-  tile_quantified: "groups with all wells quantified"
+  tile_quantified: "groups with all wells in range"
   tile_median_cv: "median CV of replicates"
   tile_high_cv: "groups with CV above limit"
   tile_linear: "samples with linear dilutions"
@@ -592,7 +630,7 @@ samples:
   no_dilution: "No sample is measured at two or more dilutions within the chosen groups."
   no_qc: "No quality controls on the plate."
   quant_help: "All sample wells of the plate by the status of the well: OD at or below the blank (red), below the lowest calibrator (orange, left), quantified within the calibration range (green), above the highest calibrator (blue, right) and other problems such as a missing OD (grey). The length of a segment is proportional to the number of wells."
-  figure_help: "One row per row of the summary (the columns ticked under Group results by). Concentration: the dots are the quantified wells of the group, coloured by the status of the well; the vertical bar is the mean and the horizontal line the mean ± SD; the axis is logarithmic when the concentrations differ more than 20-fold. Replicate CV: the CV of the wells of the group, blue-grey within the limit and red above it; the dashed line is the CV limit (groups near the ends of the calibration range may have a higher limit). Wells: the number of wells of the group by status, in the colours of the legend."
+  figure_help: "One row per row of the summary (the columns ticked under Group results by). Concentration: filled dots are the wells used in the result, hollow marks the other wells with a value (triangles: beyond the axis, drawn at its edge), coloured by the status of the well; the vertical bar is the mean and the horizontal line the mean ± SD of the wells used; the axis is logarithmic when their concentrations differ more than 20-fold. Replicate CV: the CV within a dilution (for several dilutions, the one closest to or farthest above its limit), blue-grey within the limit and red above it; the dashed line is the CV limit (groups near the ends of the calibration range may have a higher limit). Wells: the number of wells of the group by status, in the colours of the legend."
   qc_help: "Bias (%) of each QC well from the nominal concentration, one row per QC level. The grey band is the allowed bias of the level; blue-grey points are within it, red points outside."
 
 effect:

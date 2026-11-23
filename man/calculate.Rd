@@ -39,14 +39,16 @@ columns \code{key} (see \code{\link[=well_keys]{well_keys()}}) and \code{reason}
 \item{criteria}{Acceptance criteria (see \code{\link[=qc_criteria]{qc_criteria()}}).}
 
 \item{extrapolate}{Samples outside the quantification range that still get
-a concentration: any of \code{"below"} (under the LLOQ) and \code{"above"} (over
-the ULOQ). Their flags are kept.}
+an exploratory value in \code{conc.est}: any of \code{"below"} (under the LLOQ) and
+\code{"above"} (over the ULOQ). Their flags are kept and they do not enter the
+sample result.}
 
 \item{blank_zero}{If \code{TRUE}, samples with OD at or below the blank and
-outside the calibration range (or without a concentration) get
-concentration 0 (flag kept). Only for a curve that increases with the
-concentration: on a decreasing curve a weak signal means a high
-concentration, the option is then ignored with a note.}
+outside the calibration range (or without a concentration) get an
+exploratory 0 in \code{conc.est} (flag kept), which does not enter the sample
+result. Only for a curve that increases with the concentration: on a
+decreasing curve a weak signal means a high concentration, the option is
+then ignored with a note.}
 
 \item{interval}{For the quadratic models: the monotonic interval of
 concentrations (lower and upper bound) set by the user, or \code{NULL} for the
@@ -105,9 +107,14 @@ calibration (see \code{\link[=exclusion_effect]{exclusion_effect()}}; \code{NULL
 \item \code{lack_of_fit}: lack-of-fit test (see \code{\link[=lack_of_fit]{lack_of_fit()}});
 \item \code{notes}: warnings as a list of messages (see \code{\link[=message_text]{message_text()}});
 \item \code{result}: sample results with \code{OD} as measured (before the blank is
-subtracted), \code{OD.corrected} (after it), \code{conc} (dilution-corrected), its confidence interval
-\code{conc.lower}, \code{conc.upper}, \code{flag} and, when some wells have a signal at
-or below the background, \code{OD.le.blank} (logical; see \code{\link[=classify_wells]{classify_wells()}});
+subtracted), \code{OD.corrected} (after it), \code{conc} (dilution-corrected,
+within the accepted range), \code{conc.est} (every value of the well, for
+exploration, see \code{\link[=well_values]{well_values()}}), its confidence interval \code{conc.lower}, \code{conc.upper},
+\code{flag} (the Range status, see \link{FLAGS}), \code{value.source} (see
+\code{\link[=value_sources]{value_sources()}}), \code{included} (used in the sample result under the
+default replicate groups, see \code{\link[=included_wells]{included_wells()}}) and, when some wells
+have a signal at or below the background, \code{OD.le.blank} (logical; see
+\code{\link[=classify_wells]{classify_wells()}});
 \item \code{qc}: quality controls with nominal and measured concentration, OD as measured,
 recovery (\%), flag and \code{OD.le.blank} as for the samples (\code{NULL} if there
 are no QC wells);
@@ -133,7 +140,8 @@ controls and the samples; tables round them for display and export (see
 Subtracts the background, fits the calibration curve OD = f(conc) on the
 standards, inverts the curve for samples and quality controls and
 multiplies the result by the dilution factor. Samples outside the
-calibration range are flagged and receive \code{NA} instead of a concentration.
+calibration range are flagged and receive \code{NA} in \code{conc}; \code{conc.est} holds
+every value of the wells, exploratory ones included (see \code{\link[=well_values]{well_values()}}).
 }
 \examples{
 path <- system.file('extdata', 'bca_plate.xlsx', package = 'LinearityApp')

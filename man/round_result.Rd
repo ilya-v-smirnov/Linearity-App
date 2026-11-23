@@ -10,8 +10,8 @@ round_result(result, round_fun = signif, round_par = 3, bias_limit = NULL)
 \item{result}{Result or QC table from \code{\link[=calculate]{calculate()}}.}
 
 \item{round_fun, round_par}{Rounding of the concentrations (\code{conc},
-\code{conc.lower}, \code{conc.upper}); the recovery of the quality controls is
-rounded to 0.1 \%.}
+\code{conc.est}, \code{conc.lower}, \code{conc.upper}); the recovery of the quality
+controls is rounded to 0.1 \%.}
 
 \item{bias_limit}{Allowed bias (\%) of each quality control, in the order
 of the rows (\code{bias.limit} of the wells of \code{\link[=assess_qc]{assess_qc()}}): a recovery that

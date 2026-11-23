@@ -141,7 +141,8 @@ fake_curve <- function(lang = 'en', units_ok = TRUE) {
 test_that('results module translates flags and downloads tables', {
     shiny::testServer(LinearityApp:::mod_results_server,
                       args = list(lang = 'ru', curve = fake_curve('ru')), {
-        expect_true(tr('flag.od_le_nc', 'ru') %in% session$returned()$flag)
+        expect_true(tr('flag.od_le_nc', 'ru') %in% session$returned()$RS)
+        expect_false(any(c('OD.le.blank', 'OD.blk') %in% names(session$returned())))
     })
 })
 
@@ -150,14 +151,14 @@ test_that('summary module groups by sample by default, offers quick choices and 
                       args = list(lang = 'en', curve = fake_curve(), rounding = rounding_3()), {
         # before the browser answers, the samples are the groups
         out <- session$returned$table()
-        expect_equal(names(out)[1:2], c('sample.name', 'sample.date'))
-        expect_true(all(c('n', 'n.quantified', 'mean', 'sd', 'cv', 'range', 'precision', 'linearity') %in% names(out)))
+        expect_equal(names(out)[1:2], c('sample', 'date'))
+        expect_true(all(c('In.N', 'Mean', 'SD', 'CV', 'RS', 'Prec', 'Lin') %in% names(out)))
         expect_false('flag' %in% names(out))
         # the mean next to the minimum and the maximum, then the spread
-        expect_equal(names(out)[names(out) %in% c('mean', 'min', 'max', 'sd', 'cv')],
-                     c('mean', 'min', 'max', 'sd', 'cv'))
-        expect_equal(sum(out$n), 12)
-        expect_equal(out$sample.name, c('M0', 'M0', 'M1', 'M1', 'M2', 'M2'))
+        expect_equal(names(out)[names(out) %in% c('Mean', 'Min', 'Max', 'SD', 'CV')],
+                     c('Mean', 'Min', 'Max', 'SD', 'CV'))
+        expect_equal(sum(as.integer(sub('.*/', '', out$In.N))), 12)
+        expect_equal(out$sample, c('M0', 'M0', 'M1', 'M1', 'M2', 'M2'))
         expect_match(output$preview$html, '12 wells', fixed = TRUE)
 
         session$setInputs(group_vars = c('sample.name', 'sample.date'))
@@ -175,7 +176,7 @@ test_that('summary module groups by sample by default, offers quick choices and 
 
         session$setInputs(group_vars = c('sample.name', 'sample.date', 'dilution'), stats = c('n', 'mean'))
         out <- session$returned$table()
-        expect_equal(names(out), c('sample.name', 'sample.date', 'dilution', 'n', 'mean'))
+        expect_equal(names(out), c('sample', 'date', 'DF', 'N', 'Mean'))
         expect_equal(names(readxl::read_excel(output$download)), names(out))
 
         session$setInputs(group_vars = character(0))
@@ -443,9 +444,9 @@ test_that('results module shows quality controls', {
     curve$result <- shiny::reactive(qc_result)
     shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve), {
         expect_match(output$qc$html, 'Quality controls', fixed = TRUE)
-        expect_match(output$qc_table, 'nominal', fixed = TRUE)
+        expect_match(output$qc_table, 'Nom', fixed = TRUE)
         path <- output$download
-        expect_equal(readxl::excel_sheets(path), c('Results', 'Quality controls'))
+        expect_equal(readxl::excel_sheets(path), c('Results', 'Quality controls', 'Legend'))
         expect_equal(readxl::read_excel(path, sheet = 'Quality controls')$id, 'QC-L')
     })
 })
@@ -461,13 +462,13 @@ test_that('the rounding changes the cells of the results, not the calculation', 
     shiny::testServer(LinearityApp:::mod_results_server,
                       args = list(lang = 'en', curve = curve, rounding = rounding), {
         qc_cell <- function() readxl::read_excel(output$download, sheet = 'Quality controls')
-        expect_equal(qc_cell()$conc, 12)
-        expect_equal(qc_cell()$recovery, 120)
-        expect_equal(sort(session$returned()$conc), sort(signif(exact, 3)))
+        expect_equal(qc_cell()$C, 12)
+        expect_equal(qc_cell()$Rec, 120)
+        expect_equal(sort(session$returned()$C), sort(signif(exact, 3)))
         rounding(list(fun = signif, par = 5))
         session$flushReact()
-        expect_equal(qc_cell()$conc, 12.004)
-        expect_equal(sort(session$returned()$conc), sort(signif(exact, 5)))
+        expect_equal(qc_cell()$C, 12.004)
+        expect_equal(sort(session$returned()$C), sort(signif(exact, 5)))
         # the result itself keeps full precision
         expect_equal(shiny::isolate(curve$result())$result$conc, exact)
     })
@@ -480,18 +481,24 @@ test_that('results are ordered by well, columns are chosen and exported to Excel
     by <- shiny::reactiveVal('column')
     shiny::testServer(LinearityApp:::mod_results_server, args = list(lang = 'en', curve = curve, by = by), {
         out <- session$returned()
-        expect_equal(names(out)[1:3], c('well', 'id', 'sample.name'))
-        expect_equal(tail(names(out), 4), c('conc', 'conc.lower', 'conc.upper', 'flag'))
+        expect_equal(names(out)[1:3], c('well', 'id', 'sample'))
+        expect_equal(tail(names(out), 7), c('C', 'C.est', 'C.low', 'C.up', 'RS', 'VS', 'Inc'))
+        # the headers survive an import into R as they are
+        expect_identical(names(out), make.names(names(out)))
         expect_equal(out$well[1:3], c('A3', 'B3', 'C3'))
         by('row')
         session$flushReact()
         expect_equal(session$returned()$well[1:3], c('A3', 'A4', 'A5'))
 
-        session$setInputs(columns = c('well', 'conc', 'flag'))
-        expect_equal(names(session$returned()), c('well', 'conc', 'flag'))
+        session$setInputs(columns = c('well', 'C', 'RS'))
+        expect_equal(names(session$returned()), c('well', 'C', 'RS'))
         saved <- readxl::read_excel(output$download, sheet = 'Results')
-        expect_equal(names(saved), c('well', 'conc', 'flag'))
+        expect_equal(names(saved), c('well', 'C', 'RS'))
         expect_equal(saved$well[1:3], c('A3', 'A4', 'A5'))
+        # the legend is on a sheet of its own and explains only what is exported
+        legend <- readxl::read_excel(output$download, sheet = 'Legend')
+        expect_equal(legend$Abbreviation, c('C', 'RS'))
+        expect_match(output$legend$html, 'abbr-legend', fixed = TRUE)
         expect_match(output$table, 'orderData', fixed = TRUE)
     })
 })
@@ -503,8 +510,9 @@ test_that('out-of-range options reach the calculation', {
                                   rounding = rounding_3(), options = opts), {
         session$setInputs(model = 'LRM', weights = 'none', xtitle = 'x', xunits = '', ytitle = 'y')
         res <- session$returned$result()$result
-        expect_false(anyNA(res$conc[res$flag == '< LLOQ']))
-        expect_true(all(res$conc[res$flag == 'OD <= blank'] == 0))
+        expect_false(anyNA(res$conc.est[res$flag == '< LLOQ']))
+        expect_true(all(res$conc.est[res$flag == 'OD <= blank'] == 0))
+        expect_true(all(is.na(res$conc[res$flag != 'OK'])))
     })
     shiny::testServer(LinearityApp:::mod_quant_options_server, {
         session$setInputs(below = TRUE, above = FALSE, blank_zero = FALSE)

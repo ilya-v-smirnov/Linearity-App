@@ -299,7 +299,7 @@ test_that('minimal table format needs only type and OD', {
     data <- check_assay(normalize_table(tab))
     expect_equal(data$type, c(rep('standard', 5), 'blank', 'sample', 'QC'))
     expect_equal(data$dilution[7:8], c(1, 1))
-    r <- calculate(data, 'LRM', linear = TRUE)
+    r <- calculate(data, 'LRM', linear = TRUE, criteria = accept_any())
     expect_equal(r$result$conc, 5)
     expect_equal(r$qc$recovery, 100)
 })

@@ -13,8 +13,12 @@
 #'   `"row"`): the initial order of the wells.
 #' @param rounding Reactive from [mod_rounding_server()]: the rounding of the
 #'   concentrations shown and exported (see [round_result()]).
+#' @param included Reactive with the wells used in the sample result under the
+#'   grouping of the result summary (see [included_wells()]), or `NULL` for
+#'   the default replicate groups.
 #'
-#' @return `mod_results_server()` returns a reactive with the translated result table.
+#' @return `mod_results_server()` returns a reactive with the translated result
+#'   table, with the short column names (see [column_abbreviations()]).
 #' @name mod_results
 #' @keywords internal
 NULL
@@ -22,7 +26,8 @@ NULL
 #' Columns of the Result Table in Display Order
 #'
 #' Identification columns first, then any additional columns, then the
-#' measurement, the concentration with its interval and the flag.
+#' measurement, the concentration with its interval and the three statuses of
+#' the well (Range status, Value source, Included in sample result).
 #'
 #' @param columns Column names.
 #'
@@ -30,7 +35,8 @@ NULL
 #' @keywords internal
 result_columns <- function(columns) {
     first <- intersect(c('well', 'id', 'sample.name', 'sample.date'), columns)
-    last <- intersect(c('dilution', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag', 'OD.le.blank'), columns)
+    last <- intersect(c('dilution', 'OD', 'OD.corrected', 'conc', 'conc.est', 'conc.lower', 'conc.upper', 'flag', 'value.source',
+                        'included'), columns)
     c(first, setdiff(columns, c(first, last)), last)
 }
 
@@ -58,7 +64,10 @@ order_result <- function(result, by = 'column') {
 #'
 #' @return Character vector.
 #' @keywords internal
-concentration_columns <- function() c('conc', 'conc.lower', 'conc.upper', 'nominal', 'mean', 'min', 'max', 'sd')
+concentration_columns <- function() {
+    full <- c('conc', 'conc.est', 'conc.lower', 'conc.upper', 'nominal', 'mean', 'min', 'max', 'sd')
+    c(full, unname(column_abbreviations()[full]))
+}
 
 
 #' Interactive Result Table
@@ -101,19 +110,21 @@ results_datatable <- function(table, lang, page_length = 25) {
                        language = dt_language(lang))
     )
     flags <- c(FLAGS$ok, FLAGS$below, FLAGS$above, FLAGS$od_le_nc, FLAGS$no_solution, FLAGS$missing,
-               FLAGS$high_cv, FLAGS$nonlinear, FLAGS$no_background)
-    colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828', '#c62828')
+               FLAGS$high_cv, FLAGS$nonlinear, FLAGS$no_background, FLAGS$no_range)
+    colours <- c('#1b5e20', '#ef8f00', '#1976d2', '#c62828', '#757575', '#757575', '#c62828', '#c62828', '#c62828',
+                 '#c62828')
     style <- function(widget, column, values, colours) {
         if (!column %in% names(table)) return(widget)
         DT::formatStyle(widget, column, fontWeight = 'bold', whiteSpace = 'nowrap',
                         color = DT::styleEqual(values, colours))
     }
-    widget <- style(widget, 'flag', translate_flags(flags, lang), colours)
+    for (column in c('flag', 'RS')) widget <- style(widget, column, translate_flags(flags, lang), colours)
     # Checks of the groups of the result summary (see summary_checks())
-    widget <- style(widget, 'range', translate_flags(flags[1:6], lang), colours[1:6])
-    widget <- style(widget, 'precision', c(tr('flag.ok', lang), tr('flag.high_cv', lang)), c('#1b5e20', '#c62828'))
-    widget <- style(widget, 'linearity', c(tr('samples.legend_linear', lang), tr('samples.legend_nonlinear', lang)),
-                    c('#1b5e20', '#c62828'))
+    not_assessable <- tr('value.not_assessable', lang)
+    widget <- style(widget, 'Prec', c(tr('flag.ok', lang), tr('flag.high_cv', lang), not_assessable),
+                    c('#1b5e20', '#c62828', '#757575'))
+    widget <- style(widget, 'Lin', c(tr('samples.legend_linear', lang), tr('samples.legend_nonlinear', lang),
+                                     not_assessable), c('#1b5e20', '#c62828', '#757575'))
     widget
 }
 
@@ -202,7 +213,8 @@ mod_results_ui <- function(id, lang) {
                 # Counts of the flags: the same whatever the options for out-of-range samples
                 shiny::uiOutput(ns('flags')),
                 DT::DTOutput(ns('table')),
-                shiny::uiOutput(ns('qc'))
+                shiny::uiOutput(ns('qc')),
+                shiny::uiOutput(ns('legend'))
             )
         )
     )
@@ -212,16 +224,23 @@ mod_results_ui <- function(id, lang) {
 
 #' @rdname mod_results
 mod_results_server <- function(id, lang, curve, by = shiny::reactive('column'),
-                               rounding = shiny::reactive(list(fun = signif, par = 3))) {
+                               rounding = shiny::reactive(list(fun = signif, par = 3)), included = NULL) {
     shiny::moduleServer(id, function(input, output, session) {
         ns <- session$ns
 
         # Rounded for display and export only: the statuses are assessed at full precision
         shown <- function(tab, bias_limit = NULL) {
             r <- rounding()
-            order_result(localize_result(round_result(tab, r$fun, r$par, bias_limit), lang), by())
+            abbreviate_columns(order_result(localize_result(round_result(tab, r$fun, r$par, bias_limit), lang), by()))
         }
-        full <- shiny::reactive(shown(curve$result()$result))
+        # The wells used in the result follow the grouping of the summary
+        wells <- shiny::reactive({
+            res <- curve$result()$result
+            used <- if (!is.null(included)) included()
+            if (length(used) == nrow(res)) res$included <- used
+            res
+        })
+        full <- shiny::reactive(shown(wells()))
         qc <- shiny::reactive(shown(curve$result()$qc, curve$result()$quality$qc$wells$bias.limit))
 
         # Column choices follow the data; the user's choice is kept, new columns are shown
@@ -250,6 +269,7 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column'),
             shiny::tagList(shiny::h5(tr('results.qc', lang)), DT::DTOutput(ns('qc_table')))
         })
         output$qc_table <- DT::renderDT(results_datatable(qc(), lang, page_length = 10))
+        output$legend <- shiny::renderUI(abbreviations_ui(c(names(table()), names(qc())), lang))
 
         output$download_ui <- shiny::renderUI(
             export_button_ui(ns('download'), tr('results.download', lang), 'download', is.null(curve$export_lock())))
@@ -261,6 +281,9 @@ mod_results_server <- function(id, lang, curve, by = shiny::reactive('column'),
                 sheets <- list(table())
                 names(sheets) <- tr('tab.results', lang)
                 if (!is.null(qc())) sheets[[tr('results.qc', lang)]] <- qc()
+                # On a sheet of its own: rows under the table would break its import and filters
+                legend <- abbreviations_table(c(names(table()), names(qc())), lang)
+                if (!is.null(legend)) sheets[[tr('abbr.sheet', lang)]] <- legend
                 openxlsx::write.xlsx(sheets, file, rowNames = FALSE, overwrite = TRUE)
             }
         )

@@ -14,6 +14,10 @@ load_sample <- function(name) {
         format_input_table()
 }
 
+# Criteria that accept any calibration: for tests of the arithmetic on plates too small for the
+# default number of levels, since a rejected calibration gives no value for the sample result
+accept_any <- function() qc_criteria(min_levels = 0, min_fraction = 0)
+
 # Synthetic data set: standards follow OD = f(conc) exactly, reagent blank = 0.05
 synthetic_data <- function(f, conc = c(1, 2, 4, 8, 16, 32), sample_od = 0.5,
                            nc = 0.05) {

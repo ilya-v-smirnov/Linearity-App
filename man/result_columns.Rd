@@ -14,6 +14,7 @@ The column names reordered.
 }
 \description{
 Identification columns first, then any additional columns, then the
-measurement, the concentration with its interval and the flag.
+measurement, the concentration with its interval and the three statuses of
+the well (Range status, Value source, Included in sample result).
 }
 \keyword{internal}

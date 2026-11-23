@@ -15,23 +15,26 @@
 #' @param rounding Reactive from [mod_rounding_server()].
 #'
 #' @return `mod_summary_server()` returns a list of reactives: `table` (the
-#'   aggregated table shown), `assessment` (see [assess_samples()]) and
-#'   `warnings` (translated warnings of the samples).
+#'   aggregated table shown, with the short column names, see
+#'   [column_abbreviations()]), `assessment` (see [assess_samples()]),
+#'   `included` (the wells used in the sample result, see [included_wells()])
+#'   and `warnings` (translated warnings of the samples).
 #' @name mod_summary
 #' @keywords internal
 NULL
 
 #' Columns Available for Grouping
 #'
-#' All columns of the result table except the measurements, the flag and the
-#' well, in display order (see [result_columns()]).
+#' All columns of the result table except the measurements, the statuses of
+#' the well and the well itself, in display order (see [result_columns()]).
 #'
 #' @param result Result table from [calculate()].
 #'
 #' @return Character vector.
 #' @keywords internal
 grouping_columns <- function(result) {
-    exclude <- c('type', 'well', 'OD', 'conc', 'conc.lower', 'conc.upper', 'flag', 'OD.le.blank')
+    exclude <- c('type', 'well', 'OD', 'conc', 'conc.est', 'conc.lower', 'conc.upper', 'flag', 'value.source',
+                 'included', 'OD.le.blank')
     setdiff(result_columns(names(result)), exclude)
 }
 
@@ -56,27 +59,31 @@ summary_statistics <- function() {
 #'   `OD <= blank`, `Below`, `Above`, `No solution`, `Missing OD`; several
 #'   are joined by `"; "` in this order);
 #' * `precision`: `High CV` above the limit of the replicates, `OK` within it,
-#'   empty when the CV cannot be computed (fewer than two quantified wells);
+#'   `Not assessable` with fewer than two used wells in a replicate set (see
+#'   [group_precision()]);
 #' * `linearity`: `Non-linear` or `Linear` for the samples compared across
-#'   dilutions, empty for the others.
+#'   dilutions, `Not assessable` for those measured at several dilutions of
+#'   which fewer than two have used wells, empty for the others.
 #'
 #' @param samples `samples` element of [assess_samples()].
 #' @param dilution `dilution` element of [assess_samples()], or `NULL`.
 #' @param lang Language code.
+#' @param dilution_na `dilution_na` element of [assess_samples()], or `NULL`.
 #'
 #' @return A data.frame with the columns `range`, `precision` and `linearity`
 #'   (translated texts), one row per row of `samples`.
 #' @keywords internal
-summary_checks <- function(samples, dilution = NULL, lang = 'en') {
+summary_checks <- function(samples, dilution = NULL, lang = 'en', dilution_na = NULL) {
     parts <- strsplit(ifelse(is.na(samples$flag), FLAGS$ok, samples$flag), '; ', fixed = TRUE)
-    sequence <- unlist(FLAGS[c('od_le_nc', 'below', 'above', 'no_solution', 'missing')])
+    sequence <- unlist(FLAGS[c('no_range', 'od_le_nc', 'below', 'above', 'no_solution', 'missing')])
     range <- vapply(parts, function(p) {
         p <- setdiff(p, c(FLAGS$ok, FLAGS$high_cv, FLAGS$nonlinear))
         p <- p[order(match(p, sequence))]
         translate_flags(if (length(p) == 0) FLAGS$ok else paste(p, collapse = '; '), lang)
     }, '')
-    high_cv <- vapply(parts, function(p) FLAGS$high_cv %in% p, logical(1))
-    precision <- ifelse(high_cv, tr('flag.high_cv', lang), ifelse(is.na(samples$cv), '', tr('flag.ok', lang)))
+    not_assessable <- tr('value.not_assessable', lang)
+    precision <- unname(c(ok = tr('flag.ok', lang), high_cv = tr('flag.high_cv', lang),
+                          not_assessable = not_assessable)[samples$cv.status])
     nonlinear <- vapply(parts, function(p) FLAGS$nonlinear %in% p, logical(1))
     assessed <- rep(FALSE, nrow(samples))
     if (!is.null(dilution)) {
@@ -86,8 +93,14 @@ summary_checks <- function(samples, dilution = NULL, lang = 'en') {
             assessed <- key(samples) %in% key(dilution)
         }
     }
+    unassessed <- rep(FALSE, nrow(samples))
+    if (!is.null(dilution_na) && all(names(dilution_na) %in% names(samples))) {
+        key <- function(x) do.call(paste, c(lapply(x[names(dilution_na)], as.character), sep = ' | '))
+        unassessed <- key(samples) %in% key(dilution_na)
+    }
     linearity <- ifelse(nonlinear, tr('samples.legend_nonlinear', lang),
-                        ifelse(assessed, tr('samples.legend_linear', lang), ''))
+                        ifelse(assessed, tr('samples.legend_linear', lang),
+                               ifelse(unassessed, not_assessable, '')))
     data.frame(range = range, precision = precision, linearity = linearity)
 }
 
@@ -101,17 +114,18 @@ summary_checks <- function(samples, dilution = NULL, lang = 'en') {
 #' @param lang Language code of the checks.
 #' @param dilution `dilution` element of [assess_samples()], or `NULL`; marks
 #'   the samples compared across dilutions as linear (see [summary_checks()]).
+#' @param dilution_na `dilution_na` element of [assess_samples()], or `NULL`.
 #'
 #' @return A data.frame, or `NULL` without groups.
 #' @keywords internal
 summary_table <- function(samples, group_vars, stats = summary_statistics(), round_fun = signif, round_par = 3,
-                          lang = 'en', dilution = NULL) {
+                          lang = 'en', dilution = NULL, dilution_na = NULL) {
     if (is.null(samples) || length(group_vars) == 0) return(NULL)
     out <- samples
     for (col in c('mean', 'sd', 'min', 'max')) out[[col]] <- round_fun(out[[col]], round_par)
     # One decimal, more where it would show the CV equal to its limit (see limit_digits())
     out$cv <- round(out$cv, if (is.null(out$cv.limit)) 1 else limit_digits(out$cv, out$cv.limit))
-    out <- cbind(out, summary_checks(samples, dilution, lang))
+    out <- cbind(out, summary_checks(samples, dilution, lang, dilution_na))
     out[, c(group_vars, intersect(summary_statistics(), stats)), drop = FALSE]
 }
 
@@ -155,6 +169,7 @@ mod_summary_ui <- function(id, lang) {
                        shiny::uiOutput(ns('warnings')),
                        shiny::uiOutput(ns('empty')),
                        DT::DTOutput(ns('table')),
+                       shiny::uiOutput(ns('legend')),
                        shiny::uiOutput(ns('dilution')),
                        shiny::uiOutput(ns('qc')))
         ),
@@ -183,9 +198,11 @@ mod_summary_server <- function(id, lang, curve, rounding) {
         shiny::observeEvent(result(), {
             cols <- columns()
             res <- result()
+            # The names of the columns of the table; the values of the inputs stay the full ones
+            shown <- stats::setNames(short_columns(cols), cols)
             labels <- lapply(cols, function(col) {
-                shiny::span(col, shiny::span(class = 'text-muted small',
-                                             t('summary.values', n = length(unique(res[[col]])))))
+                shiny::span(shown[[col]], shiny::span(class = 'text-muted small',
+                                                      t('summary.values', n = length(unique(res[[col]])))))
             })
             selected <- if (length(known()) == 0) samples() else
                 c(intersect(cols, input$group_vars), setdiff(intersect(cols, samples()), known()))
@@ -217,14 +234,17 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             if (is.null(a)) character(0) else message_text(a$warnings, lang)
         })
 
-        table <- shiny::reactive({
+        full_table <- shiny::reactive({
             a <- assessment()
             if (is.null(a)) return(NULL)
             r <- rounding()
             # No choice (before the first answer of the browser, or nothing ticked): all statistics
             stats <- if (is.null(input$stats)) summary_statistics() else input$stats
-            summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang, a$dilution)
+            summary_table(a$samples, group_vars(), stats, r$fun, r$par, lang, a$dilution, a$dilution_na)
         })
+        # Shown as 1/2; the export keeps the two counts as numbers
+        table <- shiny::reactive(abbreviate_columns(merge_well_counts(full_table())))
+        export_table <- shiny::reactive(abbreviate_columns(full_table()))
         dilution_tables <- function(highlight) {
             a <- assessment()
             if (is.null(a)) return(NULL)
@@ -256,6 +276,7 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             shiny::req(table())
             results_datatable(table(), lang)
         })
+        output$legend <- shiny::renderUI(abbreviations_ui(names(table()), lang))
 
         output$dilution <- shiny::renderUI({
             if (is.null(tables()$dilution)) return(NULL)
@@ -279,7 +300,7 @@ mod_summary_server <- function(id, lang, curve, rounding) {
         figure <- shiny::reactive({
             a <- assessment()
             if (is.null(a)) return(NULL)
-            sample_figure_data(result(), a$samples, group_vars())
+            sample_figure_data(result(), a$samples, group_vars(), a$included)
         })
 
         output$infographics <- shiny::renderUI({
@@ -338,14 +359,20 @@ mod_summary_server <- function(id, lang, curve, rounding) {
             filename = function() paste0(Sys.Date(), '_summary.xlsx'),
             content = function(file) {
                 shiny::req(is.null(curve$export_lock()))
-                sheets <- list(table())
+                sheets <- list(export_table())
                 names(sheets) <- t('tab.summary')
                 if (!is.null(tables()$dilution)) sheets[[t('quality.section_dilution')]] <- tables()$dilution
                 if (!is.null(tables()$qc)) sheets[[t('quality.section_qc')]] <- tables()$qc
+                legend <- abbreviations_table(names(export_table()), lang)
+                if (!is.null(legend)) sheets[[t('abbr.sheet')]] <- legend
                 openxlsx::write.xlsx(sheets, file, rowNames = FALSE, overwrite = TRUE)
             }
         )
 
-        list(table = table, assessment = assessment, warnings = warnings)
+        included <- shiny::reactive({
+            a <- assessment()
+            if (is.null(a)) NULL else a$included
+        })
+        list(table = table, assessment = assessment, included = included, warnings = warnings)
     })
 }

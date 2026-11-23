@@ -84,6 +84,10 @@ mod_report_server <- function(id, lang, curve, summary, rounding = shiny::reacti
             tables <- quality_tables(r$quality, lang)
             tables$samples <- NULL
             tables$dilution <- if (!is.null(assessment)) quality_tables(assessment, lang)$dilution
+            # The wells used in the result follow the grouping of the summary
+            wells <- r$result
+            if (length(assessment$included) == nrow(wells)) wells$included <- assessment$included
+            wells <- localize_result(round_result(wells, rounding()$fun, rounding()$par), lang)
             report_blocks(type(),
                           date = as.character(date()),
                           title = text_input(input$title),
@@ -96,10 +100,10 @@ mod_report_server <- function(id, lang, curve, summary, rounding = shiny::reacti
                           at_blank = blank_rule_text(r, lang),
                           equation = model_equation_text(r$fit),
                           model_table = curve$coef_table(),
-                          result_table = localize_result(round_result(r$result, rounding()$fun, rounding()$par), lang),
+                          result_table = abbreviate_columns(wells[, result_columns(names(wells)), drop = FALSE]),
                           means_table = summary$table(),
-                          qc_table = localize_result(round_result(r$qc, rounding()$fun, rounding()$par,
-                                                                  r$quality$qc$wells$bias.limit), lang),
+                          qc_table = abbreviate_columns(localize_result(
+                              round_result(r$qc, rounding()$fun, rounding()$par, r$quality$qc$wells$bias.limit), lang)),
                           exclusions = exclusions_table(r$exclusions, lang),
                           comparison = comparison_table(curve$comparison(), lang),
                           quality = list(summary = quality_summary(r, lang, sample_warnings),

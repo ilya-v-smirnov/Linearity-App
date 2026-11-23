@@ -1,8 +1,10 @@
 #' Result Flags
 #'
-#' Status codes assigned to wells. Only sample wells flagged `"OK"` receive a
-#' numeric concentration; all other wells get `NA` in `conc`. The codes are
-#' stored in English; use [translate_flags()] for display.
+#' Status codes assigned to wells: the Range status (`RS`) of a sample well,
+#' its position against the accepted range or the reason why it cannot be
+#' determined. Only sample wells flagged `"OK"` have a value in `conc`;
+#' `conc.est` holds every value of the well (see [well_values()]). The
+#' codes are stored in English; use [translate_flags()] for display.
 #'
 #' - `ok` (`"OK"`): the OD lies within the calibration range.
 #' - `below` (`"< LLOQ"`): below the lowest standard used in the fit.
@@ -15,6 +17,8 @@
 #'   chosen, but no well of the chosen roles is usable; no well gets a
 #'   concentration until a background well is restored or "no background
 #'   subtraction" is chosen (see [background_summary()]).
+#' - `no_range` (`"Range not accepted"`): the calibration is rejected, so the
+#'   sample well has no accepted range to be placed in.
 #'
 #' Flags of replicate groups (see [assess_run()]):
 #'
@@ -36,7 +40,36 @@ FLAGS <- list(ok = 'OK',
               excluded = 'Excluded',
               high_cv = 'High CV',
               nonlinear = 'Dilution non-linear',
-              no_background = 'Background unavailable')
+              no_background = 'Background unavailable',
+              no_range = 'Range not accepted')
+
+
+#' Value Sources of Sample Wells
+#'
+#' Where the value of a sample well comes from (`VS`), independently of its
+#' Range status (see [FLAGS]) and of its use in the sample result.
+#'
+#' @return A named list of codes.
+#' @keywords internal
+value_sources <- function() {
+    list(interpolated = 'Interpolated', extrapolated = 'Extrapolated', zero = 'Assigned zero', none = 'No estimate')
+}
+
+
+#' Short Labels of the Value Sources
+#'
+#' Shown in the tables and exports, the same in every language, so that a
+#' filter on an imported table does not depend on the language of the app.
+#' `"None"` rather than `"NA"`, which R would read as a missing value.
+#'
+#' @return A named character vector: the label of each code of
+#'   [value_sources()].
+#' @keywords internal
+value_source_labels <- function() {
+    codes <- value_sources()
+    stats::setNames(c('Interp', 'Extrap', 'Zero', 'None'),
+                    c(codes$interpolated, codes$extrapolated, codes$zero, codes$none))
+}
 
 
 ##################### BACKGROUND ###############################################
@@ -453,6 +486,54 @@ classify_wells <- function(fit, od, conc, conc_range, at_blank = 'range') {
 }
 
 
+#' Values of Sample Wells
+#'
+#' Keeps the value for the sample result apart from the full exploratory set:
+#'
+#' * `conc`: an interpolated value within the range of an accepted calibration,
+#'   the only value used for the sample result;
+#' * `conc.est`: every value of the well, for exploration: the value in `conc`,
+#'   an extrapolated value or an assigned zero (when the options ask for them),
+#'   or any value of a rejected calibration. Its origin is in `value.source`.
+#'
+#' The interval belongs to the value of the well; an assigned zero is not
+#' estimated from the curve and has none.
+#'
+#' @param conc,lower,upper Dilution-corrected concentrations and intervals
+#'   from the inverse of the curve.
+#' @param flag Flags from [classify_wells()].
+#' @param at_blank Logical: the signal is at or below the background.
+#' @param extrapolate,blank_zero See [calculate()].
+#' @param accepted Whether the calibration is accepted. Without it the wells
+#'   placed against the range get the flag `"Range not accepted"`.
+#'
+#' @return A data.frame with `conc`, `conc.est`, `conc.lower`, `conc.upper`,
+#'   `flag` and `value.source` (see [value_sources()]).
+#' @keywords internal
+well_values <- function(conc, lower, upper, flag, at_blank, extrapolate = character(0), blank_zero = FALSE,
+                        accepted = TRUE) {
+    codes <- value_sources()
+    within <- flag == FLAGS$ok
+    outside <- (flag == FLAGS$below & 'below' %in% extrapolate) | (flag == FLAGS$above & 'above' %in% extrapolate)
+    # A concentration within the range is kept even if the signal is at the background
+    zero <- isTRUE(blank_zero) & at_blank & !within
+    source <- rep(codes$none, length(flag))
+    source[within] <- codes$interpolated
+    source[outside] <- codes$extrapolated
+    source[zero] <- codes$zero
+    value <- ifelse(zero, 0, ifelse(within | outside, conc, NA_real_))
+    from_curve <- (within | outside) & !zero
+    reported <- within & isTRUE(accepted)
+    if (!isTRUE(accepted)) flag[flag %in% c(FLAGS$ok, FLAGS$below, FLAGS$above)] <- FLAGS$no_range
+    data.frame(conc = ifelse(reported, value, NA_real_),
+               conc.est = value,
+               conc.lower = ifelse(from_curve, lower, NA_real_),
+               conc.upper = ifelse(from_curve, upper, NA_real_),
+               flag = unname(flag),
+               value.source = source)
+}
+
+
 #' Check Monotonicity of the Calibration Curve
 #'
 #' Only the quadratic models can turn within the working interval (the
@@ -501,7 +582,8 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' Subtracts the background, fits the calibration curve OD = f(conc) on the
 #' standards, inverts the curve for samples and quality controls and
 #' multiplies the result by the dilution factor. Samples outside the
-#' calibration range are flagged and receive `NA` instead of a concentration.
+#' calibration range are flagged and receive `NA` in `conc`; `conc.est` holds
+#' every value of the wells, exploratory ones included (see [well_values()]).
 #'
 #' @param data Validated input data (see [check_assay()]).
 #' @param model Model code (see [calibration_models()]).
@@ -513,13 +595,15 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #' @param level Confidence level of the concentration intervals.
 #' @param criteria Acceptance criteria (see [qc_criteria()]).
 #' @param extrapolate Samples outside the quantification range that still get
-#'   a concentration: any of `"below"` (under the LLOQ) and `"above"` (over
-#'   the ULOQ). Their flags are kept.
+#'   an exploratory value in `conc.est`: any of `"below"` (under the LLOQ) and
+#'   `"above"` (over the ULOQ). Their flags are kept and they do not enter the
+#'   sample result.
 #' @param blank_zero If `TRUE`, samples with OD at or below the blank and
-#'   outside the calibration range (or without a concentration) get
-#'   concentration 0 (flag kept). Only for a curve that increases with the
-#'   concentration: on a decreasing curve a weak signal means a high
-#'   concentration, the option is then ignored with a note.
+#'   outside the calibration range (or without a concentration) get an
+#'   exploratory 0 in `conc.est` (flag kept), which does not enter the sample
+#'   result. Only for a curve that increases with the concentration: on a
+#'   decreasing curve a weak signal means a high concentration, the option is
+#'   then ignored with a note.
 #' @param at_blank Rule for a signal at or below the background on the
 #'   original OD scale, applied alike to the calibrators, quality controls and
 #'   samples (see [blank_rules()]): `"range"` (the default) inverts it like
@@ -572,9 +656,14 @@ get_coef_ci <- function(fit, round_fun = NULL, round_par = NULL) {
 #'   * `lack_of_fit`: lack-of-fit test (see [lack_of_fit()]);
 #'   * `notes`: warnings as a list of messages (see [message_text()]);
 #'   * `result`: sample results with `OD` as measured (before the blank is
-#'     subtracted), `OD.corrected` (after it), `conc` (dilution-corrected), its confidence interval
-#'     `conc.lower`, `conc.upper`, `flag` and, when some wells have a signal at
-#'     or below the background, `OD.le.blank` (logical; see [classify_wells()]);
+#'     subtracted), `OD.corrected` (after it), `conc` (dilution-corrected,
+#'     within the accepted range), `conc.est` (every value of the well, for
+#'     exploration, see [well_values()]), its confidence interval `conc.lower`, `conc.upper`,
+#'     `flag` (the Range status, see [FLAGS]), `value.source` (see
+#'     [value_sources()]), `included` (used in the sample result under the
+#'     default replicate groups, see [included_wells()]) and, when some wells
+#'     have a signal at or below the background, `OD.le.blank` (logical; see
+#'     [classify_wells()]);
 #'   * `qc`: quality controls with nominal and measured concentration, OD as measured,
 #'     recovery (%), flag and `OD.le.blank` as for the samples (`NULL` if there
 #'     are no QC wells);
@@ -735,25 +824,25 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
 
     # Samples and QC: inverse prediction, then the signal, the inverse and the range
     # (classify_wells()) give the flag, as for the calibrators; dilution correction
-    quantify <- function(rows, extrapolate = character(0), blank_zero = FALSE) {
+    quantify <- function(rows, extrapolate = character(0), blank_zero = FALSE, accepted = TRUE) {
         rows$dilution[is.na(rows$dilution)] <- 1
         pred <- inverse_predict_ci(fit, rows$OD, level)
         cls <- classify_wells(fit, rows$OD, pred$conc, conc_range, at_blank)
-        flag <- cls$flag
-        ok <- flag == FLAGS$ok |
-            (flag == FLAGS$below & 'below' %in% extrapolate) |
-            (flag == FLAGS$above & 'above' %in% extrapolate)
         # Full precision: the statuses of the QC and the samples are assessed on it, the tables
         # round only what they show (see round_result())
-        rows$conc <- ifelse(ok, pred$conc * rows$dilution, NA_real_)
-        rows$conc.lower <- ifelse(ok, pred$lower * rows$dilution, NA_real_)
-        rows$conc.upper <- ifelse(ok, pred$upper * rows$dilution, NA_real_)
-        # A concentration within the range is kept even if the signal is at the background
-        if (blank_zero) rows$conc[cls$at.blank & flag != FLAGS$ok] <- 0
+        values <- well_values(pred$conc * rows$dilution, pred$lower * rows$dilution, pred$upper * rows$dilution,
+                              cls$flag, cls$at.blank, extrapolate, blank_zero, accepted)
+        rows$conc <- values$conc
+        rows$conc.est <- values$conc.est
+        rows$conc.lower <- values$conc.lower
+        rows$conc.upper <- values$conc.upper
+        rows$value.source <- values$value.source
+        flag <- values$flag
         at_blank_well <- cls$at.blank
         # The background chosen is unavailable: no concentration from the OD as measured
         if (bg$empty) {
-            rows$conc <- rows$conc.lower <- rows$conc.upper <- rep(NA_real_, nrow(rows))
+            rows$conc <- rows$conc.est <- rows$conc.lower <- rows$conc.upper <- rep(NA_real_, nrow(rows))
+            rows$value.source <- rep(value_sources()$none, nrow(rows))
             flag <- rep(FLAGS$no_background, nrow(rows))
             at_blank_well <- rep(NA, nrow(rows))
         }
@@ -762,14 +851,16 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
         rows$OD.corrected <- if (bg$empty) NA_real_ else round(corrected, 4)
         rows$.od_raw <- NULL
         rows$flag <- flag
-        # The signal at or below the background is shown apart from the flag, when it occurs
+        # The signal at or below the background is kept apart from the flag, when it occurs
         if (any(at_blank_well, na.rm = TRUE)) rows$OD.le.blank <- at_blank_well
         rownames(rows) <- NULL
         rows
     }
 
-    sample_data <- quantify(data[data$type == 'sample', , drop = FALSE], extrapolate, blank_zero)
-    # Wells without a concentration (extrapolated values and zeros are reported)
+    # The quality controls below keep their values: the run is judged on them
+    sample_data <- quantify(data[data$type == 'sample', , drop = FALSE], extrapolate, blank_zero,
+                            calibration$accepted)
+    # Wells without a value for the sample result (exploratory values do not count)
     bad <- sample_data$flag[is.na(sample_data$conc)]
     if (length(bad) > 0) {
         notes <- c(notes, list(lin_message('note.not_quantified',
@@ -816,6 +907,7 @@ calculate <- function(data, model = 'LRM', linear = FALSE, weights = 'none', exc
     sample_data$type <- NULL
     sample_data$.key <- NULL
     sample_data <- drop_empty_columns(sample_data, c('well', 'id'))
+    sample_data$included <- included_wells(sample_data, criteria)
 
     quality <- assess_run(fit, standards, calibration, sample_data, qc, conc_range, lof, criteria,
                           background = bg$status)

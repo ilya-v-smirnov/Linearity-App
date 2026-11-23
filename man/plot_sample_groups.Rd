@@ -17,6 +17,8 @@ A plot from \code{\link[cowplot:plot_grid]{cowplot::plot_grid()}}.
 \description{
 Three panels sharing the groups (one row per row of the summary):
 concentrations of the wells with the mean and SD, CV of the replicates
-against the limit, and the number of wells by quantification status.
+against the limit, and the number of wells by quantification status. Wells
+used in the result are filled dots; the others are hollow, as circles on
+the axis or as triangles at its edge (see \code{\link[=sample_axis]{sample_axis()}}).
 }
 \keyword{internal}

@@ -2,7 +2,7 @@
 % Please edit documentation in R/aggregate.R
 \name{localize_result}
 \alias{localize_result}
-\title{Translate the Flag Column of a Result Table}
+\title{Translate the Status Columns of a Result Table}
 \usage{
 localize_result(result, lang = "en")
 }
@@ -12,9 +12,11 @@ localize_result(result, lang = "en")
 \item{lang}{Language code.}
 }
 \value{
-The table with translated \code{flag} values; the signal at or below
-the background (\code{OD.le.blank}) is marked with a check mark.
+The table with translated \code{flag} and \code{included}, the short labels
+of \code{value.source} (see \code{\link[=value_source_labels]{value_source_labels()}}), and without
+\code{OD.le.blank}: a signal at or below the background reads from
+\code{OD.corrected}.
 }
 \description{
-Translate the Flag Column of a Result Table
+Translate the Status Columns of a Result Table
 }

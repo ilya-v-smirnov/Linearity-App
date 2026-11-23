@@ -4,7 +4,7 @@
 \alias{summary_checks}
 \title{Checks of the Groups of the Summary}
 \usage{
-summary_checks(samples, dilution = NULL, lang = "en")
+summary_checks(samples, dilution = NULL, lang = "en", dilution_na = NULL)
 }
 \arguments{
 \item{samples}{\code{samples} element of \code{\link[=assess_samples]{assess_samples()}}.}
@@ -12,6 +12,8 @@ summary_checks(samples, dilution = NULL, lang = "en")
 \item{dilution}{\code{dilution} element of \code{\link[=assess_samples]{assess_samples()}}, or \code{NULL}.}
 
 \item{lang}{Language code.}
+
+\item{dilution_na}{\code{dilution_na} element of \code{\link[=assess_samples]{assess_samples()}}, or \code{NULL}.}
 }
 \value{
 A data.frame with the columns \code{range}, \code{precision} and \code{linearity}
@@ -24,9 +26,11 @@ Splits the flags of the groups into three columns:
 \code{OD <= blank}, \code{Below}, \code{Above}, \verb{No solution}, \verb{Missing OD}; several
 are joined by \code{"; "} in this order);
 \item \code{precision}: \verb{High CV} above the limit of the replicates, \code{OK} within it,
-empty when the CV cannot be computed (fewer than two quantified wells);
+\verb{Not assessable} with fewer than two used wells in a replicate set (see
+\code{\link[=group_precision]{group_precision()}});
 \item \code{linearity}: \code{Non-linear} or \code{Linear} for the samples compared across
-dilutions, empty for the others.
+dilutions, \verb{Not assessable} for those measured at several dilutions of
+which fewer than two have used wells, empty for the others.
 }
 }
 \keyword{internal}

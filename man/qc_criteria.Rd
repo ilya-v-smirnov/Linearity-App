@@ -23,7 +23,8 @@ qc_criteria(
   edge = 1.25,
   singlets = TRUE,
   replicate_loss = "documented",
-  edge_levels = "plan"
+  edge_levels = "plan",
+  single_replicate = "report"
 )
 }
 \arguments{
@@ -72,6 +73,11 @@ level of the plate plan, whatever wells are lost or excluded: a level
 keeps its limits when the fit gets narrower) or \code{"fit"} (the lowest and
 highest level with wells in the fit, after the exclusions: a rule the
 method has to state). The presets use \code{"plan"}.}
+
+\item{single_replicate}{A sample replicate set planned in two or more wells
+with a single well within the accepted range: \code{"report"} gives its value
+as the result (the precision is not assessable), \code{"withhold"} gives no
+result. A well planned as single is not affected (see \code{\link[=included_wells]{included_wells()}}).}
 }
 \value{
 A list of class \code{lin_criteria}.

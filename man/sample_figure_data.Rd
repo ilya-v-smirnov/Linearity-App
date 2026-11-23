@@ -4,7 +4,7 @@
 \alias{sample_figure_data}
 \title{Data of the Sample Figure}
 \usage{
-sample_figure_data(result, samples, group_vars)
+sample_figure_data(result, samples, group_vars, included = NULL)
 }
 \arguments{
 \item{result}{Well-level sample results.}
@@ -12,12 +12,16 @@ sample_figure_data(result, samples, group_vars)
 \item{samples}{\code{samples} element of \code{\link[=assess_samples]{assess_samples()}} for \code{group_vars}.}
 
 \item{group_vars}{Grouping columns.}
+
+\item{included}{Wells used in the sample result (see \code{\link[=included_wells]{included_wells()}});
+\code{NULL} for all wells with a value in \code{conc}.}
 }
 \value{
 A list with \code{groups} (one row per group: \code{label}, \code{n},
-\code{n.quantified}, \code{mean}, \code{sd}, \code{cv}, \code{cv.limit}, \code{cv.pass}) and \code{wells}
-(\code{label}, \code{conc}, \code{status}); \code{label} is a factor with the first group on
-top of the plot.
+\code{n.quantified}, \code{n.included}, \code{mean}, \code{sd}, \code{cv}, \code{cv.limit}, \code{cv.pass})
+and \code{wells} (\code{label}, \code{conc}: the value of the well in \code{conc} or
+\code{conc.est}, \code{included}, \code{status}); \code{label} is a factor with the first
+group on top of the plot.
 }
 \description{
 Data of the Sample Figure

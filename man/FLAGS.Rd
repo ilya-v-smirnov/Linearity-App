@@ -7,9 +7,11 @@
 FLAGS
 }
 \description{
-Status codes assigned to wells. Only sample wells flagged \code{"OK"} receive a
-numeric concentration; all other wells get \code{NA} in \code{conc}. The codes are
-stored in English; use \code{\link[=translate_flags]{translate_flags()}} for display.
+Status codes assigned to wells: the Range status (\code{RS}) of a sample well,
+its position against the accepted range or the reason why it cannot be
+determined. Only sample wells flagged \code{"OK"} have a value in \code{conc};
+\code{conc.est} holds every value of the well (see \code{\link[=well_values]{well_values()}}). The
+codes are stored in English; use \code{\link[=translate_flags]{translate_flags()}} for display.
 }
 \details{
 \itemize{
@@ -24,6 +26,8 @@ stored in English; use \code{\link[=translate_flags]{translate_flags()}} for dis
 chosen, but no well of the chosen roles is usable; no well gets a
 concentration until a background well is restored or "no background
 subtraction" is chosen (see \code{\link[=background_summary]{background_summary()}}).
+\item \code{no_range} (\code{"Range not accepted"}): the calibration is rejected, so the
+sample well has no accepted range to be placed in.
 }
 
 Flags of replicate groups (see \code{\link[=assess_run]{assess_run()}}):

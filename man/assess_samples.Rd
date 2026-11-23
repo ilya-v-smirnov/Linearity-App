@@ -24,11 +24,15 @@ default grouping (see \code{\link[=replicate_groups]{replicate_groups()}}).}
 \value{
 A list with \code{samples} (see \code{\link[=summarise_samples]{summarise_samples()}}, with the
 \code{"Dilution non-linear"} flag added), \code{dilution} (see
-\code{\link[=dilution_linearity]{dilution_linearity()}}) and \code{warnings} (list of messages).
+\code{\link[=dilution_linearity]{dilution_linearity()}}), \code{dilution_na} (see \code{\link[=dilution_not_assessable]{dilution_not_assessable()}}),
+\code{included} (see \code{\link[=included_wells]{included_wells()}}, in the order of \code{result}) and
+\code{warnings} (list of messages).
 }
 \description{
 Precision of the replicates and dilution linearity of the samples. The
-replicate groups are the rows of the result summary: with \code{group_vars}
-given, the dilutions are compared within the groups of \code{group_vars}
-without \code{dilution}.
+rows of the result summary are the groups of \code{group_vars}; the precision is
+assessed within a row and a dilution (see \code{\link[=group_precision]{group_precision()}}), and with
+\code{group_vars} given, the dilutions are compared within the groups of
+\code{group_vars} without \code{dilution}. Only the wells of the sample result enter
+them (see \code{\link[=included_wells]{included_wells()}}).
 }

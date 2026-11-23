@@ -156,7 +156,8 @@ quality_tables <- function(quality, lang = 'en', highlight = FALSE) {
     samples <- NULL
     if (!is.null(quality$samples)) {
         s <- quality$samples
-        id_cols <- setdiff(names(s), c('n', 'n.quantified', 'mean', 'sd', 'cv', 'min', 'max', 'cv.limit', 'flag'))
+        id_cols <- setdiff(names(s), c('n', 'n.quantified', 'n.included', 'mean', 'sd', 'cv', 'min', 'max', 'cv.limit',
+                                       'cv.status', 'flag'))
         samples <- data.frame(as_text(s[id_cols]),
                               n = s$n, n.quantified = s$n.quantified, mean = num(s$mean), sd = num(s$sd),
                               cv = pct_limit(s$cv, s$cv.limit), flag = translate_flags(s$flag, lang))
@@ -502,7 +503,14 @@ mod_criteria_ui <- function(id, lang, part = c('standards', 'samples')) {
                 shiny::div(class = 'crit-subtitle', t('crit.group_qc')), rows('qc'),
                 shiny::div(class = 'crit-subtitle', t('crit.group_dilution')), rows('dilution')
             )
-        })
+        }),
+        # A decision of the method, whatever the preset of the limits
+        shiny::radioButtons(ns('single_replicate'), with_tooltip(t('crit.single_replicate'),
+                                                                 t('crit.single_replicate_help')),
+                            choices = stats::setNames(single_replicate_rules(),
+                                                      vapply(paste0('crit.single_replicate_', single_replicate_rules()),
+                                                             t, '')),
+                            selected = 'report', width = '100%')
     )
 }
 
@@ -524,7 +532,10 @@ mod_criteria_server <- function(id, lang) {
             shiny::updateRadioButtons(session, 'replicate_loss', selected = 'documented')
             shiny::updateRadioButtons(session, 'edge_levels', selected = 'plan')
         })
-        shiny::observeEvent(input$reset_samples, reset('samples'))
+        shiny::observeEvent(input$reset_samples, {
+            reset('samples')
+            shiny::updateRadioButtons(session, 'single_replicate', selected = 'report')
+        })
         # The criteria of the samples follow the choice of the standards; they can be changed after it
         shiny::observeEvent(input$preset, {
             shiny::updateSelectInput(session, 'preset_samples', selected = input$preset)
@@ -546,6 +557,7 @@ mod_criteria_server <- function(id, lang) {
             values$range <- if (is.null(input$range)) 'accepted' else input$range
             values$singlets <- if (is.null(input$singlets)) TRUE else isTRUE(input$singlets)
             values$replicate_loss <- if (is.null(input$replicate_loss)) 'documented' else input$replicate_loss
+            values$single_replicate <- if (is.null(input$single_replicate)) 'report' else input$single_replicate
             # The rule of the fit only in the custom criteria, when chosen
             custom <- identical(input$preset, 'custom')
             values$edge_levels <- if (custom && !is.null(input$edge_levels)) input$edge_levels else 'plan'

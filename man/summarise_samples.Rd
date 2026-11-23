@@ -26,11 +26,14 @@ summarise_samples(
 A data.frame with one row per replicate group (in the order of the
 wells; with \code{group_vars}, ordered by the columns, each in the order of
 its first appearance): identification columns (\code{group_vars}, or \code{id}, \code{sample.name},
-\code{dilution}, \code{sample.date} for the default grouping), \code{n}, \code{n.quantified},
-\code{mean}, \code{sd}, \code{cv} (\%), \code{min}, \code{max}, \code{cv.limit} and \code{flag} (codes from
+\code{dilution}, \code{sample.date} for the default grouping), \code{n}, \code{n.quantified}
+(wells with a value within the accepted range), \code{n.included} (wells used
+in the result), \code{mean}, \code{sd}, \code{min}, \code{max} of the wells used, \code{cv} (\%),
+\code{cv.limit}, \code{cv.status} (see \code{\link[=group_precision]{group_precision()}}) and \code{flag} (codes from
 \link{FLAGS} separated by \code{"; "}); \code{NULL} without wells.
 }
 \description{
-Summary of Sample Replicates
+The statistics use only the wells of the sample result (see
+\code{\link[=included_wells]{included_wells()}}); exploratory values do not enter them.
 }
 \keyword{internal}

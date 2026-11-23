@@ -8,7 +8,7 @@ test_that('sample concentrations lie on the plotted calibration curve', {
         s <- scenarios[i, ]
         info <- paste(s, collapse = ' / ')
         data <- load_sample(s$dataset)
-        r <- calculate(data, s$model, linear = s$linear)
+        r <- calculate(data, s$model, linear = s$linear, criteria = accept_any())
         ok <- r$result$flag == 'OK'
         expect_gt(sum(ok), 0)
 
@@ -23,7 +23,7 @@ test_that('only concentrations within the calibration range are reported', {
     for (i in seq_len(nrow(scenarios))) {
         s <- scenarios[i, ]
         info <- paste(s, collapse = ' / ')
-        r <- calculate(load_sample(s$dataset), s$model, linear = s$linear)
+        r <- calculate(load_sample(s$dataset), s$model, linear = s$linear, criteria = accept_any())
         res <- r$result
         ok <- res$flag == 'OK'
 
@@ -75,7 +75,7 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     data <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'QC', 'sample'),
                        conc = c(conc, conc, NA, NA, 1, NA), dilution = c(rep(NA, 13), 1),
                        OD = c(od, od, 0.10, 0.10, 0.09, 0.09))
-    r <- calculate(data, 'LIN')
+    r <- calculate(data, 'LIN', criteria = accept_any())
     # the calibrator at -0.01 is in the fit and its level is accepted ...
     expect_equal(nrow(r$standard_data), 10)
     expect_true(r$quality$standards$pass[r$quality$standards$conc == 1])
@@ -88,18 +88,20 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     expect_equal(r$result$flag, 'OK')
     expect_true(r$result$OD.le.blank)
     # a concentration within the range is not replaced by zero
-    expect_equal(calculate(data, 'LIN', blank_zero = TRUE)$result$conc, 1, tolerance = 1e-8)
+    expect_equal(calculate(data, 'LIN', blank_zero = TRUE, criteria = accept_any())$result$conc, 1, tolerance = 1e-8)
     # the three properties are kept apart
     cls <- LinearityApp:::classify_wells(r$fit, c(-0.01, -0.05, 0.1, NA), c(1, -1, 6.5, NA), c(1, 16))
     expect_equal(cls$at.blank, c(TRUE, TRUE, FALSE, FALSE))
     expect_equal(cls$inverse, c(NA, NA, NA, 'missing'))
     expect_equal(cls$range, c('within', 'below', 'within', NA))
     expect_equal(cls$flag, c('OK', '< LLOQ', 'OK', 'Missing OD'))
-    # the table of the points and the results mark the signal at the background
+    # the table of the points marks the signal at the background; the tables of the results
+    # show it through the corrected OD, while the result of calculate() keeps the property
     pts <- LinearityApp:::standard_points_table(r, 'en')
     expect_equal(sum(pts[['OD ≤ blank']] == '✓'), 2)
-    expect_equal(localize_result(r$result)$OD.le.blank, '✓')
-    expect_equal(LinearityApp:::result_columns(names(r$result))[ncol(r$result)], 'OD.le.blank')
+    expect_false('OD.le.blank' %in% names(localize_result(r$result)))
+    expect_false('OD.le.blank' %in% names(localize_result(r$qc)))
+    expect_lte(localize_result(r$result)$OD.corrected, 0)
 
     # not reportable: the calibrators at the background leave the fit, the QC and the sample get no value
     ex <- calculate(data, 'LIN', at_blank = 'exclude')
@@ -112,7 +114,10 @@ test_that('a signal at the background is judged alike for calibrators, QC and sa
     expect_equal(ex$result$flag, 'OD <= blank')
     expect_true(is.na(ex$result$conc))
     # zero for a signal at the background on an increasing curve
-    expect_equal(calculate(data, 'LIN', at_blank = 'exclude', blank_zero = TRUE)$result$conc, 0)
+    zero <- calculate(data, 'LIN', at_blank = 'exclude', blank_zero = TRUE)$result
+    expect_true(is.na(zero$conc))
+    expect_equal(zero$conc.est, 0)
+    expect_equal(zero$value.source, 'Assigned zero')
     expect_equal(LinearityApp:::blank_rule_text(ex, 'en'), 'Not reportable')
     blocks <- LinearityApp:::report_blocks('detailed', date = '2026-11-21', title = 't', method = 'm',
                                            at_blank = LinearityApp:::blank_rule_text(ex, 'ru'),
@@ -133,7 +138,7 @@ test_that('a weak signal on a decreasing curve is a high concentration, not zero
     data <- data.frame(type = c(rep('standard', 10), 'blank', 'blank', 'sample'),
                        conc = c(conc, conc, NA, NA, NA), dilution = c(rep(NA, 12), 1),
                        OD = c(od + 0.1, od + 0.1, 0.1, 0.1, 0.05))
-    r <- calculate(data, 'LIN', blank_zero = TRUE)
+    r <- calculate(data, 'LIN', blank_zero = TRUE, criteria = accept_any())
     expect_false(r$increasing)
     expect_equal(r$result$flag, '> ULOQ')
     expect_true(r$result$OD.le.blank)
@@ -141,8 +146,10 @@ test_that('a weak signal on a decreasing curve is a high concentration, not zero
     expect_match(message_text(r$notes), 'the curve decreases with the concentration', ignore.case = TRUE,
                  all = FALSE)
     # extrapolated above the highest calibrator: 21
-    up <- calculate(data, 'LIN', extrapolate = 'above')
-    expect_equal(up$result$conc, 21, tolerance = 1e-8)
+    up <- calculate(data, 'LIN', extrapolate = 'above', criteria = accept_any())
+    expect_true(is.na(up$result$conc))
+    expect_equal(up$result$conc.est, 21, tolerance = 1e-8)
+    expect_equal(up$result$value.source, 'Extrapolated')
     # without a signal at the background the column is left out
     data$OD[13] <- 0.5
     expect_false('OD.le.blank' %in% names(calculate(data, 'LIN')$result))
@@ -181,7 +188,7 @@ test_that('a quadratic curve that turns within the range gives no concentration'
     expect_s3_class(LinearityApp:::plot_fitted_resid(r), 'ggplot')
 
     # an explicit interval on one side of the vertex chooses the branch
-    left <- calculate(data, 'QUAD', interval = c(1, 3))
+    left <- calculate(data, 'QUAD', interval = c(1, 3), criteria = accept_any())
     expect_true(left$monotonic)
     expect_equal(left$result$conc[1], 2, tolerance = 1e-8)
     expect_equal(left$calibration_range, c(1, 3))
@@ -189,7 +196,7 @@ test_that('a quadratic curve that turns within the range gives no concentration'
     expect_equal(st$status[st$conc > 3], rep('outside_interval', 2))
     expect_match(message_text(left$notes), 'within the monotonic interval 1\u20133', fixed = TRUE, all = FALSE)
 
-    right <- calculate(data, 'QUAD', interval = c(3, 5))
+    right <- calculate(data, 'QUAD', interval = c(3, 5), criteria = accept_any())
     expect_equal(right$result$conc[1], 4, tolerance = 1e-8)
     # the bounds also apply to the range check: OD 10 is C = 6 on this branch
     expect_equal(right$result$flag, c(FLAGS$ok, FLAGS$above))
@@ -209,7 +216,7 @@ test_that('the log-log quadratic curve is checked on the log scale of the concen
     expect_false(r$monotonic)
     expect_equal(LinearityApp:::quad_vertex(r$fit)$conc, sqrt(10), tolerance = 1e-6)
     expect_true(is.na(r$result$conc))
-    low <- calculate(data, 'QRM', interval = c(1, sqrt(10)))
+    low <- calculate(data, 'QRM', interval = c(1, sqrt(10)), criteria = accept_any())
     expect_equal(low$result$conc, 1.5, tolerance = 1e-6)
 })
 
@@ -294,7 +301,7 @@ test_that('the background is the mean of the chosen background wells', {
                    dilution = c(rep(NA, 10 + length(bg_types)), 1),
                    OD = c(0.02 * conc + 0.10, 0.02 * conc + 0.10, bg_od, 0.30))
     }
-    blank <- calculate(make(c('blank', 'blank'), c(0.04, 0.16)), 'LIN')
+    blank <- calculate(make(c('blank', 'blank'), c(0.04, 0.16)), 'LIN', criteria = accept_any())
     expect_equal(blank$nc_value, 0.10)
     expect_equal(blank$background$roles, 'blank')
     expect_equal(blank$background$n, 2)
@@ -309,7 +316,7 @@ test_that('the background is the mean of the chosen background wells', {
 
     # a negative control does not change the result until it is chosen
     with_nc <- make(c('blank', 'blank', 'NC'), c(0.04, 0.16, 0.40))
-    plain <- calculate(with_nc, 'LIN')
+    plain <- calculate(with_nc, 'LIN', criteria = accept_any())
     expect_equal(plain$nc_value, 0.10)
     expect_equal(plain$result$conc, blank$result$conc)
     expect_equal(plain$background$unused, c(NC = 1))
@@ -441,7 +448,8 @@ test_that('an unavailable background suspends the verdict and the concentrations
     expect_false(any(is.na(one$result$conc[one$result$flag == FLAGS$ok])))
 
     # the explicit choice of no subtraction is calculated, with a note, even if the wells are excluded
-    none <- calculate(data, 'LRM', subtract_background = FALSE, exclude_background = all_out)
+    none <- calculate(data, 'LRM', subtract_background = FALSE, exclude_background = all_out,
+                      criteria = accept_any())
     expect_equal(none$background$status, 'none')
     expect_equal(none$nc_value, 0)
     expect_equal(none$background$roles, character(0))
@@ -574,29 +582,51 @@ test_that('samples outside the range can be extrapolated and below-blank samples
 
     below <- calculate(data, 'LRM', extrapolate = 'below')
     low <- below$result$flag == '< LLOQ'
-    expect_true(all(below$result$conc[low] > 0))
-    expect_true(all(below$result$conc[low] < min(below$standard_data$conc)))
+    expect_true(all(is.na(below$result$conc[low])))
+    expect_true(all(below$result$conc.est[low] > 0))
+    expect_true(all(below$result$conc.est[low] < min(below$standard_data$conc)))
     expect_true(all(below$result$conc.lower[low] < below$result$conc.upper[low]))
     expect_equal(below$result$flag, plain$result$flag)       # flags are kept
 
-    # only wells left without a concentration are reported as not quantified
+    # exploratory values do not make a well quantified
     expect_match(message_text(plain$notes), '8 of 12 sample wells', fixed = TRUE, all = FALSE)
-    expect_match(message_text(below$notes), '4 of 12 sample wells', fixed = TRUE, all = FALSE)
+    expect_match(message_text(below$notes), '8 of 12 sample wells', fixed = TRUE, all = FALSE)
 
     zero <- calculate(data, 'LRM', blank_zero = TRUE)
-    expect_equal(unique(zero$result$conc[zero$result$flag == 'OD <= blank']), 0)
-    expect_true(all(is.na(zero$result$conc[zero$result$flag == '< LLOQ'])))
+    expect_equal(unique(zero$result$conc.est[zero$result$flag == 'OD <= blank']), 0)
+    expect_true(all(is.na(zero$result$conc.est[zero$result$flag == '< LLOQ'])))
+    expect_equal(zero$result$conc, plain$result$conc)
 
     # above the ULOQ: the top standards are excluded so that samples exceed the range
     bca <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
     keys <- well_keys(bca)
     top <- data.frame(key = keys[bca$type == 'standard' & bca$conc >= 0.5], reason = 'test')
-    r_plain <- calculate(bca, 'LRM', exclude = top)
-    r_above <- calculate(bca, 'LRM', exclude = top, extrapolate = 'above')
+    r_plain <- calculate(bca, 'LRM', exclude = top, criteria = accept_any())
+    r_above <- calculate(bca, 'LRM', exclude = top, extrapolate = 'above', criteria = accept_any())
     high <- r_plain$result$flag == '> ULOQ'
     expect_true(any(high))
     expect_true(all(is.na(r_plain$result$conc[high])))
-    expect_true(all(r_above$result$conc[high] > 0.25 * r_above$result$dilution[high]))
+    expect_true(all(r_above$result$conc.est[high] > 0.25 * r_above$result$dilution[high]))
+})
+
+test_that('a zero has no interval, also when extrapolation is on', {
+    v <- LinearityApp:::well_values(conc = c(10, 1e-15, 0.5), lower = c(9, 1e-17, 0.4), upper = c(11, 1e-13, 0.6),
+                                    flag = c('OK', '< LLOQ', '< LLOQ'), at_blank = c(FALSE, TRUE, FALSE),
+                                    extrapolate = 'below', blank_zero = TRUE)
+    expect_equal(v$conc, c(10, NA, NA))
+    expect_equal(v$conc.est, c(10, 0, 0.5))
+    expect_equal(v$conc.lower, c(9, NA, 0.4))
+    expect_equal(v$conc.upper, c(11, NA, 0.6))
+    expect_equal(v$value.source, c('Interpolated', 'Assigned zero', 'Extrapolated'))
+})
+
+test_that('a rejected calibration gives exploratory values and no accepted range', {
+    v <- LinearityApp:::well_values(conc = c(10, 0.5, NA), lower = c(9, 0.4, NA), upper = c(11, 0.6, NA),
+                                    flag = c('OK', '< LLOQ', 'Missing OD'), at_blank = FALSE, accepted = FALSE)
+    expect_true(all(is.na(v$conc)))
+    expect_equal(v$conc.est, c(10, NA, NA))
+    expect_equal(v$flag, c('Range not accepted', 'Range not accepted', 'Missing OD'))
+    expect_equal(v$value.source, c('Interpolated', 'No estimate', 'No estimate'))
 })
 
 test_that('sample and QC results show the OD as measured, before the blank is subtracted', {

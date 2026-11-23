@@ -647,6 +647,21 @@
     text-align: center;
 }
 
+/* Legend of the short column names of the result tables ------------------ */
+
+.abbr-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 1rem;
+    margin: 0.5rem 0 1rem;
+    font-size: 0.8rem;
+    color: #555;
+}
+
+.abbr-title {
+    font-weight: 600;
+}
+
 /* Standard curve step: effect of the excluded points --------------------- */
 
 .exclusion-effect h5 {

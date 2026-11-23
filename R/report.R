@@ -36,6 +36,11 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
     b <- function(type, ...) list(type = type, ...)
     has_rows <- function(x) !is.null(x) && nrow(x) > 0
     table <- function(x, caption = NULL) if (has_rows(x)) list(b('table', data = x, caption = caption))
+    # The short column names of the tables of results, under the last of them
+    legend_text <- abbreviations_text(c(if (has_rows(result_table)) names(result_table),
+                                        if (type == 'detailed' && has_rows(qc_table)) names(qc_table),
+                                        if (has_rows(means_table)) names(means_table)), lang)
+    legend <- if (nzchar(legend_text)) list(b('text', text = legend_text))
 
     given <- function(x) length(x) == 1 && !is.na(x) && nzchar(trimws(x))
     head <- c(list(b('date', text = format(as.Date(date), '%d.%m.%Y')),
@@ -66,7 +71,8 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
                  },
                  list(b('heading', text = t('report.section_result'))), table(result_table),
                  if (has_rows(means_table)) c(list(b('heading', text = t('report.section_means'))),
-                                              table(means_table))))
+                                              table(means_table)),
+                 legend))
     }
 
     quality_part <- NULL
@@ -106,6 +112,7 @@ report_blocks <- function(type = c('short', 'detailed'), date, title, method, sc
       list(b('heading', text = t('report.section_result'))), table(result_table),
       if (has_rows(qc_table)) c(list(b('subheading', text = t('report.section_qc'))), table(qc_table)),
       if (has_rows(means_table)) c(list(b('subheading', text = t('report.section_means'))), table(means_table)),
+      legend,
       if (length(notes) > 0) list(b('heading', text = t('report.section_warnings')), b('list', items = notes)))
 }
 

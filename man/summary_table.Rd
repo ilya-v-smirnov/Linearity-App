@@ -11,7 +11,8 @@ summary_table(
   round_fun = signif,
   round_par = 3,
   lang = "en",
-  dilution = NULL
+  dilution = NULL,
+  dilution_na = NULL
 )
 }
 \arguments{
@@ -27,6 +28,8 @@ summary_table(
 
 \item{dilution}{\code{dilution} element of \code{\link[=assess_samples]{assess_samples()}}, or \code{NULL}; marks
 the samples compared across dilutions as linear (see \code{\link[=summary_checks]{summary_checks()}}).}
+
+\item{dilution_na}{\code{dilution_na} element of \code{\link[=assess_samples]{assess_samples()}}, or \code{NULL}.}
 }
 \value{
 A data.frame, or \code{NULL} without groups.

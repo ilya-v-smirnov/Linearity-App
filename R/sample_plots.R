@@ -58,24 +58,56 @@ group_labels <- function(groups, group_vars) {
 #' @param result Well-level sample results.
 #' @param samples `samples` element of [assess_samples()] for `group_vars`.
 #' @param group_vars Grouping columns.
+#' @param included Wells used in the sample result (see [included_wells()]);
+#'   `NULL` for all wells with a value in `conc`.
 #'
 #' @return A list with `groups` (one row per group: `label`, `n`,
-#'   `n.quantified`, `mean`, `sd`, `cv`, `cv.limit`, `cv.pass`) and `wells`
-#'   (`label`, `conc`, `status`); `label` is a factor with the first group on
-#'   top of the plot.
+#'   `n.quantified`, `n.included`, `mean`, `sd`, `cv`, `cv.limit`, `cv.pass`)
+#'   and `wells` (`label`, `conc`: the value of the well in `conc` or
+#'   `conc.est`, `included`, `status`); `label` is a factor with the first
+#'   group on top of the plot.
 #' @keywords internal
-sample_figure_data <- function(result, samples, group_vars) {
+sample_figure_data <- function(result, samples, group_vars, included = NULL) {
     labels <- group_labels(samples, group_vars)
     levels <- rev(unique(labels))
     groups <- data.frame(label = factor(labels, levels = levels),
-                         samples[c('n', 'n.quantified', 'mean', 'sd', 'cv', 'cv.limit')])
+                         samples[c('n', 'n.quantified', 'n.included', 'mean', 'sd', 'cv', 'cv.limit')])
     groups$cv.pass <- !exceeds_limit(groups$cv, groups$cv.limit)
     key <- replicate_groups(result, group_vars)
     group_key <- replicate_groups(samples, group_vars)
+    if (is.null(included)) included <- !is.na(result$conc)
+    estimate <- if ('conc.est' %in% names(result)) result$conc.est else rep(NA_real_, nrow(result))
     wells <- data.frame(label = factor(labels[match(key, group_key)], levels = levels),
-                        conc = result$conc,
+                        conc = ifelse(is.na(result$conc), estimate, result$conc),
+                        included = included,
                         status = quantification_status(result$flag))
     list(groups = groups, wells = wells)
+}
+
+
+#' Concentration Axis of the Sample Figure
+#'
+#' Set by the wells used in the result and the spread of their groups, so that
+#' an exploratory value (a zero on a logarithmic axis, a far extrapolation)
+#' cannot change it; such values are drawn at the edge of the axis. Without
+#' used wells the axis follows the exploratory values.
+#'
+#' @param used Concentrations of the wells used.
+#' @param groups `groups` element of [sample_figure_data()].
+#' @param estimates Values of the other wells.
+#'
+#' @return A list with `log` (logical) and `limits`.
+#' @keywords internal
+sample_axis <- function(used, groups, estimates = numeric(0)) {
+    log_x <- length(used) > 0 && all(used > 0) && max(used) / min(used) >= 20
+    spread <- groups[!is.na(groups$sd), , drop = FALSE]
+    lower <- spread$mean - spread$sd
+    values <- c(used, spread$mean + spread$sd, if (log_x) lower[lower > 0] else lower)
+    if (length(values) == 0) values <- estimates[is.finite(estimates)]
+    if (length(values) == 0) values <- c(0, 1)
+    limits <- range(values)
+    if (limits[1] == limits[2]) limits <- if (limits[1] == 0) c(0, 1) else sort(limits[1] * c(0.8, 1.2))
+    list(log = log_x, limits = limits)
 }
 
 
@@ -106,7 +138,9 @@ sample_theme <- function() {
 #'
 #' Three panels sharing the groups (one row per row of the summary):
 #' concentrations of the wells with the mean and SD, CV of the replicates
-#' against the limit, and the number of wells by quantification status.
+#' against the limit, and the number of wells by quantification status. Wells
+#' used in the result are filled dots; the others are hollow, as circles on
+#' the axis or as triangles at its edge (see [sample_axis()]).
 #'
 #' @param figure Output of [sample_figure_data()].
 #' @param lang Language code.
@@ -118,12 +152,16 @@ plot_sample_groups <- function(figure, lang = 'en') {
     colours <- sample_colours()
     groups <- figure$groups
     wells <- figure$wells[!is.na(figure$wells$label), , drop = FALSE]
-    quantified <- wells[!is.na(wells$conc), , drop = FALSE]
+    quantified <- wells[!is.na(wells$conc) & wells$included, , drop = FALSE]
+    estimates <- wells[!is.na(wells$conc) & !wells$included, , drop = FALSE]
     y_scale <- ggplot2::scale_y_discrete(drop = FALSE)
 
-    # Concentrations: a logarithmic axis when they span more than a decade
-    conc <- quantified$conc
-    log_x <- length(conc) > 0 && all(conc > 0) && max(conc) / min(conc) >= 20
+    # Concentrations: a logarithmic axis when those of the result span more than a decade
+    axis <- sample_axis(quantified$conc, groups, estimates$conc)
+    log_x <- axis$log
+    estimates$x <- pmin(pmax(estimates$conc, axis$limits[1]), axis$limits[2])
+    at_edge <- estimates$x != estimates$conc
+    jitter <- function() ggplot2::position_jitter(width = 0, height = 0.12, seed = 1)
     sd_data <- groups[!is.na(groups$sd), , drop = FALSE]
     if (log_x) sd_data <- sd_data[sd_data$mean - sd_data$sd > 0, , drop = FALSE]
     p_conc <- ggplot2::ggplot(groups, ggplot2::aes(y = .data$label)) +
@@ -132,19 +170,25 @@ plot_sample_groups <- function(figure, lang = 'en') {
                               ggplot2::aes(x = .data$mean - .data$sd, xend = .data$mean + .data$sd,
                                            yend = .data$label),
                               colour = 'grey25', linewidth = 0.6) +
+        ggplot2::geom_point(data = estimates[!at_edge, , drop = FALSE],
+                            ggplot2::aes(x = .data$x, colour = .data$status),
+                            shape = 1, size = 2.2, stroke = 0.8, position = jitter()) +
+        ggplot2::geom_point(data = estimates[at_edge, , drop = FALSE],
+                            ggplot2::aes(x = .data$x, colour = .data$status),
+                            shape = 2, size = 2.2, stroke = 0.8, position = jitter()) +
         ggplot2::geom_point(data = quantified, ggplot2::aes(x = .data$conc, colour = .data$status),
-                            size = 2.2, alpha = 0.85,
-                            position = ggplot2::position_jitter(width = 0, height = 0.12, seed = 1)) +
+                            size = 2.2, alpha = 0.85, position = jitter()) +
         ggplot2::geom_errorbar(data = groups[!is.na(groups$mean), , drop = FALSE],
                                ggplot2::aes(xmin = .data$mean, xmax = .data$mean),
                                width = 0.55, linewidth = 0.9, colour = 'grey10', orientation = 'y') +
-        ggplot2::geom_text(data = groups[groups$n.quantified == 0, , drop = FALSE], ggplot2::aes(x = -Inf),
+        ggplot2::geom_text(data = groups[groups$n.included == 0, , drop = FALSE], ggplot2::aes(x = -Inf),
                            label = t('samples.not_quantified'), hjust = -0.05, colour = 'grey45',
                            fontface = 'italic', size = 3.4) +
         ggplot2::scale_colour_manual(values = colours, drop = FALSE) +
         ggplot2::labs(title = t('samples.panel_conc'), x = t('samples.axis_conc'), y = NULL) +
         sample_theme()
-    if (log_x) p_conc <- p_conc + ggplot2::scale_x_log10()
+    p_conc <- p_conc + if (log_x) ggplot2::scale_x_log10(limits = axis$limits) else
+        ggplot2::scale_x_continuous(limits = axis$limits)
 
     # CV of the replicates; groups without a CV are marked with a dash
     cv_data <- groups
@@ -199,6 +243,10 @@ samples_legend_ui <- function(lang) {
                item('quant-above', t('flag.above')),
                item('quant-od_le_nc', t('flag.od_le_nc')),
                item('quant-other', t('infographic.other')),
+               shiny::span(class = 'quant-legend-item', shiny::span(class = 'legend-mean', '○'),
+                           t('samples.legend_estimate')),
+               shiny::span(class = 'quant-legend-item', shiny::span(class = 'legend-mean', '△'),
+                           t('samples.legend_estimate_edge')),
                shiny::span(class = 'quant-legend-item', shiny::span(class = 'legend-mean', '|'),
                            t('samples.legend_mean')),
                item('cv-pass', t('samples.legend_cv_pass')),

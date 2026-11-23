@@ -635,9 +635,14 @@ test_that('a rejected calibration has no range, and its concentrations are not r
     # the concentrations are kept for inspection, with a note instead of a narrowed range
     notes <- message_text(r$notes)
     expect_false(any(grepl('quantification range is limited', notes, fixed = TRUE)))
-    expect_match(notes, 'shown for inspection only and are not reportable (range applied to the samples: 3.12–50)',
+    expect_match(notes, 'shown for inspection only (column C.est) and are not reportable (range applied to the samples: 3.12–50)',
                  fixed = TRUE, all = FALSE)
-    expect_true(any(!is.na(r$result$conc)))
+    expect_true(all(is.na(r$result$conc)))
+    expect_true(any(!is.na(r$result$conc.est)))
+    expect_true(all(r$result$flag[!is.na(r$result$conc.est)] == FLAGS$no_range))
+    expect_false(any(r$result$included))
+    expect_true(all(r$quality$samples$n.quantified == 0))
+    expect_true(all(is.na(r$quality$samples$mean)))
     # the report says the same
     s <- LinearityApp:::quality_summary(r, 'en')
     expect_equal(s$range, 'Quantification range: not established (range applied to the samples: 3.12 – 50, not reportable)')
@@ -952,9 +957,12 @@ test_that('replicates follow the grouping chosen by the user', {
     # dilutions are compared within the groups even when they are averaged together
     expect_equal(nrow(by_sample$dilution), 4)
     expect_match(by_sample$samples$flag[2], 'Dilution non-linear', fixed = TRUE)
-    expect_match(by_sample$samples$flag[2], 'High CV', fixed = TRUE)
+    # one well at each dilution: these wells are not replicates of each other
+    expect_false(grepl('High CV', by_sample$samples$flag[2], fixed = TRUE))
+    expect_equal(by_sample$samples$cv.status, c('not_assessable', 'not_assessable'))
+    expect_true(all(is.na(by_sample$samples$cv)))
     expect_equal(by_sample$samples$flag[1], 'OK')
-    expect_equal(vapply(by_sample$warnings, function(m) m$key, ''), c('quality.warn_cv', 'quality.warn_dilution'))
+    expect_equal(vapply(by_sample$warnings, function(m) m$key, ''), 'quality.warn_dilution')
 
     by_dilution <- assess_samples(r$result, r$calibration_range, group_vars = c('sample.name', 'dilution'))
     expect_equal(nrow(by_dilution$samples), 4)
@@ -990,16 +998,153 @@ test_that('quality controls without a code are grouped by their nominal concentr
 
 test_that('the flags of the summary are split into range, precision and linearity', {
     samples <- data.frame(sample.name = c('A', 'A', 'B', 'C'), dilution = c(2, 4, 2, 1), cv = c(5, NA, 30, 4),
+                          cv.status = c('ok', 'not_assessable', 'high_cv', 'ok'),
                           flag = c('Dilution non-linear; < LLOQ', 'Dilution non-linear', 'High CV; > ULOQ; < LLOQ',
                                    'OK'))
     dilution <- data.frame(sample.name = c('A', 'A', 'B', 'B'), dilution = c(2, 4, 2, 4), n = 2, n.quantified = 2,
                            mean = 1, deviation = 0, cv = 0, pass = c(FALSE, FALSE, TRUE, TRUE))
     checks <- summary_checks(samples, dilution, 'en')
     expect_equal(checks$range, c('Below', 'OK', 'Below; Above', 'OK'))
-    expect_equal(checks$precision, c('OK', '', 'High CV', 'OK'))
+    expect_equal(checks$precision, c('OK', 'Not assessable', 'High CV', 'OK'))
     expect_equal(checks$linearity, c('Non-linear', 'Non-linear', 'Linear', ''))
     expect_equal(summary_checks(samples, NULL, 'ru')$linearity, c('Нелинейно', 'Нелинейно', '', ''))
     out <- summary_table(cbind(samples, mean = 1, sd = 0, min = 1, max = 1), 'sample.name',
                          stats = c('cv', 'range', 'linearity'), dilution = dilution)
     expect_equal(names(out), c('sample.name', 'cv', 'range', 'linearity'))
+})
+
+# Standards y = 0.02 x, in duplicate, and the samples given (see run_data())
+inclusion_run <- function(od, dilution = 1, name = 'A', ...) {
+    calculate(run_data(samples = data.frame(name = name, dilution = dilution, od = od)), 'LRM', linear = TRUE, ...)
+}
+
+test_that('the options do not change the result of a duplicate with one well at the background', {
+    plain <- inclusion_run(c(0.2, 0))
+    for (args in list(list(blank_zero = TRUE), list(extrapolate = 'below'),
+                      list(blank_zero = TRUE, extrapolate = 'below'))) {
+        s <- do.call(inclusion_run, c(list(c(0.2, 0)), args))$quality$samples
+        expect_equal(s$n, 2)
+        expect_equal(s$n.quantified, 1)
+        expect_equal(s$n.included, 1)
+        expect_equal(s$mean, 10)
+        expect_true(is.na(s$cv))
+        expect_equal(s$cv.status, 'not_assessable')
+        expect_equal(s$cv.limit, plain$quality$samples$cv.limit)
+    }
+    r <- inclusion_run(c(0.2, 0), blank_zero = TRUE)
+    expect_equal(r$result$included, c(TRUE, FALSE))
+    expect_equal(r$result$value.source, c('Interpolated', 'Assigned zero'))
+    expect_match(message_text(r$notes), 'One usable replicate in 1 replicate set', fixed = TRUE, all = FALSE)
+    table <- LinearityApp:::merge_well_counts(summary_table(r$quality$samples, 'sample.name'))
+    expect_equal(table$In.N, '1/2')
+    expect_equal(table$precision, 'Not assessable')
+})
+
+test_that('C.est holds every value of the wells and the result uses C only', {
+    r <- inclusion_run(c(0.2, 0), blank_zero = TRUE)
+    expect_equal(r$result$conc.est, c(10, 0))
+    expect_equal(r$result$conc, c(10, NA))
+    expect_equal(r$quality$samples$mean, 10)
+    expect_equal(r$quality$samples$n.quantified, 1)
+    # the column is there whatever the options, with the same values as C
+    plain <- inclusion_run(c(0.2, 0.22))$result
+    expect_equal(plain$conc.est, plain$conc)
+})
+
+test_that('the method decides whether a single usable replicate gives a result', {
+    strict <- qc_criteria(single_replicate = 'withhold')
+    r <- inclusion_run(c(0.2, 0), criteria = strict)
+    s <- r$quality$samples
+    expect_equal(s$n.quantified, 1)
+    expect_equal(s$n.included, 0)
+    expect_true(is.na(s$mean))
+    expect_equal(r$result$conc[1], 10)
+    expect_false(any(r$result$included))
+    expect_match(message_text(r$notes), 'withheld by the rule of the method', fixed = TRUE, all = FALSE)
+
+    # a well planned as single is not a lost replicate
+    single <- inclusion_run(0.2, criteria = strict)
+    expect_true(single$result$included)
+    expect_equal(single$quality$samples$mean, 10)
+    expect_equal(single$quality$samples$cv.status, 'not_assessable')
+    expect_length(Filter(function(m) identical(m$key, 'quality.warn_withheld'), single$quality$warnings), 0)
+
+    expect_error(qc_criteria(single_replicate = 'other'), class = 'lin_error')
+})
+
+test_that('the precision is assessed within a dilution and a row shows its worst', {
+    samples <- data.frame(name = 'A', dilution = c(2, 2, 4, 4), od = c(0.2, 0.21, 0.1, 0.16))
+    r <- calculate(run_data(samples = samples), 'LRM', linear = TRUE)
+    by_sample <- assess_samples(r$result, r$calibration_range, r$quality$criteria, 'sample.name')$samples
+    by_dilution <- assess_samples(r$result, r$calibration_range, r$quality$criteria,
+                                  c('sample.name', 'dilution'))$samples
+    expect_equal(by_sample$cv, max(by_dilution$cv))
+    expect_equal(by_sample$cv.status, 'high_cv')
+    expect_equal(by_dilution$cv.status, c('ok', 'high_cv'))
+
+    # one set assessed, the other with a single usable well
+    partial <- inclusion_run(c(0.2, 0.21, 0.1, 0), dilution = c(2, 2, 4, 4))
+    s <- assess_samples(partial$result, partial$calibration_range, partial$quality$criteria, 'sample.name')$samples
+    expect_equal(s$cv.status, 'not_assessable')
+})
+
+test_that('dilutions are compared on the wells used in the result', {
+    r <- inclusion_run(c(0.32, 0.32, 0.16, 0.16, 0, 0), dilution = c(2, 2, 4, 4, 8, 8), blank_zero = TRUE)
+    d <- r$quality$dilution
+    expect_equal(d$dilution, c(2, 4))
+    expect_true(all(d$pass))
+    expect_null(r$quality$dilution_na)
+
+    # fewer than two dilutions with used wells: not assessable, not non-linear
+    lost <- inclusion_run(c(0.2, 0.2, 0, 0), dilution = c(2, 2, 4, 4), blank_zero = TRUE)
+    a <- assess_samples(lost$result, lost$calibration_range, lost$quality$criteria, 'sample.name')
+    expect_null(a$dilution)
+    expect_equal(a$dilution_na$sample.name, 'A')
+    expect_false(grepl('non-linear', a$samples$flag, fixed = TRUE))
+    expect_equal(summary_checks(a$samples, a$dilution, 'en', a$dilution_na)$linearity, 'Not assessable')
+})
+
+test_that('exploratory values do not change the axis of the sample figure', {
+    groups <- data.frame(mean = c(100, 2), sd = NA_real_)
+    expect_true(LinearityApp:::sample_axis(c(100, 2), groups, 0)$log)
+    expect_equal(LinearityApp:::sample_axis(c(100, 2), groups, c(0, 5000))$limits, c(2, 100))
+    expect_equal(LinearityApp:::sample_axis(numeric(0), groups[0, ], c(0, 5))$limits, c(0, 5))
+})
+
+test_that('the short column names are valid in R and explained in both languages', {
+    short <- c(unname(LinearityApp:::column_abbreviations()), 'In.N')
+    expect_identical(short, make.names(short))
+    for (lang in supported_languages()) {
+        legend <- LinearityApp:::abbreviations_table(short, lang)
+        expect_false(any(grepl('abbr.term', legend[[2]], fixed = TRUE)), info = lang)
+        expect_false(any(c('Mean', 'Min', 'Max') %in% legend[[1]]), info = lang)
+    }
+    expect_null(LinearityApp:::abbreviations_table(c('well', 'OD')))
+    expect_equal(LinearityApp:::abbreviations_text('well'), '')
+    # the sample and the date need no explanation, the dilution factor does
+    expect_equal(LinearityApp:::abbreviations_table(c('sample', 'date', 'DF'))[[1]], 'DF')
+})
+
+test_that('the value sources have short labels, the same in every language', {
+    codes <- unlist(LinearityApp:::value_sources(), use.names = FALSE)
+    res <- data.frame(value.source = codes)
+    for (lang in supported_languages()) {
+        expect_equal(localize_result(res, lang)$value.source, c('Interp', 'Extrap', 'Zero', 'None'), info = lang)
+        expect_match(LinearityApp:::abbreviations_table('VS', lang)[[2]], 'Interp.*Extrap.*Zero.*None')
+    }
+    # the label of a well without an estimate is not read as a missing value
+    path <- tempfile(fileext = '.csv')
+    utils::write.csv(localize_result(res), path, row.names = FALSE)
+    expect_false(anyNA(utils::read.csv(path)$value.source))
+    # the calculation keeps the full codes
+    expect_equal(inclusion_run(c(0.2, 0), blank_zero = TRUE)$result$value.source, c('Interpolated', 'Assigned zero'))
+})
+
+test_that('a short name taken by a column of the user is not used', {
+    short <- LinearityApp:::short_columns
+    expect_equal(short(c('sample.name', 'sample.date', 'dilution')), c('sample', 'date', 'DF'))
+    expect_equal(short(c('sample.name', 'sample.date', 'date', 'dilution')),
+                 c('sample', 'sample.date', 'date', 'DF'))
+    table <- data.frame(sample.name = 'A', sample = 'x', conc = 1)
+    expect_equal(names(LinearityApp:::abbreviate_columns(table)), c('sample.name', 'sample', 'C'))
 })

@@ -13,7 +13,8 @@ mod_results_server(
   lang,
   curve,
   by = shiny::reactive("column"),
-  rounding = shiny::reactive(list(fun = signif, par = 3))
+  rounding = shiny::reactive(list(fun = signif, par = 3)),
+  included = NULL
 )
 }
 \arguments{
@@ -28,9 +29,14 @@ mod_results_server(
 
 \item{rounding}{Reactive from \code{\link[=mod_rounding_server]{mod_rounding_server()}}: the rounding of the
 concentrations shown and exported (see \code{\link[=round_result]{round_result()}}).}
+
+\item{included}{Reactive with the wells used in the sample result under the
+grouping of the result summary (see \code{\link[=included_wells]{included_wells()}}), or \code{NULL} for
+the default replicate groups.}
 }
 \value{
-\code{mod_results_server()} returns a reactive with the translated result table.
+\code{mod_results_server()} returns a reactive with the translated result
+table, with the short column names (see \code{\link[=column_abbreviations]{column_abbreviations()}}).
 }
 \description{
 The sidebar holds the handling of samples outside the quantification range

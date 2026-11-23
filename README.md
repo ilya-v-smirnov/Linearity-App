@@ -108,12 +108,12 @@ The background is the arithmetic mean OD of the wells chosen in **Standard curve
 
 ### 5. View and Export Results
 - The **Results** table displays calculated analyte concentrations.
-- Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor; `conc.lower` and `conc.upper` give the 95 % confidence interval (uncertainty of the curve and of a single OD measurement).
-- Each sample well gets a **flag**. Only wells flagged `OK` receive a concentration; the others are left empty:
-  - `< LLOQ` / `> ULOQ` - outside the range of standards used in the fit;
-  - `OD <= blank` - optical density at or below the background;
-  - `No solution` - the OD cannot be reached by the quadratic curve;
-  - `Missing OD` - no optical density value.
+- Concentrations are calculated by inverting the fitted standard curve and multiplying by the dilution factor; `C.low` and `C.up` give the 95 % confidence interval (uncertainty of the curve and of a single OD measurement).
+- The tables use short column names, valid in R and explained under each table and on the **Legend** sheet of the exports. `C` holds only values within the accepted range and is the only column used for the sample result. `C.est` is for exploration and holds every value of the well: those of `C`, extrapolated concentrations, assigned zeros and values of a calibration that was not accepted; `VS` tells them apart.
+- Each sample well has three independent statuses:
+  - **Range status** (`RS`): `OK`, `Below`, `Above`, `OD <= blank`, `No solution`, `Missing OD`, `Background unavailable` or `Range not accepted`;
+  - **Value source** (`VS`): `Interp` (interpolated), `Extrap` (extrapolated), `Zero` (assigned zero) or `None` (no estimate), the same in every language;
+  - **Included in sample result** (`Inc`): whether the well is used for the result of the sample.
 - Quality controls are shown in a separate table with nominal and measured concentration and recovery (%).
 - Warnings about excluded standards and unquantified samples are shown above the tables and in the report.
 - Click **"Download Results"** to export as Excel or CSV.
@@ -122,7 +122,7 @@ The background is the arithmetic mean OD of the wells chosen in **Standard curve
 The quality assessment is split between two steps:
 
 - **Standard curve → Model parameters** shows the verdict of the run (accepted or rejected, LLOQ – ULOQ, number of accepted standard levels), the model coefficients, the back-calculated standards and the quality of the curve. The acceptance criteria of the standards are in the sidebar of this step.
-- **Result Summary** assesses the samples. The columns ticked under **Group results by** define the replicates: each row of the summary is a replicate group, its CV is checked against the limit (flag `High CV`), and the dilutions of a sample are compared within the rows without the dilution column (flag `Dilution non-linear`). The **Table** tab shows the summary with flags, the dilution linearity and the quality controls; the **Infographics** tab shows summary tiles, the concentrations of each group with mean ± SD, the CV of the replicates against the limit, the wells by quantification status, the dilution linearity and the accuracy of the QC. The acceptance criteria of the samples, QC and dilutions are in the sidebar of this step.
+- **Result Summary** assesses the samples. The columns ticked under **Group results by** define the rows of the summary. Only wells with `Inc = Yes` enter the mean, SD, CV, plots and the comparison of dilutions; `In.N` shows the wells within the accepted range out of all wells (`1/2`). The CV is computed within a row and a dilution (flag `High CV`), and a row with several dilutions shows the worst of them; with one usable well the precision is `Not assessable`. The method decides whether such a sample reports the value of that well or withholds the result (**Sample with one usable replicate**). The dilutions of a sample are compared within the rows without the dilution column (flag `Dilution non-linear`). The **Table** tab shows the summary with flags, the dilution linearity and the quality controls; the **Infographics** tab shows summary tiles, the concentrations of each group with mean ± SD, the CV of the replicates against the limit, the wells by quantification status, the dilution linearity and the accuracy of the QC. The acceptance criteria of the samples, QC and dilutions are in the sidebar of this step.
 
 | Check | How | Default limit (ICH M10, ligand binding assays) |
 |-------|-----|-------------------------------------------------|
@@ -131,8 +131,8 @@ The quality assessment is split between two steps:
 | Calibration | number of accepted standard levels | ≥ 75 % and ≥ 6 levels |
 | LLOQ / ULOQ | lowest and highest accepted standard level; samples outside are flagged `< LLOQ` / `> ULOQ` | — |
 | Quality controls | bias of each QC well; rule: ≥ 2/3 of all QC and ≥ 50 % of each level within limits | ±20 % (±25 % near LLOQ/ULOQ) |
-| Samples | mean, SD and CV of the replicates of each row of the summary; flag `High CV` | CV ≤ 20 % (25 % near LLOQ/ULOQ) |
-| Dilution linearity | for samples measured at several dilutions: deviation of each dilution from the mean and CV between dilutions; flag `Dilution non-linear` | ±20 %, CV ≤ 20 % |
+| Samples | mean and SD of the wells used in each row of the summary, CV of the replicates within a dilution; flag `High CV` | CV ≤ 20 % (25 % near LLOQ/ULOQ) |
+| Dilution linearity | for samples with used wells at two or more dilutions: deviation of each dilution from the mean and CV between dilutions; flag `Dilution non-linear` | ±20 %, CV ≤ 20 % |
 | Curve | R², residual standard error, lack-of-fit test | warning if R² < 0.99 or lack of fit p < 0.05 |
 
 The run is rejected if the calibration or the QC rule fails; replicate CV, dilution linearity and curve quality give warnings. For chromatographic assays use 15 % / 20 %; the quantification range can also be set to all standards used in the fit. From the console, `assess_samples(res$result, res$calibration_range, group_vars = c("sample.name", "dilution"))` assesses the samples with any grouping.

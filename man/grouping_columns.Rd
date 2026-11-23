@@ -13,7 +13,7 @@ grouping_columns(result)
 Character vector.
 }
 \description{
-All columns of the result table except the measurements, the flag and the
-well, in display order (see \code{\link[=result_columns]{result_columns()}}).
+All columns of the result table except the measurements, the statuses of
+the well and the well itself, in display order (see \code{\link[=result_columns]{result_columns()}}).
 }
 \keyword{internal}

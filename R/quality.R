@@ -70,6 +70,10 @@ limit_tolerance <- function(limit) 1e-9 * pmax(1, abs(limit))
 #'   back-calculated results whatever the reason of the loss. A well without
 #'   an OD or left out automatically (OD <= blank) is not a documented loss
 #'   (see [assess_standards()]).
+#' @param single_replicate A sample replicate set planned in two or more wells
+#'   with a single well within the accepted range: `"report"` gives its value
+#'   as the result (the precision is not assessable), `"withhold"` gives no
+#'   result. A well planned as single is not affected (see [included_wells()]).
 #'
 #' @return A list of class `lin_criteria`.
 #' @export
@@ -80,14 +84,16 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
                         min_fraction = 0.75, min_levels = 6, sample_cv = cv, sample_cv_edge = cv_edge,
                         qc_bias = 20, qc_bias_edge = 25, qc_fraction = 2 / 3, qc_level_fraction = 0.5,
                         dilution_bias = 20, dilution_cv = 20, range = 'accepted', edge = 1.25,
-                        singlets = TRUE, replicate_loss = 'documented', edge_levels = 'plan') {
+                        singlets = TRUE, replicate_loss = 'documented', edge_levels = 'plan',
+                        single_replicate = 'report') {
     out <- list(std_bias = std_bias, std_bias_edge = std_bias_edge, cv = cv, cv_edge = cv_edge,
                 min_fraction = min_fraction, min_levels = min_levels,
                 sample_cv = sample_cv, sample_cv_edge = sample_cv_edge,
                 qc_bias = qc_bias, qc_bias_edge = qc_bias_edge, qc_fraction = qc_fraction,
                 qc_level_fraction = qc_level_fraction, dilution_bias = dilution_bias,
                 dilution_cv = dilution_cv, range = range, edge = edge, singlets = singlets,
-                replicate_loss = replicate_loss, edge_levels = edge_levels)
+                replicate_loss = replicate_loss, edge_levels = edge_levels,
+                single_replicate = single_replicate)
     if (!(is.logical(singlets) && length(singlets) == 1 && !is.na(singlets))) {
         lin_abort('error.criteria', names = 'singlets')
     }
@@ -97,7 +103,10 @@ qc_criteria <- function(std_bias = 20, std_bias_edge = 25, cv = 20, cv_edge = 25
     if (!(length(edge_levels) == 1 && edge_levels %in% edge_level_rules())) {
         lin_abort('error.criteria', names = 'edge_levels')
     }
-    numeric <- setdiff(names(out), c('range', 'singlets', 'replicate_loss', 'edge_levels'))
+    if (!(length(single_replicate) == 1 && single_replicate %in% single_replicate_rules())) {
+        lin_abort('error.criteria', names = 'single_replicate')
+    }
+    numeric <- setdiff(names(out), c('range', 'singlets', 'replicate_loss', 'edge_levels', 'single_replicate'))
     bad <- numeric[!vapply(out[numeric], function(v) is.numeric(v) && length(v) == 1 && !is.na(v) && v >= 0,
                            logical(1))]
     if (length(bad) > 0) lin_abort('error.criteria', names = bad)
@@ -122,6 +131,15 @@ replicate_loss_rules <- function() c('documented', 'reject')
 #' @return Character vector of rule codes.
 #' @export
 edge_level_rules <- function() c('plan', 'fit')
+
+
+#' Rules for a Sample With One Usable Replicate
+#'
+#' See `single_replicate` of [qc_criteria()].
+#'
+#' @return Character vector of rule codes.
+#' @keywords internal
+single_replicate_rules <- function() c('report', 'withhold')
 
 
 #' Presets of the Acceptance Criteria
@@ -373,7 +391,98 @@ replicate_groups <- function(result, group_vars = NULL) {
 }
 
 
+#' Sets of True Replicates
+#'
+#' A row of the summary may hold several dilutions of a sample: wells at
+#' different dilutions are not replicates of each other, so the precision is
+#' assessed within the row and the dilution.
+#'
+#' @inheritParams replicate_groups
+#'
+#' @return Character vector of set labels.
+#' @keywords internal
+replicate_sets <- function(result, group_vars = NULL) {
+    if (length(group_vars) == 0) return(replicate_groups(result))
+    replicate_groups(result, union(group_vars, intersect('dilution', names(result))))
+}
+
+
+#' Wells Planned and Usable in Each Replicate Set
+#'
+#' @inheritParams replicate_groups
+#'
+#' @return A data.frame, one row per well: `set` (see [replicate_sets()]),
+#'   `usable` (a value within the accepted range), `n.set` (wells planned in
+#'   the set) and `n.usable` (usable wells of the set).
+#' @keywords internal
+replicate_counts <- function(result, group_vars = NULL) {
+    set <- replicate_sets(result, group_vars)
+    usable <- !is.na(result$conc)
+    data.frame(set = set, usable = usable,
+               n.set = stats::ave(rep(1, length(set)), set, FUN = length),
+               n.usable = stats::ave(as.numeric(usable), set, FUN = sum))
+}
+
+
+#' Wells Used in the Sample Result
+#'
+#' A well is used when it has a value within the accepted range (`conc`). With
+#' the rule `"withhold"` (see [qc_criteria()]), a set planned in two or more
+#' wells that keeps a single usable well gives no result. Only the plan
+#' counts: a well planned as single is used.
+#'
+#' @param result Well-level sample results.
+#' @param criteria See [qc_criteria()].
+#' @param group_vars Columns defining the rows of the summary, or `NULL`.
+#'
+#' @return Logical vector, one element per well, in the order of `result`.
+#' @keywords internal
+included_wells <- function(result, criteria = qc_criteria(), group_vars = NULL) {
+    if (nrow(result) == 0) return(logical(0))
+    counts <- replicate_counts(result, group_vars)
+    used <- counts$usable
+    if (identical(criteria$single_replicate, 'withhold')) used[counts$n.set >= 2 & counts$n.usable == 1] <- FALSE
+    used
+}
+
+
+#' Precision of a Row of the Summary
+#'
+#' The CV is computed within each replicate set of the row. The row shows its
+#' worst set: `"high_cv"` if a set exceeds its limit, otherwise
+#' `"not_assessable"` if a set has fewer than two used wells, otherwise
+#' `"ok"`. Sets without used wells do not contribute to the result of the row
+#' and are not considered.
+#'
+#' @param conc,dilution Concentrations and dilutions of the wells used.
+#' @param set Replicate sets of these wells (see [replicate_sets()]).
+#' @param range Quantification range, or `NULL`.
+#' @param criteria See [qc_criteria()].
+#'
+#' @return A list with `cv` (of the set farthest above or closest to its
+#'   limit; `NA` when none can be computed), `limit` and `status`.
+#' @keywords internal
+group_precision <- function(conc, dilution, set, range = NULL, criteria = qc_criteria()) {
+    if (length(conc) == 0) return(list(cv = NA_real_, limit = criteria$sample_cv, status = 'not_assessable'))
+    parts <- split(seq_along(conc), factor(set, levels = unique(set)))
+    cv <- vapply(parts, function(k) cv_percent(conc[k]), 0)
+    # The limit near the ends of the range follows the concentration in the well
+    limit <- vapply(parts, function(k) {
+        edge <- !is.null(range) && near_edge(mean(conc[k] / dilution[k]), range, criteria$edge)
+        if (edge) criteria$sample_cv_edge else criteria$sample_cv
+    }, 0)
+    assessed <- which(!is.na(cv))
+    if (length(assessed) == 0) return(list(cv = NA_real_, limit = limit[[1]], status = 'not_assessable'))
+    worst <- assessed[which.max(cv[assessed] - limit[assessed])]
+    status <- if (any(exceeds_limit(cv, limit))) 'high_cv' else if (anyNA(cv)) 'not_assessable' else 'ok'
+    list(cv = cv[[worst]], limit = limit[[worst]], status = status)
+}
+
+
 #' Summary of Sample Replicates
+#'
+#' The statistics use only the wells of the sample result (see
+#' [included_wells()]); exploratory values do not enter them.
 #'
 #' @param result Well-level sample results from [calculate()].
 #' @param range Quantification range; `NULL` uses the limit inside the range
@@ -385,8 +494,10 @@ replicate_groups <- function(result, group_vars = NULL) {
 #' @return A data.frame with one row per replicate group (in the order of the
 #'   wells; with `group_vars`, ordered by the columns, each in the order of
 #'   its first appearance): identification columns (`group_vars`, or `id`, `sample.name`,
-#'   `dilution`, `sample.date` for the default grouping), `n`, `n.quantified`,
-#'   `mean`, `sd`, `cv` (%), `min`, `max`, `cv.limit` and `flag` (codes from
+#'   `dilution`, `sample.date` for the default grouping), `n`, `n.quantified`
+#'   (wells with a value within the accepted range), `n.included` (wells used
+#'   in the result), `mean`, `sd`, `min`, `max` of the wells used, `cv` (%),
+#'   `cv.limit`, `cv.status` (see [group_precision()]) and `flag` (codes from
 #'   [FLAGS] separated by `"; "`); `NULL` without wells.
 #' @keywords internal
 summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), group_vars = NULL) {
@@ -404,26 +515,25 @@ summarise_samples <- function(result, range = NULL, criteria = qc_criteria(), gr
         intersect(c('id', 'sample.name', 'dilution', 'sample.date'), names(result))
     dilution <- if ('dilution' %in% names(result)) result$dilution else rep(1, nrow(result))
     flag <- if ('flag' %in% names(result)) result$flag else rep(FLAGS$ok, nrow(result))
+    included <- included_wells(result, criteria, group_vars)
+    sets <- replicate_sets(result, group_vars)
     rows <- lapply(split(seq_len(nrow(result)), factor(group, levels = unique(group))), function(i) {
-        quantified <- i[!is.na(result$conc[i])]
-        conc <- result$conc[quantified]
-        m <- if (length(conc) > 0) mean(conc) else NA_real_
-        cv <- cv_percent(conc)
-        # The limit near the ends of the range follows the concentration in the well
-        measured <- if (length(conc) > 0) mean(conc / dilution[quantified]) else NA_real_
-        edge <- !is.null(range) && near_edge(measured, range, criteria$edge)
-        cv_limit <- if (edge) criteria$sample_cv_edge else criteria$sample_cv
+        used <- i[included[i]]
+        conc <- result$conc[used]
+        precision <- group_precision(conc, dilution[used], sets[used], range, criteria)
         flags <- unique(flag[i][!is.na(flag[i]) & flag[i] != FLAGS$ok])
-        if (exceeds_limit(cv, cv_limit)) flags <- c(FLAGS$high_cv, flags)
+        if (precision$status == 'high_cv') flags <- c(FLAGS$high_cv, flags)
         out <- result[i[1], id_cols, drop = FALSE]
         out$n <- length(i)
-        out$n.quantified <- length(conc)
-        out$mean <- m
+        out$n.quantified <- sum(!is.na(result$conc[i]))
+        out$n.included <- length(used)
+        out$mean <- if (length(conc) > 0) mean(conc) else NA_real_
         out$sd <- if (length(conc) >= 2) stats::sd(conc) else NA_real_
-        out$cv <- cv
+        out$cv <- precision$cv
         out$min <- if (length(conc) > 0) min(conc) else NA_real_
         out$max <- if (length(conc) > 0) max(conc) else NA_real_
-        out$cv.limit <- cv_limit
+        out$cv.limit <- precision$limit
+        out$cv.status <- precision$status
         out$flag <- if (length(flags) == 0) FLAGS$ok else paste(flags, collapse = '; ')
         out
     })
@@ -493,12 +603,38 @@ dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NUL
 }
 
 
+#' Samples Whose Dilutions Cannot Be Compared
+#'
+#' Samples measured at two or more dilutions of which fewer than two have
+#' wells used in the result.
+#'
+#' @param samples Rows of the summary by sample and dilution.
+#' @param dilution Output of [dilution_linearity()], or `NULL`.
+#' @param key_cols Columns identifying a sample.
+#'
+#' @return A data.frame with the `key_cols`, or `NULL` for none.
+#' @keywords internal
+dilution_not_assessable <- function(samples, dilution, key_cols) {
+    key <- function(x) do.call(paste, c(lapply(x[key_cols], as.character), sep = ' | '))
+    keys <- key(samples)
+    n_dilutions <- tapply(samples$dilution, keys, function(x) length(unique(x)))
+    several <- names(n_dilutions)[n_dilutions >= 2]
+    lost <- setdiff(several, if (!is.null(dilution)) key(dilution))
+    if (length(lost) == 0) return(NULL)
+    out <- unique(samples[keys %in% lost, key_cols, drop = FALSE])
+    rownames(out) <- NULL
+    out
+}
+
+
 #' Quality Assessment of Samples
 #'
 #' Precision of the replicates and dilution linearity of the samples. The
-#' replicate groups are the rows of the result summary: with `group_vars`
-#' given, the dilutions are compared within the groups of `group_vars`
-#' without `dilution`.
+#' rows of the result summary are the groups of `group_vars`; the precision is
+#' assessed within a row and a dilution (see [group_precision()]), and with
+#' `group_vars` given, the dilutions are compared within the groups of
+#' `group_vars` without `dilution`. Only the wells of the sample result enter
+#' them (see [included_wells()]).
 #'
 #' @param result Well-level sample results from [calculate()].
 #' @param range Quantification range.
@@ -508,11 +644,14 @@ dilution_linearity <- function(samples, criteria = qc_criteria(), key_cols = NUL
 #'
 #' @return A list with `samples` (see [summarise_samples()], with the
 #'   `"Dilution non-linear"` flag added), `dilution` (see
-#'   [dilution_linearity()]) and `warnings` (list of messages).
+#'   [dilution_linearity()]), `dilution_na` (see [dilution_not_assessable()]),
+#'   `included` (see [included_wells()], in the order of `result`) and
+#'   `warnings` (list of messages).
 #' @export
 assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group_vars = NULL) {
     samples <- summarise_samples(result, range, criteria, group_vars)
     dilution <- NULL
+    dilution_na <- NULL
     if (!is.null(samples) && 'dilution' %in% names(result)) {
         if (length(group_vars) == 0) {
             key_cols <- intersect(c('sample.name', 'sample.date'), names(samples))
@@ -522,7 +661,10 @@ assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group
             by_dilution <- if ('dilution' %in% group_vars) samples else
                 summarise_samples(result, range, criteria, c(key_cols, 'dilution'))
         }
-        if (length(key_cols) > 0) dilution <- dilution_linearity(by_dilution, criteria, key_cols)
+        if (length(key_cols) > 0) {
+            dilution <- dilution_linearity(by_dilution, criteria, key_cols)
+            dilution_na <- dilution_not_assessable(by_dilution, dilution, key_cols)
+        }
         if (!is.null(dilution) && any(!dilution$pass)) {
             key <- function(x) do.call(paste, c(lapply(x[key_cols], as.character), sep = ' | '))
             hit <- key(samples) %in% key(dilution[!dilution$pass, , drop = FALSE])
@@ -539,7 +681,16 @@ assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group
         n_bad <- nrow(unique(dilution[!dilution$pass, cols, drop = FALSE]))
         warnings <- c(warnings, list(lin_message('quality.warn_dilution', n = n_bad)))
     }
-    list(samples = samples, dilution = dilution, warnings = warnings)
+    included <- if (is.null(samples)) logical(0) else included_wells(result, criteria, group_vars)
+    if (!is.null(samples)) {
+        counts <- replicate_counts(result, group_vars)
+        n_single <- length(unique(counts$set[counts$n.set >= 2 & counts$n.usable == 1]))
+        if (n_single > 0) {
+            key <- if (identical(criteria$single_replicate, 'withhold')) 'quality.warn_withheld' else 'quality.warn_single'
+            warnings <- c(warnings, list(lin_message(key, n = n_single)))
+        }
+    }
+    list(samples = samples, dilution = dilution, dilution_na = dilution_na, included = included, warnings = warnings)
 }
 
 
@@ -550,7 +701,9 @@ assess_samples <- function(result, range = NULL, criteria = qc_criteria(), group
 #'
 #' @return Character vector of dictionary keys.
 #' @keywords internal
-sample_warning_keys <- function() c('quality.warn_cv', 'quality.warn_dilution')
+sample_warning_keys <- function() {
+    c('quality.warn_cv', 'quality.warn_dilution', 'quality.warn_single', 'quality.warn_withheld')
+}
 
 
 #' Assess Quality Controls

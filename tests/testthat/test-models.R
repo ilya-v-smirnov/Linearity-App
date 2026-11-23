@@ -658,7 +658,7 @@ test_that('every model works on the example data in both scales', {
     data <- check_assay(read_assay(sample_path('bca_plate.xlsx')))
     for (m in calibration_models()) {
         for (w in c('none', '1/y2', 'power')) {
-            r <- calculate(data, m, weights = w)
+            r <- calculate(data, m, weights = w, criteria = accept_any())
             expect_equal(sum(r$result$flag == 'OK'), 24, info = paste(m, w))
             expect_true(all(r$result$conc.lower <= r$result$conc & r$result$conc <= r$result$conc.upper),
                         info = paste(m, w))
